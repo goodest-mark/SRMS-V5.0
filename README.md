@@ -1,69 +1,59 @@
 # SRMS V5
 
-School Report Management System (SRMS) for Secondary Schools in Tanzania.
-
-## Overview
-
-SRMS V5 is a desktop-based school report management system designed to help schools manage:
-
-- Student Records
-- Teacher Records
-- Examination Results
-- NECTA Grading
-- Subject Ranking
-- Broadsheet Reports
-- Report Card Generation
-- Excel Import and Export
-- PDF Reports
+School Report Management System (SRMS) is a desktop-based application designed to help secondary schools manage students, examinations, grading, report cards, rankings, and academic records efficiently.
 
 ## Features
 
 ### Student Management
-- Add students
-- Edit students
-- Transfer students
-- Graduate students
-- Student status tracking
+
+* Student registration
+* Student profile management
+* Student status tracking
+* Enrollment management
 
 ### Teacher Management
-- Teacher profiles
-- Subject allocation
 
-### Examination Management
-- Create examinations
-- Enter marks
-- Import marks from Excel
+* Teacher profiles
+* Subject assignments
+* Class assignments
+
+### Academic Management
+
+* Academic years
+* Terms and examinations
+* Subject management
+* Class management
+
+### Results Management
+
+* Marks entry
+* Excel results import
+* Ranking engine
+* Division calculation
+* Subject performance analysis
 
 ### Reports
-- Individual report cards
-- Broadsheets
-- Subject summaries
-- Division summaries
-- Gender performance analysis
+
+* Report cards
+* Report books
+* Broadsheets
+* PDF export
 
 ## Technology Stack
 
-- Python
-- PySide6
-- SQLite
-- Pandas
-- OpenPyXL
-- ReportLab
-
-## Project Status
-
-Current Version: V5.0
-
-Development Stage:
-- Core functionality in progress
-- Dashboard redesign planned
-- Modular architecture under development
+* Python
+* PySide6
+* SQLite
+* Pandas
+* OpenPyXL
+* ReportLab
 
 ## Installation
 
 ```bash
-git clone https://github.com/goodest-kark/SRMS-V5.git
-cd SRMS-V5
+git clone https://github.com/goodest-mark/SRMS.git
+
+cd SRMS
 
 python3 -m venv venv
 source venv/bin/activate
@@ -73,15 +63,21 @@ pip install -r requirements.txt
 python app.py
 ```
 
+## Project Status
+
+Current Version: V5
+
+Development Status:
+
+* Core modules implemented
+* UI/UX redesign ongoing
+* Community contributions welcome
+
 ## Contributing
 
-Community contributions are welcome.
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Submit a Pull Request
+Contributions, suggestions, bug reports, and pull requests are welcome.
 
 ## License
 
-GPL v3
+Open Source
+
