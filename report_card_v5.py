@@ -101,7 +101,8 @@ def generate_report_book(parent, exam_id, class_name, save_path):
             try:
                 logo = Image(school_logo, width=1.0 * inch, height=1.0 * inch)
                 header_cells.append(logo)
-            except Exception:
+            except Exception as e:
+                print(f"[WARNING] Could not load school logo '{school_logo}': {e}")
                 header_cells.append(Paragraph('', styles['Normal']))
         else:
             header_cells.append(Paragraph('', styles['Normal']))
@@ -275,8 +276,8 @@ def generate_report_book(parent, exam_id, class_name, save_path):
                 stamp_image = Image(school_stamp, width=1.2 * inch, height=1.2 * inch)
                 elements.append(Spacer(1, 0.15 * inch))
                 elements.append(stamp_image)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARNING] Could not load school stamp '{school_stamp}': {e}")
 
 
     try:

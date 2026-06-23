@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+import sqlite3
+
 from class_utils import get_classes
 from db_utils import get_cursor, fetch_all
 from event_bus import EventBus
@@ -214,14 +216,18 @@ class StudentsPage(QWidget):
                         WHERE id=?
                     """, (admission_no, full_name, gender, class_name, stream, level, self.selected_id))
 
-        except Exception as error:
-            if "UNIQUE" in str(error).upper():
-                QMessageBox.warning(
-                    self, "Duplicate Admission Number",
-                    "That admission number is already registered.",
-                )
-            else:
-                QMessageBox.critical(self, "Database Error", str(error))
+        except sqlite3.IntegrityError:
+            QMessageBox.warning(
+                self,
+                "Duplicate Admission Number",
+                "That admission number is already registered.",
+            )
+        except Exception:
+            QMessageBox.critical(
+                self,
+                "Database Error",
+                "An unexpected error occurred while saving the student record.",
+            )
             return
 
         self.clear_form()
@@ -285,8 +291,12 @@ class StudentsPage(QWidget):
         try:
             with get_cursor(commit=True) as cur:
                 cur.execute("DELETE FROM students WHERE id=?", (self.selected_id,))
-        except Exception as error:
-            QMessageBox.critical(self, "Database Error", str(error))
+        except Exception:
+            QMessageBox.critical(
+                self,
+                "Database Error",
+                "An unexpected error occurred while deleting the student record.",
+            )
             return
 
         self.clear_form()
@@ -397,7 +407,8 @@ class StudentsPage(QWidget):
                             updated += 1
                         else:
                             imported += 1
-                    except:
+                    except Exception as e:
+                        print(f"[ERROR] Failed to import student '{adm}': {e}")
                         rejected += 1
                         continue
             
@@ -409,5 +420,5 @@ class StudentsPage(QWidget):
                                   f"- Existing Records Updated: {updated}\n"
                                   f"- Records Rejected (Invalid Data): {rejected}")
             
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Import failed: {str(e)}")
+        except Exception:
+            QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")

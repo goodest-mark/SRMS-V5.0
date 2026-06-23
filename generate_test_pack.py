@@ -65,7 +65,7 @@ def create_styled_excel(filename, title, headers, data, sample=None):
             try:
                 if cell.value and len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except: pass
+            except Exception: pass
         ws.column_dimensions[column_letter].width = max_length + 4
 
     wb.save(filename)

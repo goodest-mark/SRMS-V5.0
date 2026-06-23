@@ -209,7 +209,8 @@ def to_pdf(parent, data):
                     ]))
                     header_elements.append(header_table)
                 except Exception as e:
-                    print(f"Error loading PDF logo: {e}")
+                    print(f"[WARNING] Could not load PDF logo '{school_profile['school_logo']}': {e}")
+                    header_elements.append(Paragraph(school_profile.get('school_name', 'SCHOOL MANAGEMENT SYSTEM').upper(), styles['TitleStyle']))
             else:
                 header_elements.append(Paragraph(school_profile.get('school_name', 'SCHOOL MANAGEMENT SYSTEM').upper(), styles['TitleStyle']))
             header_elements.append(Paragraph(f"{school_profile.get('school_address', '-')} | {school_profile.get('school_phone', '-')} | {school_profile.get('school_email', '-')}", styles['SubtitleStyle']))

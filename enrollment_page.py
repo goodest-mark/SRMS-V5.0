@@ -393,20 +393,21 @@ class EnrollmentPage(QWidget):
                         student_res = cur.fetchone()
                         if not student_res:
                             continue
-                        
+
                         student_level = student_res[0]
-                        
+
                         cur.execute("SELECT 1 FROM subjects WHERE subject_name=? AND level=?", (subject, student_level))
                         if not cur.fetchone():
                             continue
-                        
+
                         cur.execute("""
                             INSERT INTO enrollments (admission_no, subject_name, academic_year_id, term_id)
                             VALUES (?, ?, ?, ?)
                             ON CONFLICT(admission_no, subject_name, academic_year_id, term_id) DO NOTHING
                         """, (adm, subject, year_id, term_id))
                         imported += 1
-                    except:
+                    except Exception as e:
+                        print(f"[ERROR] Failed to import enrollment for '{adm}' in '{subject}': {e}")
                         continue
             
             self.load_enrollment_data()

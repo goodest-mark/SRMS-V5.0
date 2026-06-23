@@ -1,7 +1,27 @@
 import sqlite3
 import hashlib
+import re
+import secrets
 
 DB_NAME = "srms.db"
+
+# Whitelist pattern for identifiers used in migrations
+_SAFE_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+_SAFE_DEFINITION = re.compile(r"^[a-zA-Z_ \"]+$")
+
+
+def _validate_identifier(name):
+    """Ensure a column/table name is a safe SQL identifier."""
+    if not _SAFE_IDENTIFIER.match(name):
+        raise ValueError(f"Unsafe SQL identifier: {name!r}")
+    return name
+
+
+def _validate_definition(defn):
+    """Ensure a column definition contains only safe characters."""
+    if not _SAFE_DEFINITION.match(defn):
+        raise ValueError(f"Unsafe column definition: {defn!r}")
+    return defn
 
 
 def connect():
@@ -16,6 +36,17 @@ def connect():
 def init_db():
     conn = connect()
     cur = conn.cursor()
+    try:
+        _init_db_inner(conn, cur)
+    except Exception as e:
+        conn.rollback()
+        print(f"[CRITICAL] Database initialization failed: {e}")
+        raise
+    finally:
+        conn.close()
+
+
+def _init_db_inner(conn, cur):
 
     # =========================
     # STUDENTS
@@ -374,15 +405,19 @@ def init_db():
         'email': 'school_email', 'headmaster': 'head_teacher'
     }
 
-    # 1. Ensure all new columns exist
+    # 1. Ensure all new columns exist (validate identifiers to prevent SQL injection)
     for col, definition in v5_columns:
         if col not in columns:
+            _validate_identifier(col)
+            _validate_definition(definition)
             print(f"[MIGRATION] Adding missing column: {col}")
             cur.execute(f"ALTER TABLE school_profile ADD COLUMN {col} {definition}")
 
-    # 2. Map legacy data if legacy columns exist
+    # 2. Map legacy data if legacy columns exist (validate identifiers)
     for old_col, new_col in legacy_map.items():
         if old_col in columns:
+            _validate_identifier(old_col)
+            _validate_identifier(new_col)
             print(f"[MIGRATION] Moving legacy data: {old_col} -> {new_col}")
             cur.execute(f"UPDATE school_profile SET {new_col} = {old_col} WHERE {new_col} IS NULL OR {new_col} = ''")
 
@@ -416,8 +451,10 @@ def init_db():
 
     cur.execute("SELECT COUNT(*) FROM system_security")
     if cur.fetchone()[0] == 0:
-        # Store default admin passcode hashed for security
-        default_hash = hashlib.sha256("000000".encode("utf-8")).hexdigest()
+        # Store default admin passcode using PBKDF2 with random salt
+        salt = secrets.token_hex(16)
+        dk = hashlib.pbkdf2_hmac("sha256", "000000".encode("utf-8"), salt.encode("utf-8"), iterations=260000)
+        default_hash = f"{salt}${dk.hex()}"
         cur.execute(
             "INSERT INTO system_security (admin_passcode) VALUES (?)",
             (default_hash,)
@@ -463,4 +500,3 @@ def init_db():
     """)
 
     conn.commit()
-    conn.close()

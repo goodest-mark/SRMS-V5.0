@@ -509,11 +509,11 @@ class ResultsPage(QWidget):
                     cur.execute("""
                         INSERT INTO results (admission_no, subject_name, marks, exam_id)
                         VALUES (?, ?, ?, ?)
-                        ON CONFLICT(admission_no, subject_name, exam_id) 
+                        ON CONFLICT(admission_no, subject_name, exam_id)
                         DO UPDATE SET marks = excluded.marks
                     """, (admission_no, subject_name, marks, exam_id))
-        except Exception as e:
-            QMessageBox.critical(self, "Database Error", str(e))
+        except Exception:
+            QMessageBox.critical(self, "Database Error", "An unexpected error occurred while saving results.")
             return
 
         # V4.1: Automatically refresh subject completion
@@ -581,12 +581,12 @@ class ResultsPage(QWidget):
                 for row in rows:
                     if not row or not row[0] or row[1] is None: continue
                     adm, marks = row
-                    
+
                     cur.execute("""
-                        SELECT 1 FROM enrollments 
+                        SELECT 1 FROM enrollments
                         WHERE admission_no=? AND subject_name=? AND academic_year_id=? AND term_id=?
                     """, (str(adm), subject_name, year_id, term_id))
-                    
+
                     if cur.fetchone():
                         try:
                             cur.execute("""
@@ -596,7 +596,8 @@ class ResultsPage(QWidget):
                                     marks=excluded.marks
                             """, (str(adm), subject_name, int(marks), exam_id))
                             imported += 1
-                        except:
+                        except Exception as e:
+                            print(f"[ERROR] Failed to import result for '{adm}': {e}")
                             continue
             
             self.load_students()
@@ -604,8 +605,8 @@ class ResultsPage(QWidget):
             EventBus.emit("RESULTS_UPDATED")
             QMessageBox.information(self, "Import Complete", f"Imported {imported} marks.")
             
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Import failed: {str(e)}")
+        except Exception:
+            QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")
 
     def _clear_table(self):
         self.loading_table = True

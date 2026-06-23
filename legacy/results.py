@@ -185,7 +185,7 @@ class ResultsWindow(QWidget):
             try:
                 marks = float(marks_item.text())
 
-            except:
+            except (ValueError, TypeError):
                 continue
 
             grade = get_grade(marks)

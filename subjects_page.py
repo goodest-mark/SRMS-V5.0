@@ -291,7 +291,8 @@ class SubjectsPage(QWidget):
                                 subject_type=excluded.subject_type
                         """, (str(name), level, str(stype)))
                         imported += 1
-                    except:
+                    except Exception as e:
+                        print(f"[ERROR] Failed to import subject '{name}': {e}")
                         continue
             
             self.load()

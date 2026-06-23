@@ -76,13 +76,20 @@ class AcademicYearsPage(QWidget):
 
         year_id = self.table.item(row, 0).text()
 
-        with get_cursor(commit=True) as cur:
-            cur.execute("UPDATE academic_years SET is_active=0")
-            cur.execute("""
-                UPDATE academic_years
-                SET is_active=1
-                WHERE id=?
-            """, (year_id,))
+        try:
+            with get_cursor(commit=True) as cur:
+                cur.execute("UPDATE academic_years SET is_active=0")
+                cur.execute("""
+                    UPDATE academic_years
+                    SET is_active=1
+                    WHERE id=?
+                """, (year_id,))
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Database Error",
+                f"Failed to activate year: {e}"
+            )
 
         self.load()
 
