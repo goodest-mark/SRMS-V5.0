@@ -152,10 +152,9 @@ class MainWindow(QMainWindow):
 
         
         self.sidebar_widget = QWidget()
-        self.sidebar_widget.setMinimumWidth(88)
-        self.sidebar_widget.setMaximumWidth(240)
+        self.sidebar_widget.setFixedWidth(240)
         self.sidebar_widget.setSizePolicy(
-            QSizePolicy.Preferred,
+            QSizePolicy.Fixed,
             QSizePolicy.Expanding
         )
 
@@ -167,12 +166,20 @@ class MainWindow(QMainWindow):
         }
         """)
 
-        self.sidebar_animation = QPropertyAnimation(
+        self.sidebar_anim_max = QPropertyAnimation(
             self.sidebar_widget,
             b"maximumWidth"
         )
-        self.sidebar_animation.setDuration(240)
-        self.sidebar_animation.setEasingCurve(
+        self.sidebar_anim_max.setDuration(240)
+        self.sidebar_anim_max.setEasingCurve(
+            QEasingCurve.InOutQuad
+        )
+        self.sidebar_anim_min = QPropertyAnimation(
+            self.sidebar_widget,
+            b"minimumWidth"
+        )
+        self.sidebar_anim_min.setDuration(240)
+        self.sidebar_anim_min.setEasingCurve(
             QEasingCurve.InOutQuad
         )
 
@@ -567,26 +574,15 @@ class MainWindow(QMainWindow):
 
     def update_sidebar_state(self):
         if self.sidebar_collapsed:
-            start_width = 240
-            end_width = 88
+            target_width = 88
         else:
-            start_width = 88
-            end_width = 240
+            target_width = 240
 
-        self.sidebar_animation.stop()
-        self.sidebar_animation.setStartValue(start_width)
-        self.sidebar_animation.setEndValue(end_width)
-        self.sidebar_animation.start()
+        current_w = self.sidebar_widget.width()
 
-        if self.sidebar_collapsed:
-            self.sidebar_widget.setMaximumWidth(88)
-            self.sidebar_widget.setMinimumWidth(88)
-        else:
-            self.sidebar_widget.setMaximumWidth(240)
-            self.sidebar_widget.setMinimumWidth(88)
-
+        # Update text/style BEFORE animation so content matches target
         for btn in self.nav_buttons:
-            btn.setIconSize(QSize(28,28))
+            btn.setIconSize(QSize(28, 28))
             if self.sidebar_collapsed:
                 btn.setMinimumHeight(54)
                 btn.setStyleSheet(self.sidebar_button_style_collapsed)
@@ -597,6 +593,16 @@ class MainWindow(QMainWindow):
                 btn.setText(btn.toolTip())
 
         self.update_highlight(self.active_btn)
+
+        # Animate both min and max width together
+        self.sidebar_anim_max.stop()
+        self.sidebar_anim_min.stop()
+        self.sidebar_anim_max.setStartValue(current_w)
+        self.sidebar_anim_max.setEndValue(target_width)
+        self.sidebar_anim_min.setStartValue(current_w)
+        self.sidebar_anim_min.setEndValue(target_width)
+        self.sidebar_anim_max.start()
+        self.sidebar_anim_min.start()
 
     def toggle_level(self):
 

@@ -23,15 +23,14 @@ LIGHT_BG = colors.HexColor('#F8FAFC')
 GRID_COLOR = colors.HexColor('#D0D5DD')
 WHITE = colors.white
 
-# Page dimensions — landscape A4
+# Page dimensions — landscape A4, generous but balanced margins
 PAGE_SIZE = landscape(A4)
-L_MARGIN = 25
-R_MARGIN = 25
-T_MARGIN = 18
-B_MARGIN = 18
+L_MARGIN = 28
+R_MARGIN = 28
+T_MARGIN = 20
+B_MARGIN = 20
 PAGE_W = PAGE_SIZE[0] - L_MARGIN - R_MARGIN
 
-# Pre-defined styles (unique names required by ReportLab)
 _styles_cache = {}
 
 
@@ -39,68 +38,68 @@ def _get_styles():
     if _styles_cache:
         return _styles_cache
     _styles_cache['title'] = ParagraphStyle(
-        'rc_title', fontName='Helvetica-Bold', fontSize=13,
-        alignment=TA_CENTER, leading=15, textColor=NAVY)
+        'rc_title', fontName='Helvetica-Bold', fontSize=15,
+        alignment=TA_CENTER, leading=18, textColor=NAVY)
     _styles_cache['motto'] = ParagraphStyle(
-        'rc_motto', fontName='Helvetica-Oblique', fontSize=7,
-        alignment=TA_CENTER, leading=9, textColor=NAVY)
+        'rc_motto', fontName='Helvetica-Oblique', fontSize=8,
+        alignment=TA_CENTER, leading=11, textColor=NAVY)
     _styles_cache['section_hdr'] = ParagraphStyle(
-        'rc_section_hdr', fontName='Helvetica-Bold', fontSize=7,
-        alignment=TA_CENTER, textColor=NAVY, leading=9)
+        'rc_section_hdr', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_CENTER, textColor=NAVY, leading=11)
     _styles_cache['section_left'] = ParagraphStyle(
-        'rc_section_left', fontName='Helvetica-Bold', fontSize=7,
-        alignment=TA_LEFT, textColor=NAVY, leading=9)
+        'rc_section_left', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_LEFT, textColor=NAVY, leading=11)
     _styles_cache['label'] = ParagraphStyle(
-        'rc_label', fontName='Helvetica-Bold', fontSize=6.5,
-        alignment=TA_LEFT, leading=8)
-    _styles_cache['value'] = ParagraphStyle(
-        'rc_value', fontName='Helvetica', fontSize=6.5,
-        alignment=TA_LEFT, leading=8)
-    _styles_cache['small'] = ParagraphStyle(
-        'rc_small', fontName='Helvetica', fontSize=6,
-        alignment=TA_LEFT, leading=8)
-    _styles_cache['small_c'] = ParagraphStyle(
-        'rc_small_c', fontName='Helvetica', fontSize=6,
-        alignment=TA_CENTER, leading=8)
-    _styles_cache['small_b'] = ParagraphStyle(
-        'rc_small_b', fontName='Helvetica-Bold', fontSize=6,
-        alignment=TA_CENTER, leading=8)
-    _styles_cache['small_b_left'] = ParagraphStyle(
-        'rc_small_b_left', fontName='Helvetica-Bold', fontSize=6,
-        alignment=TA_LEFT, leading=8)
-    _styles_cache['center'] = ParagraphStyle(
-        'rc_center', fontName='Helvetica', fontSize=6.5,
-        alignment=TA_CENTER, leading=8)
-    _styles_cache['center_b'] = ParagraphStyle(
-        'rc_center_b', fontName='Helvetica-Bold', fontSize=6.5,
-        alignment=TA_CENTER, leading=8)
-    _styles_cache['right_b'] = ParagraphStyle(
-        'rc_right_b', fontName='Helvetica-Bold', fontSize=6.5,
-        alignment=TA_RIGHT, leading=8)
-    _styles_cache['note'] = ParagraphStyle(
-        'rc_note', fontName='Helvetica', fontSize=6,
-        alignment=TA_CENTER, leading=8, textColor=NAVY)
-    _styles_cache['sig'] = ParagraphStyle(
-        'rc_sig', fontName='Helvetica', fontSize=6,
-        alignment=TA_LEFT, leading=8)
-    _styles_cache['sig_hdr'] = ParagraphStyle(
-        'rc_sig_hdr', fontName='Helvetica-Bold', fontSize=6.5,
-        alignment=TA_CENTER, leading=8, textColor=NAVY)
-    _styles_cache['tiny'] = ParagraphStyle(
-        'rc_tiny', fontName='Helvetica', fontSize=5.5,
-        alignment=TA_CENTER, leading=7)
-    _styles_cache['tiny_b'] = ParagraphStyle(
-        'rc_tiny_b', fontName='Helvetica-Bold', fontSize=5.5,
-        alignment=TA_LEFT, leading=7)
-    _styles_cache['contact_hdr'] = ParagraphStyle(
-        'rc_contact_hdr', fontName='Helvetica-Bold', fontSize=7,
-        alignment=TA_LEFT, leading=9, textColor=NAVY)
-    _styles_cache['acad_hdr'] = ParagraphStyle(
-        'rc_acad_hdr', fontName='Helvetica-Bold', fontSize=7,
-        alignment=TA_LEFT, leading=9, textColor=NAVY)
-    _styles_cache['comment_body'] = ParagraphStyle(
-        'rc_comment_body', fontName='Helvetica', fontSize=6,
+        'rc_label', fontName='Helvetica-Bold', fontSize=7.5,
         alignment=TA_LEFT, leading=10)
+    _styles_cache['value'] = ParagraphStyle(
+        'rc_value', fontName='Helvetica', fontSize=7.5,
+        alignment=TA_LEFT, leading=10)
+    _styles_cache['small'] = ParagraphStyle(
+        'rc_small', fontName='Helvetica', fontSize=7,
+        alignment=TA_LEFT, leading=9)
+    _styles_cache['small_c'] = ParagraphStyle(
+        'rc_small_c', fontName='Helvetica', fontSize=7,
+        alignment=TA_CENTER, leading=9)
+    _styles_cache['small_b'] = ParagraphStyle(
+        'rc_small_b', fontName='Helvetica-Bold', fontSize=7,
+        alignment=TA_CENTER, leading=9)
+    _styles_cache['small_b_left'] = ParagraphStyle(
+        'rc_small_b_left', fontName='Helvetica-Bold', fontSize=7,
+        alignment=TA_LEFT, leading=9)
+    _styles_cache['center'] = ParagraphStyle(
+        'rc_center', fontName='Helvetica', fontSize=7.5,
+        alignment=TA_CENTER, leading=10)
+    _styles_cache['center_b'] = ParagraphStyle(
+        'rc_center_b', fontName='Helvetica-Bold', fontSize=7.5,
+        alignment=TA_CENTER, leading=10)
+    _styles_cache['right_b'] = ParagraphStyle(
+        'rc_right_b', fontName='Helvetica-Bold', fontSize=7.5,
+        alignment=TA_RIGHT, leading=10)
+    _styles_cache['note'] = ParagraphStyle(
+        'rc_note', fontName='Helvetica-Oblique', fontSize=7,
+        alignment=TA_CENTER, leading=10, textColor=NAVY)
+    _styles_cache['sig'] = ParagraphStyle(
+        'rc_sig', fontName='Helvetica', fontSize=7,
+        alignment=TA_LEFT, leading=11)
+    _styles_cache['sig_hdr'] = ParagraphStyle(
+        'rc_sig_hdr', fontName='Helvetica-Bold', fontSize=7.5,
+        alignment=TA_CENTER, leading=10, textColor=NAVY)
+    _styles_cache['tiny'] = ParagraphStyle(
+        'rc_tiny', fontName='Helvetica', fontSize=6,
+        alignment=TA_CENTER, leading=8)
+    _styles_cache['tiny_b'] = ParagraphStyle(
+        'rc_tiny_b', fontName='Helvetica-Bold', fontSize=6,
+        alignment=TA_LEFT, leading=8)
+    _styles_cache['contact_hdr'] = ParagraphStyle(
+        'rc_contact_hdr', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_LEFT, leading=11, textColor=NAVY)
+    _styles_cache['acad_hdr'] = ParagraphStyle(
+        'rc_acad_hdr', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_LEFT, leading=11, textColor=NAVY)
+    _styles_cache['comment_body'] = ParagraphStyle(
+        'rc_comment_body', fontName='Helvetica', fontSize=7,
+        alignment=TA_LEFT, leading=14)
     return _styles_cache
 
 
@@ -200,11 +199,11 @@ def generate_report_book(parent, exam_id, class_name, save_path):
             draw_watermark(canvas, doc, school_name, year_name, watermark_text)
         canvas.saveState()
         canvas.setStrokeColor(NAVY)
-        canvas.setLineWidth(2)
-        x = doc.leftMargin - 6
-        y = doc.bottomMargin - 6
-        w = doc.pagesize[0] - doc.leftMargin - doc.rightMargin + 12
-        h = doc.pagesize[1] - doc.topMargin - doc.bottomMargin + 12
+        canvas.setLineWidth(2.5)
+        x = doc.leftMargin - 8
+        y = doc.bottomMargin - 8
+        w = doc.pagesize[0] - doc.leftMargin - doc.rightMargin + 16
+        h = doc.pagesize[1] - doc.topMargin - doc.bottomMargin + 16
         canvas.rect(x, y, w, h)
         canvas.restoreState()
 
@@ -215,13 +214,9 @@ def generate_report_book(parent, exam_id, class_name, save_path):
     )
     elements = []
 
-    # ══════════════════════════════════════════════════════════════
-    # GENERATE ONE PAGE PER STUDENT
-    # ══════════════════════════════════════════════════════════════
     for student in class_students:
         adm = student['admission']
 
-        # Fetch student details
         cur.execute(
             "SELECT full_name, gender, stream FROM students WHERE admission_no=?",
             (adm,))
@@ -230,23 +225,23 @@ def generate_report_book(parent, exam_id, class_name, save_path):
         student_gender = s_row[1] if s_row else student.get('gender', '')
         student_stream = (s_row[2] if s_row and s_row[2] else '-')
 
-        # ── SECTION 1: HEADER (3 columns) ──
+        # ── HEADER ──
         elements.append(_build_header(
             ST, school_name, school_motto, school_addr, school_phone,
             school_email, school_website, school_logo, use_logo,
             year_name, term_name, exam_name, level, class_name,
             student_stream, generated_date
         ))
-        elements.append(Spacer(1, 2))
+        elements.append(Spacer(1, 6))
 
-        # ── SECTION 2: STUDENT INFORMATION ──
+        # ── STUDENT INFORMATION ──
         report_id = f"SRMS-{year_name}-{adm.replace('/', '')}"
         elements.append(_build_student_info(
             ST, student_name, adm, student_gender, report_id,
             student['status']))
-        elements.append(Spacer(1, 3))
+        elements.append(Spacer(1, 6))
 
-        # ── SECTION 3: RESULTS + ACADEMIC SUMMARY ──
+        # ── RESULTS + ACADEMIC SUMMARY ──
         cur.execute("""
             SELECT r.subject_name,
                    COALESCE(s.subject_short_name, r.subject_name),
@@ -279,28 +274,27 @@ def generate_report_book(parent, exam_id, class_name, save_path):
             total_marks, average, student['position'], total_in_class,
             gender_pos, gender_total, student['division'],
             student['points']))
-        elements.append(Spacer(1, 3))
+        elements.append(Spacer(1, 6))
 
-        # ── SECTION 4: COMMENTS / BEST-WORST / REQUIREMENTS ──
+        # ── COMMENTS / BEST-WORST / REQUIREMENTS ──
         elements.append(_build_lower_section(
             ST, marks_vals, full_names, grades_vals,
             requirements_data, use_req))
-        elements.append(Spacer(1, 3))
+        elements.append(Spacer(1, 6))
 
-        # ── SECTION 5: SIGNATURES + FOOTER ──
+        # ── SIGNATURES ──
         elements.append(_build_signatures(
             ST, head_teacher, academic_master, school_stamp))
-        elements.append(Spacer(1, 2))
+        elements.append(Spacer(1, 4))
 
         # ── FOOTER NOTE ──
         elements.append(Paragraph(
-            '<b>Note:</b> This report is computer generated and does '
-            'not require a signature except the above.',
+            '<b>Note:</b> <i>This report is computer generated and does '
+            'not require a signature except the above.</i>',
             ST['note']))
 
         elements.append(PageBreak())
 
-    # ── Build PDF ──
     try:
         doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
         conn.close()
@@ -329,14 +323,13 @@ def _build_header(ST, school_name, motto, addr, phone, email, website,
         contact_lines.append(email)
     if website:
         contact_lines.append(website)
-
     left = Paragraph('<br/>'.join(contact_lines), ST['small'])
 
     # ── Center: Logo + Name + Motto ──
     center_parts = []
     if use_logo and logo_path:
         try:
-            logo = Image(logo_path, width=0.6 * inch, height=0.6 * inch)
+            logo = Image(logo_path, width=0.7 * inch, height=0.7 * inch)
             center_parts.append([logo])
         except Exception:
             pass
@@ -346,12 +339,12 @@ def _build_header(ST, school_name, motto, addr, phone, email, website,
         center_parts.append(
             [Paragraph(f'<i>{motto}</i>', ST['motto'])])
 
-    center = Table(center_parts, colWidths=[4 * inch])
+    center = Table(center_parts, colWidths=[4.2 * inch])
     center.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
 
     # ── Right: Academic Information ──
@@ -370,22 +363,22 @@ def _build_header(ST, school_name, motto, addr, phone, email, website,
 
     header = Table(
         [[left, center, right]],
-        colWidths=[2.5 * inch, 4.5 * inch, 3.0 * inch])
+        colWidths=[2.6 * inch, 4.8 * inch, 3.0 * inch])
     header.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (1, 0), (1, 0), 'CENTER'),
         ('LINEBELOW', (0, 0), (-1, 0), 1.5, NAVY),
         ('TOPPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
     return header
 
 
 def _build_student_info(ST, name, adm, gender, report_id, status):
-    """Compact bordered student information section — 2 rows."""
+    """Bordered student information section — 2 rows."""
 
     info = [
-        [Paragraph('<b>NAME</b>', ST['label']),
+        [Paragraph('<b>STUDENT NAME</b>', ST['label']),
          Paragraph(f': {name}', ST['value']),
          Paragraph('<b>ADM NO.</b>', ST['label']),
          Paragraph(f': {adm}', ST['value']),
@@ -402,15 +395,15 @@ def _build_student_info(ST, name, adm, gender, report_id, status):
          '', ''],
     ]
     tbl = Table(info, colWidths=[
-        0.8 * inch, 2.0 * inch, 0.9 * inch, 1.2 * inch,
-        0.9 * inch, 0.8 * inch, 0.7 * inch, 0.7 * inch])
+        1.0 * inch, 2.1 * inch, 1.0 * inch, 1.2 * inch,
+        1.0 * inch, 0.8 * inch, 0.7 * inch, 0.7 * inch])
     tbl.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BOX', (0, 0), (-1, -1), 0.8, NAVY),
-        ('INNERGRID', (0, 0), (-1, -1), 0.3, GRID_COLOR),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('BOX', (0, 0), (-1, -1), 1, NAVY),
+        ('INNERGRID', (0, 0), (-1, -1), 0.4, GRID_COLOR),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
     ]))
     return tbl
 
@@ -422,10 +415,9 @@ def _build_results_and_summary(ST, short_names, full_names, marks,
     """Subject results table (left) + academic summary (right)."""
     n = len(marks)
 
-    # ── Subject table ──
-    label_w = 0.9 * inch
-    sub_col_w = min(0.65 * inch,
-                    max(0.45 * inch, (6.2 * inch - label_w) / max(n, 1)))
+    label_w = 1.0 * inch
+    sub_col_w = min(0.68 * inch,
+                    max(0.48 * inch, (6.5 * inch - label_w) / max(n, 1)))
     sub_tbl_w = label_w + sub_col_w * n
 
     row_hdr = [Paragraph('<b>SUBJECTS</b>', ST['small_b'])]
@@ -450,17 +442,17 @@ def _build_results_and_summary(ST, short_names, full_names, marks,
         ('TEXTCOLOR', (0, 2), (0, 2), WHITE),
         ('BACKGROUND', (0, 3), (0, 3), NAVY),
         ('TEXTCOLOR', (0, 3), (0, 3), WHITE),
-        ('GRID', (0, 0), (-1, -1), 0.4, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.5, NAVY),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('LEFTPADDING', (0, 0), (-1, -1), 1),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 1),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
     ]))
 
     # ── Academic summary ──
-    summary_w = PAGE_W - sub_tbl_w - 4
+    summary_w = PAGE_W - sub_tbl_w - 6
     lw = summary_w * 0.6
     rw = summary_w * 0.4
 
@@ -469,9 +461,9 @@ def _build_results_and_summary(ST, short_names, full_names, marks,
         colWidths=[summary_w])
     sum_hdr.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), NAVY_LIGHT),
-        ('LINEBELOW', (0, 0), (-1, 0), 0.8, NAVY),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, NAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
 
     rows = [
@@ -490,19 +482,19 @@ def _build_results_and_summary(ST, short_names, full_names, marks,
     ]
     sum_body = Table(rows, colWidths=[lw, rw])
     sum_body.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.4, NAVY),
-        ('INNERGRID', (0, 0), (-1, -1), 0.3, GRID_COLOR),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
+        ('INNERGRID', (0, 0), (-1, -1), 0.4, GRID_COLOR),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
         ('BACKGROUND', (0, 0), (-1, -1), LIGHT_BG),
     ]))
 
     summary_col = Table(
         [[sum_hdr], [sum_body]], colWidths=[summary_w])
     summary_col.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.4, NAVY),
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
         ('TOPPADDING', (0, 0), (-1, -1), 0),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ('LEFTPADDING', (0, 0), (-1, -1), 0),
@@ -511,7 +503,7 @@ def _build_results_and_summary(ST, short_names, full_names, marks,
 
     combined = Table(
         [[tbl, summary_col]],
-        colWidths=[sub_tbl_w, summary_w + 4])
+        colWidths=[sub_tbl_w, summary_w + 6])
     combined.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
@@ -522,13 +514,13 @@ def _build_lower_section(ST, marks, full_names, grades,
                          requirements_data, use_req):
     """Three columns: comments | best/worst subjects | requirements."""
     col_w = PAGE_W / 3
-    inner = col_w - 4
+    inner = col_w - 6
 
     # ── Teacher's Comments ──
     c_hdr = _section_header("TEACHER'S COMMENTS", ST, inner)
     c_body = Paragraph(
-        'Class Teacher: ______________________________________<br/>'
-        'Academic Master: ____________________________________<br/>'
+        'Class Teacher: ______________________________________<br/><br/>'
+        'Academic Master: ____________________________________<br/><br/>'
         'Head Teacher: _______________________________________',
         ST['comment_body'])
     comments = _boxed([c_hdr, c_body], inner)
@@ -565,11 +557,11 @@ def _build_lower_section(ST, marks, full_names, grades,
     bw_tbl.setStyle(TableStyle([
         ('SPAN', (0, 0), (1, 0)), ('SPAN', (2, 0), (3, 0)),
         ('SPAN', (0, 1), (1, 1)), ('SPAN', (2, 1), (3, 1)),
-        ('GRID', (0, 2), (-1, -1), 0.4, NAVY),
+        ('GRID', (0, 2), (-1, -1), 0.5, NAVY),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
     best_worst = _boxed([bw_hdr, bw_tbl], inner)
 
@@ -592,16 +584,16 @@ def _build_lower_section(ST, marks, full_names, grades,
             Paragraph('-', ST['small_c'])])
 
     rq_tbl = Table(rq_rows, colWidths=[
-        0.25 * inch, inner - 0.25 * inch - 0.4 * inch, 0.4 * inch])
+        0.3 * inch, inner - 0.3 * inch - 0.5 * inch, 0.5 * inch])
     rq_tbl.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), NAVY_LIGHT),
-        ('GRID', (0, 0), (-1, -1), 0.3, GRID_COLOR),
+        ('GRID', (0, 0), (-1, -1), 0.4, GRID_COLOR),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
         ('ALIGN', (2, 0), (2, -1), 'CENTER'),
         ('ALIGN', (1, 1), (1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 1),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
     reqs = _boxed([rq_hdr, rq_tbl], inner)
 
@@ -614,7 +606,7 @@ def _build_lower_section(ST, marks, full_names, grades,
 
 
 def _build_signatures(ST, head_teacher, academic_master, stamp_path):
-    """Compact signature section — 2 rows."""
+    """Signature section with four columns."""
     col_w = PAGE_W / 4
 
     data = [
@@ -622,40 +614,42 @@ def _build_signatures(ST, head_teacher, academic_master, stamp_path):
          Paragraph('<b>ACADEMIC MASTER</b>', ST['sig_hdr']),
          Paragraph('<b>HEAD TEACHER</b>', ST['sig_hdr']),
          Paragraph('<b>PARENT / GUARDIAN</b>', ST['sig_hdr'])],
-        [Paragraph('Sign: ____________<br/>'
-                   'Name: ____________<br/>'
-                   'Date: ____________', ST['sig']),
-         Paragraph(f'Sign: ____________<br/>'
-                   f'Name: {academic_master if academic_master else "____________"}<br/>'
-                   f'Date: ____________', ST['sig']),
-         Paragraph(f'Sign: ____________<br/>'
-                   f'Name: {head_teacher if head_teacher else "____________"}<br/>'
-                   f'Date: ____________', ST['sig']),
-         Paragraph('Sign: ____________<br/>'
-                   'Name: ____________<br/>'
-                   'Date: ____________', ST['sig'])],
+        [Paragraph('Signature: ______________', ST['sig']),
+         Paragraph('Signature: ______________', ST['sig']),
+         Paragraph('Signature: ______________', ST['sig']),
+         Paragraph('Signature: ______________', ST['sig'])],
+        [Paragraph('Name: ______________', ST['sig']),
+         Paragraph(
+             f'Name: {academic_master}' if academic_master
+             else 'Name: ______________', ST['sig']),
+         Paragraph(
+             f'Name: {head_teacher}' if head_teacher
+             else 'Name: ______________', ST['sig']),
+         Paragraph('Name: ______________', ST['sig'])],
+        [Paragraph('Date: ______________', ST['sig']),
+         Paragraph('Date: ______________', ST['sig']),
+         Paragraph('Date: ______________', ST['sig']),
+         Paragraph('Date: ______________', ST['sig'])],
     ]
 
     tbl = Table(data, colWidths=[col_w] * 4)
     tbl.setStyle(TableStyle([
-        ('LINEABOVE', (0, 0), (-1, 0), 0.8, NAVY),
+        ('LINEABOVE', (0, 0), (-1, 0), 1, NAVY),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
     return tbl
 
-
-# ── tiny helpers ──
 
 def _section_header(title, ST, width):
     t = Table(
         [[Paragraph(f'<b>{title}</b>', ST['section_hdr'])]],
         colWidths=[width])
     t.setStyle(TableStyle([
-        ('LINEBELOW', (0, 0), (-1, 0), 0.8, NAVY),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, NAVY),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
     ]))
     return t
 
@@ -664,10 +658,10 @@ def _boxed(items, width):
     rows = [[item] for item in items]
     t = Table(rows, colWidths=[width])
     t.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.4, NAVY),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ('LEFTPADDING', (0, 0), (-1, -1), 3),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
     ]))
     return t
