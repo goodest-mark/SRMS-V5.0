@@ -1,6 +1,7 @@
 from database import connect
 from grade_utils import get_grade, get_points
 from division_utils import get_division
+from settings_page import get_setting
 
 def compute_student_scores(level, exam_id=None):
     """
@@ -96,10 +97,10 @@ def compute_student_scores(level, exam_id=None):
         
         if level == "A_LEVEL":
             required_type = "PRINCIPAL"
-            required_count = 3
+            required_count = int(get_setting('a_level_principal', '3'))
         else:
             required_type = "COUNTED"
-            required_count = 7
+            required_count = int(get_setting('o_level_counted', '7'))
 
         # Filter subjects based on required type
         eligible_subjects = [s for s in subjects if s["subject_type"] == required_type]

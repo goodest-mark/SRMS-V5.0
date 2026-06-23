@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+import sqlite3
+
 from class_utils import get_classes
 from database import connect
 from event_bus import EventBus

@@ -102,11 +102,11 @@ def generate_report_book(parent, exam_id, class_name, save_path):
         # --- SECTION 1: STUDENT DETAILS ---
         # Fetch full details
         cur.execute("SELECT full_name, gender, stream FROM students WHERE admission_no=?", (adm,))
-        s_extra = cur.fetchone()
+        s_extra = cur.fetchone() or (student.get('name', ''), student.get('gender', ''), '')
         
         details_data = [
-            [Paragraph("<b>ADMISSION NO:</b>", style_label), adm, Paragraph("<b>GENDER:</b>", style_label), s_extra[1]],
-            [Paragraph("<b>FULL NAME:</b>", style_label), s_extra[0], Paragraph("<b>STREAM:</b>", style_label), s_extra[2] or "-"]
+            [Paragraph("<b>ADMISSION NO:</b>", style_label), adm, Paragraph("<b>GENDER:</b>", style_label), s_extra[1] or '-'],
+            [Paragraph("<b>FULL NAME:</b>", style_label), s_extra[0] or '-', Paragraph("<b>STREAM:</b>", style_label), s_extra[2] or "-"]
         ]
         dt = Table(details_data, colWidths=[1.5*inch, 2*inch, 1.5*inch, 2*inch])
         dt.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))

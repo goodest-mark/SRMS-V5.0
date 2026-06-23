@@ -1,8 +1,12 @@
 import os
+from datetime import datetime
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image, HRFlowable
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
+    PageBreak, Image, HRFlowable
+)
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
@@ -12,20 +16,109 @@ from watermark import draw_watermark
 from ranking_engine import compute_student_scores
 from grade_utils import get_grade, get_points
 
+# Color scheme
+NAVY = colors.HexColor('#1B3A5C')
+NAVY_LIGHT = colors.HexColor('#E8EDF2')
+LIGHT_BG = colors.HexColor('#F8FAFC')
+GRID_COLOR = colors.HexColor('#D0D5DD')
+WHITE = colors.white
+
+# Page dimensions
+PAGE_SIZE = landscape(A4)
+L_MARGIN = 30
+R_MARGIN = 30
+T_MARGIN = 25
+B_MARGIN = 25
+PAGE_W = PAGE_SIZE[0] - L_MARGIN - R_MARGIN
+
+# Pre-defined styles (unique names required by ReportLab)
+_styles_cache = {}
+
+
+def _get_styles():
+    if _styles_cache:
+        return _styles_cache
+    _styles_cache['title'] = ParagraphStyle(
+        'rc_title', fontName='Helvetica-Bold', fontSize=16,
+        alignment=TA_CENTER, leading=20, textColor=NAVY)
+    _styles_cache['motto'] = ParagraphStyle(
+        'rc_motto', fontName='Helvetica-Oblique', fontSize=9,
+        alignment=TA_CENTER, leading=12, textColor=NAVY)
+    _styles_cache['section_hdr'] = ParagraphStyle(
+        'rc_section_hdr', fontName='Helvetica-Bold', fontSize=9,
+        alignment=TA_CENTER, textColor=NAVY, leading=12)
+    _styles_cache['section_left'] = ParagraphStyle(
+        'rc_section_left', fontName='Helvetica-Bold', fontSize=9,
+        alignment=TA_LEFT, textColor=NAVY, leading=12)
+    _styles_cache['label'] = ParagraphStyle(
+        'rc_label', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_LEFT, leading=11)
+    _styles_cache['value'] = ParagraphStyle(
+        'rc_value', fontName='Helvetica', fontSize=8,
+        alignment=TA_LEFT, leading=11)
+    _styles_cache['small'] = ParagraphStyle(
+        'rc_small', fontName='Helvetica', fontSize=7,
+        alignment=TA_LEFT, leading=10)
+    _styles_cache['small_c'] = ParagraphStyle(
+        'rc_small_c', fontName='Helvetica', fontSize=7,
+        alignment=TA_CENTER, leading=10)
+    _styles_cache['small_b'] = ParagraphStyle(
+        'rc_small_b', fontName='Helvetica-Bold', fontSize=7,
+        alignment=TA_CENTER, leading=10)
+    _styles_cache['small_b_left'] = ParagraphStyle(
+        'rc_small_b_left', fontName='Helvetica-Bold', fontSize=7,
+        alignment=TA_LEFT, leading=10)
+    _styles_cache['center'] = ParagraphStyle(
+        'rc_center', fontName='Helvetica', fontSize=8,
+        alignment=TA_CENTER, leading=11)
+    _styles_cache['center_b'] = ParagraphStyle(
+        'rc_center_b', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_CENTER, leading=11)
+    _styles_cache['right_b'] = ParagraphStyle(
+        'rc_right_b', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_RIGHT, leading=11)
+    _styles_cache['note'] = ParagraphStyle(
+        'rc_note', fontName='Helvetica', fontSize=7,
+        alignment=TA_CENTER, leading=10, textColor=NAVY)
+    _styles_cache['sig'] = ParagraphStyle(
+        'rc_sig', fontName='Helvetica', fontSize=7,
+        alignment=TA_LEFT, leading=10)
+    _styles_cache['sig_hdr'] = ParagraphStyle(
+        'rc_sig_hdr', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_CENTER, leading=11, textColor=NAVY)
+    _styles_cache['tiny'] = ParagraphStyle(
+        'rc_tiny', fontName='Helvetica', fontSize=6,
+        alignment=TA_CENTER, leading=8)
+    _styles_cache['tiny_b'] = ParagraphStyle(
+        'rc_tiny_b', fontName='Helvetica-Bold', fontSize=6,
+        alignment=TA_LEFT, leading=8)
+    _styles_cache['contact_hdr'] = ParagraphStyle(
+        'rc_contact_hdr', fontName='Helvetica-Bold', fontSize=9,
+        alignment=TA_LEFT, leading=12, textColor=NAVY)
+    _styles_cache['acad_hdr'] = ParagraphStyle(
+        'rc_acad_hdr', fontName='Helvetica-Bold', fontSize=9,
+        alignment=TA_LEFT, leading=12, textColor=NAVY)
+    _styles_cache['comment_body'] = ParagraphStyle(
+        'rc_comment_body', fontName='Helvetica', fontSize=7,
+        alignment=TA_LEFT, leading=12)
+    return _styles_cache
+
 
 def generate_report_book(parent, exam_id, class_name, save_path):
     """
-    Core PDF Generation Logic
-    Generates a single PDF containing one page per student.
+    Generates professional report cards matching the SRMS V5 layout.
+    One landscape A4 page per student in a single PDF.
     """
     conn = connect()
     cur = conn.cursor()
+    ST = _get_styles()
 
+    # ── Fetch school profile ──
     cur.execute("""
-        SELECT school_name, school_motto, school_address, school_phone, school_email,
-               school_logo, school_stamp, head_teacher, academic_master, watermark_text
-        FROM school_profile
-        LIMIT 1
+        SELECT school_name, school_motto, school_address, school_phone,
+               school_email, school_logo, school_stamp, head_teacher,
+               academic_master, watermark_text, school_website
+        FROM school_profile LIMIT 1
     """)
     profile = cur.fetchone()
 
@@ -34,16 +127,21 @@ def generate_report_book(parent, exam_id, class_name, save_path):
     school_addr = profile[2] if profile else "-"
     school_phone = profile[3] if profile else ""
     school_email = profile[4] if profile else ""
-    school_logo = profile[5] if profile and profile[5] and os.path.exists(profile[5]) else None
-    school_stamp = profile[6] if profile and profile[6] and os.path.exists(profile[6]) else None
+    school_logo = (profile[5] if profile and profile[5]
+                   and os.path.exists(profile[5]) else None)
+    school_stamp = (profile[6] if profile and profile[6]
+                    and os.path.exists(profile[6]) else None)
     head_teacher = profile[7] if profile else ""
     academic_master = profile[8] if profile else ""
-    watermark_text = profile[9] if profile and profile[9] else "CONFIDENTIAL"
+    watermark_text = (profile[9] if profile and profile[9]
+                      else "CONFIDENTIAL")
+    school_website = (profile[10] if profile and len(profile) > 10
+                      and profile[10] else "")
 
-    contact_info = " | ".join([item for item in [school_addr, school_phone, school_email] if item])
-
+    # ── Academic context ──
     cur.execute("""
-        SELECT t.term_name, y.year_name, e.exam_name, e.level, t.id, t.academic_year_id
+        SELECT t.term_name, y.year_name, e.exam_name, e.level,
+               t.id, t.academic_year_id
         FROM exams e
         JOIN terms t ON e.term_id = t.id
         JOIN academic_years y ON t.academic_year_id = y.id
@@ -56,13 +154,16 @@ def generate_report_book(parent, exam_id, class_name, save_path):
 
     term_name, year_name, exam_name, level, term_id, year_id = context
 
+    # ── Requirements ──
     cur.execute("""
         SELECT item_name, quantity
         FROM requirements
-        WHERE academic_year_id=? AND term_id=? AND level=? AND (class_name=? OR class_name='-- All Classes --')
+        WHERE academic_year_id=? AND term_id=? AND level=?
+          AND (class_name=? OR class_name='-- All Classes --')
     """, (year_id, term_id, level, class_name))
     requirements_data = cur.fetchall()
 
+    # ── Ranking ──
     ranking_data = compute_student_scores(level, exam_id)
     class_students = [s for s in ranking_data if s.get('class') == class_name]
 
@@ -70,219 +171,548 @@ def generate_report_book(parent, exam_id, class_name, save_path):
         conn.close()
         return False, "No students found in this class with results."
 
+    ready_students = [s for s in class_students if s['status'] == 'READY']
+    total_in_class = len(ready_students)
+
+    # Gender position computation
+    gender_pos_tracker = {}
+    gender_counts = {}
+    gender_positions = {}
+    for s in class_students:
+        g = s.get('gender', '')
+        if g not in gender_counts:
+            gender_counts[g] = 0
+        if s['status'] == 'READY':
+            gender_counts[g] += 1
+            gender_pos_tracker.setdefault(g, 0)
+            gender_pos_tracker[g] += 1
+            gender_positions[s['admission']] = gender_pos_tracker[g]
+
+    # ── Settings ──
     use_watermark = get_setting('show_watermark', '1') == '1'
     use_req = get_setting('show_requirements', '1') == '1'
+    use_logo = get_setting('show_logo', '1') == '1'
+    generated_date = datetime.now().strftime("%d %B %Y")
 
+    # ── Page callback (border + watermark) ──
     def on_page(canvas, doc):
         if use_watermark:
             draw_watermark(canvas, doc, school_name, year_name, watermark_text)
         canvas.saveState()
-        canvas.setFont('Helvetica', 8)
-        footer_text = f"{school_name} | Page {canvas.getPageNumber()}"
-        canvas.drawRightString(doc.pagesize[0] - doc.rightMargin, 15, footer_text)
+        canvas.setStrokeColor(NAVY)
+        canvas.setLineWidth(2)
+        x = doc.leftMargin - 8
+        y = doc.bottomMargin - 8
+        w = doc.pagesize[0] - doc.leftMargin - doc.rightMargin + 16
+        h = doc.pagesize[1] - doc.topMargin - doc.bottomMargin + 16
+        canvas.rect(x, y, w, h)
         canvas.restoreState()
 
-    doc = SimpleDocTemplate(save_path, pagesize=landscape(A4), rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+    doc = SimpleDocTemplate(
+        save_path, pagesize=PAGE_SIZE,
+        rightMargin=R_MARGIN, leftMargin=L_MARGIN,
+        topMargin=T_MARGIN, bottomMargin=B_MARGIN
+    )
     elements = []
-    styles = getSampleStyleSheet()
 
-    style_center = ParagraphStyle(name='Center', alignment=TA_CENTER, fontSize=11, leading=14)
-    style_header = ParagraphStyle(name='Header', alignment=TA_CENTER, fontSize=18, fontName='Helvetica-Bold', leading=22)
-    style_subheader = ParagraphStyle(name='SubHeader', alignment=TA_CENTER, fontSize=13, leading=16)
-    style_label = ParagraphStyle(name='Label', fontName='Helvetica-Bold', fontSize=10, alignment=TA_LEFT)
-    style_value = ParagraphStyle(name='Value', fontSize=10, alignment=TA_LEFT)
-    style_note = ParagraphStyle(name='Note', fontSize=9, leading=12, alignment=TA_LEFT)
-
+    # ══════════════════════════════════════════════════════════════
+    # GENERATE ONE PAGE PER STUDENT
+    # ══════════════════════════════════════════════════════════════
     for student in class_students:
         adm = student['admission']
 
-        header_cells = []
-        if school_logo:
-            try:
-                logo = Image(school_logo, width=1.0 * inch, height=1.0 * inch)
-                header_cells.append(logo)
-            except Exception:
-                header_cells.append(Paragraph('', styles['Normal']))
-        else:
-            header_cells.append(Paragraph('', styles['Normal']))
+        # Fetch student details
+        cur.execute(
+            "SELECT full_name, gender, stream FROM students WHERE admission_no=?",
+            (adm,))
+        s_row = cur.fetchone()
+        student_name = s_row[0] if s_row else student.get('name', '')
+        student_gender = s_row[1] if s_row else student.get('gender', '')
+        student_stream = (s_row[2] if s_row and s_row[2] else '-')
 
-        school_info = [f"<b>{school_name.upper()}</b>"]
-        if school_motto:
-            school_info.append(f"<i>{school_motto}</i>")
-        if contact_info:
-            school_info.append(contact_info)
-        school_info.append(f"<b>{exam_name.upper()}</b>")
-        school_info.append(f"{term_name} - {year_name}")
+        # ── SECTION 1: HEADER (3 columns) ──
+        elements.append(_build_header(
+            ST, school_name, school_motto, school_addr, school_phone,
+            school_email, school_website, school_logo, use_logo,
+            year_name, term_name, exam_name, level, class_name,
+            student_stream, generated_date
+        ))
+        elements.append(HRFlowable(
+            width='100%', thickness=1.5, color=NAVY,
+            spaceBefore=3, spaceAfter=3))
 
-        header_cells.append(Paragraph('<br/>'.join(school_info), style_center))
+        # ── SECTION 2: STUDENT INFORMATION ──
+        report_id = f"SRMS-{year_name}-{adm.replace('/', '')}"
+        elements.append(_build_student_info(
+            ST, student_name, adm, student_gender, report_id,
+            student['status']))
+        elements.append(Spacer(1, 5))
 
-        header_table = Table([header_cells], colWidths=[1.2 * inch, 5.4 * inch])
-        header_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (1, 0), (1, 0), 'CENTER')
-        ]))
-        elements.append(header_table)
-        elements.append(Spacer(1, 0.12 * inch))
-        elements.append(HRFlowable(width='100%', thickness=1, color=colors.black, spaceBefore=5, spaceAfter=8))
-
-        cur.execute("SELECT full_name, gender, stream FROM students WHERE admission_no=?", (adm,))
-        s_extra = cur.fetchone() or [student.get('name', ''), student.get('gender', ''), '']
-
-        details_data = [
-            [Paragraph('<b>Admission No:</b>', style_label), adm, Paragraph('<b>Gender:</b>', style_label), s_extra[1] or '-'],
-            [Paragraph('<b>Student Name:</b>', style_label), s_extra[0], Paragraph('<b>Stream:</b>', style_label), s_extra[2] or '-'],
-            [Paragraph('<b>Class:</b>', style_label), class_name, Paragraph('<b>Level:</b>', style_label), level],
-            [Paragraph('<b>Exam:</b>', style_label), exam_name, Paragraph('<b>Term / Year:</b>', style_label), f"{term_name} - {year_name}"]
-        ]
-        dt = Table(details_data, colWidths=[1.25 * inch, 2.05 * inch, 1.25 * inch, 2.05 * inch])
-        dt.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ]))
-        elements.append(dt)
-        elements.append(Spacer(1, 0.18 * inch))
-
+        # ── SECTION 3: RESULTS + ACADEMIC SUMMARY ──
         cur.execute("""
             SELECT r.subject_name,
                    COALESCE(s.subject_short_name, r.subject_name),
                    r.marks
             FROM results r
-            LEFT JOIN subjects s ON s.subject_name = r.subject_name AND s.level = ?
+            LEFT JOIN subjects s
+              ON s.subject_name = r.subject_name AND s.level = ?
             WHERE r.admission_no=? AND r.exam_id=?
             ORDER BY r.subject_name
         """, (level, adm, exam_id))
         marks_rows = cur.fetchall()
-        subjects = []
-        marks_row = ["MARKS"]
-        grades_row = ["GRADE"]
 
-        for _, short_name, mark in marks_rows:
+        full_names, short_names, marks_vals, grades_vals = [], [], [], []
+        for fn, sn, mk in marks_rows:
+            g = get_grade(mk, level=level)
+            full_names.append(fn)
+            short_names.append(sn if sn != fn else fn[:4].upper())
+            marks_vals.append(mk)
+            grades_vals.append(g)
 
-            grade = get_grade(
-                mark,
-                level=level
-            )
+        total_marks = sum(marks_vals) if marks_vals else 0
+        num_subj = len(marks_vals)
+        average = round(total_marks / num_subj, 2) if num_subj else 0
 
-            subjects.append(short_name)
-            marks_row.append(str(mark))
-            grades_row.append(grade)
+        gender_pos = gender_positions.get(adm, '-')
+        gender_total = gender_counts.get(student_gender, '-')
 
-        results_data = [
-            ["SUBJECT"] + subjects,
-            marks_row,
-            grades_row
-        ]
+        elements.append(_build_results_and_summary(
+            ST, short_names, full_names, marks_vals, grades_vals,
+            total_marks, average, student['position'], total_in_class,
+            gender_pos, gender_total, student['division'],
+            student['points']))
+        elements.append(Spacer(1, 5))
 
-        total_cols = len(results_data[0])
+        # ── SECTION 4: COMMENTS / BEST-WORST / REQUIREMENTS ──
+        elements.append(_build_lower_section(
+            ST, marks_vals, full_names, grades_vals,
+            requirements_data, use_req))
+        elements.append(Spacer(1, 5))
 
-        results_table = Table(
-            results_data,
-            colWidths=[
-                9.6 * inch / total_cols
-            ] * total_cols
-        )
+        # ── SECTION 5: SIGNATURES ──
+        elements.append(_build_signatures(
+            ST, head_teacher, academic_master, school_stamp))
+        elements.append(Spacer(1, 4))
 
-        results_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0),
-             colors.HexColor('#D9E2F3')),
-            ('FONTNAME', (0, 0), (-1, 0),
-             'Helvetica-Bold'),
-            ('FONTNAME', (0, 1), (0, -1),
-             'Helvetica-Bold'),
-            ('GRID', (0, 0), (-1, -1),
-             0.8, colors.black),
-            ('ALIGN', (0, 0), (-1, -1),
-             'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1),
-             'MIDDLE'),
-            ('FONTSIZE', (0, 0), (-1, -1),
-             8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1),
-             5),
-            ('TOPPADDING', (0, 0), (-1, -1),
-             5),
-        ]))
+        # ── SECTION 6: FOOTER NOTE ──
+        elements.append(Paragraph(
+            '<b>Note:</b> This report is computer generated and does '
+            'not require a signature except the above.',
+            ST['note']))
 
-        elements.append(
-            Paragraph(
-                '<b>SUBJECT RESULTS</b>',
-                style_subheader
-            )
-        )
+        elements.append(PageBreak())
 
-        elements.append(results_table)
-
-        elements.append(
-            Spacer(
-                1,
-                0.10 * inch
-            )
-        )
-
-
-        summary_data = [
-            ["POSITION", "DIVISION", "POINTS", "AVERAGE", "STATUS"],
-            [str(student['position']), str(student['division']), str(student['points']), str(student['average']), student['status']]
-        ]
-        summary_table = Table(summary_data, colWidths=[1.2 * inch, 1.2 * inch, 1.2 * inch, 1.2 * inch, 1.2 * inch])
-        summary_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.whitesmoke),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(Paragraph('<b>ACADEMIC SUMMARY</b>', style_subheader))
-        elements.append(summary_table)
-        elements.append(Spacer(1, 0.2 * inch))
-
-        if use_req:
-            elements.append(Paragraph('<b>SCHOOL REQUIREMENTS</b>', style_subheader))
-            req_data = [["ITEM", "QUANTITY"]]
-            if requirements_data:
-                for item, qty in requirements_data:
-                    req_data.append([item, qty])
-            else:
-                req_data.append(["-", "-"])
-
-            req_table = Table(req_data, colWidths=[4.0 * inch, 1.6 * inch])
-            req_table.setStyle(TableStyle([
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ]))
-            elements.append(req_table)
-            elements.append(Spacer(1, 0.2 * inch))
-
-        elements.append(Paragraph('<b>TEACHER COMMENTS</b>', style_subheader))
-        comments = [
-            [Paragraph('Class Teacher: ________________________________________________________________', style_value)],
-            [Paragraph('Academic Master: _____________________________________________________________', style_value)],
-            [Paragraph('Head Teacher: ________________________________________________________________', style_value)]
-        ]
-
-        if school_stamp:
-            try:
-                stamp_image = Image(school_stamp, width=1.2 * inch, height=1.2 * inch)
-                elements.append(Spacer(1, 0.15 * inch))
-                elements.append(stamp_image)
-            except Exception:
-                pass
-
-
+    # ── Build PDF ──
     try:
         doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
         conn.close()
-        return True, 'Report Book generated successfully.'
+        return True, 'Report cards generated successfully.'
     except Exception as e:
         conn.close()
         return False, str(e)
+
+
+# ======================================================================
+# BUILDER HELPERS
+# ======================================================================
+
+def _build_header(ST, school_name, motto, addr, phone, email, website,
+                  logo_path, use_logo, year, term, exam, level, cls,
+                  stream, gen_date):
+    """Three-column header: contacts | logo+name | academic info."""
+
+    # ── Left: School Contacts ──
+    lines = [Paragraph('<b><u>SCHOOL CONTACTS</u></b>', ST['contact_hdr'])]
+    if addr:
+        lines.append(Paragraph(f'{addr}', ST['small']))
+    if phone:
+        lines.append(Paragraph(f'{phone}', ST['small']))
+    if email:
+        lines.append(Paragraph(f'{email}', ST['small']))
+    if website:
+        lines.append(Paragraph(f'{website}', ST['small']))
+
+    left = Table([[l] for l in lines], colWidths=[2.5 * inch])
+    left.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+
+    # ── Center: Logo + Name + Motto ──
+    center_parts = []
+    if use_logo and logo_path:
+        try:
+            logo = Image(logo_path, width=0.85 * inch, height=0.85 * inch)
+            center_parts.append([logo])
+        except Exception:
+            pass
+    center_parts.append(
+        [Paragraph(f'<b>{school_name.upper()}</b>', ST['title'])])
+    if motto:
+        center_parts.append(
+            [Paragraph(f'<i>{motto}</i>', ST['motto'])])
+
+    center = Table(center_parts, colWidths=[4.2 * inch])
+    center.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+
+    # ── Right: Academic Information ──
+    term_num = term.replace('Term ', '') if term else ''
+    acad_rows = [
+        [Paragraph('<b><u>ACADEMIC INFORMATION</u></b>',
+                   ST['acad_hdr']), ''],
+        [Paragraph('<b>ACADEMIC YEAR</b>', ST['small_b_left']),
+         Paragraph(f':  {year}', ST['small'])],
+        [Paragraph('<b>TERM</b>', ST['small_b_left']),
+         Paragraph(f':  {term_num}', ST['small'])],
+        [Paragraph('<b>EXAMINATION</b>', ST['small_b_left']),
+         Paragraph(f':  {exam}', ST['small'])],
+        [Paragraph('<b>LEVEL</b>', ST['small_b_left']),
+         Paragraph(f':  {level}', ST['small'])],
+        [Paragraph('<b>CLASS</b>', ST['small_b_left']),
+         Paragraph(f':  {cls}', ST['small'])],
+        [Paragraph('<b>STREAM</b>', ST['small_b_left']),
+         Paragraph(f':  {stream}', ST['small'])],
+        [Paragraph('<b>DATE GENERATED</b>', ST['small_b_left']),
+         Paragraph(f':  {gen_date}', ST['small'])],
+    ]
+    right = Table(acad_rows, colWidths=[1.5 * inch, 1.3 * inch])
+    right.setStyle(TableStyle([
+        ('SPAN', (0, 0), (1, 0)),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+
+    header = Table(
+        [[left, center, right]],
+        colWidths=[2.8 * inch, 4.6 * inch, 3.2 * inch])
+    header.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+    ]))
+    return header
+
+
+def _build_student_info(ST, name, adm, gender, report_id, status):
+    """Bordered student information section."""
+
+    hdr = Table(
+        [[Paragraph('<b>STUDENT INFORMATION</b>', ST['section_left'])]],
+        colWidths=[PAGE_W])
+    hdr.setStyle(TableStyle([
+        ('LINEBELOW', (0, 0), (-1, 0), 1, NAVY),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+
+    info = [
+        [Paragraph('<b>STUDENT NAME</b>', ST['label']),
+         Paragraph(f':  {name}', ST['value']),
+         Paragraph('<b>DATE OF BIRTH</b>', ST['label']),
+         Paragraph(':  -', ST['value']),
+         Paragraph('<b>REPORT ID</b>', ST['label']),
+         Paragraph(f':  {report_id}', ST['value'])],
+        [Paragraph('<b>ADMISSION NO.</b>', ST['label']),
+         Paragraph(f':  {adm}', ST['value']),
+         Paragraph('<b>CLASS TEACHER</b>', ST['label']),
+         Paragraph(':  -', ST['value']),
+         Paragraph('<b>STATUS</b>', ST['label']),
+         Paragraph(f':  {status}', ST['value'])],
+        [Paragraph('<b>GENDER</b>', ST['label']),
+         Paragraph(f':  {gender}', ST['value']),
+         '', '', '', ''],
+    ]
+    tbl = Table(info, colWidths=[
+        1.3 * inch, 1.6 * inch, 1.3 * inch,
+        1.6 * inch, 1.1 * inch, 1.7 * inch])
+    tbl.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOX', (0, 0), (-1, -1), 1, NAVY),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, GRID_COLOR),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    wrapper = Table([[hdr], [tbl]], colWidths=[PAGE_W])
+    wrapper.setStyle(TableStyle([
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return wrapper
+
+
+def _build_results_and_summary(ST, short_names, full_names, marks,
+                               grades, total_marks, average, position,
+                               total_class, gender_pos, gender_total,
+                               division, points):
+    """Subject results table (left) + academic summary (right)."""
+    n = len(marks)
+
+    # ── Subject table ──
+    label_w = 1.1 * inch
+    sub_col_w = min(0.72 * inch,
+                    max(0.5 * inch, (6.4 * inch - label_w) / max(n, 1)))
+    sub_tbl_w = label_w + sub_col_w * n
+
+    row_hdr = [Paragraph('<b>SUBJECTS</b>', ST['small_b'])]
+    row_full = [Paragraph('<b>SUBJECT FULL NAME</b>', ST['tiny_b'])]
+    row_marks = [Paragraph('<b>MARKS SCORED</b>', ST['small_b'])]
+    row_grade = [Paragraph('<b>GRADE</b>', ST['small_b'])]
+
+    for i in range(n):
+        row_hdr.append(Paragraph(f'<b>{short_names[i]}</b>', ST['small_b']))
+        row_full.append(Paragraph(full_names[i], ST['tiny']))
+        row_marks.append(Paragraph(f'<b>{marks[i]}</b>', ST['center_b']))
+        row_grade.append(Paragraph(f'<b>{grades[i]}</b>', ST['center_b']))
+
+    col_widths = [label_w] + [sub_col_w] * n
+    tbl = Table([row_hdr, row_full, row_marks, row_grade],
+                colWidths=col_widths)
+    tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+        ('BACKGROUND', (0, 1), (-1, 1), NAVY_LIGHT),
+        ('BACKGROUND', (0, 2), (0, 2), NAVY),
+        ('TEXTCOLOR', (0, 2), (0, 2), WHITE),
+        ('BACKGROUND', (0, 3), (0, 3), NAVY),
+        ('TEXTCOLOR', (0, 3), (0, 3), WHITE),
+        ('GRID', (0, 0), (-1, -1), 0.5, NAVY),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+    ]))
+
+    # ── Academic summary ──
+    summary_w = PAGE_W - sub_tbl_w - 6
+    lw = summary_w * 0.62
+    rw = summary_w * 0.38
+
+    sum_hdr = Table(
+        [[Paragraph('<b>ACADEMIC SUMMARY</b>', ST['section_hdr'])]],
+        colWidths=[summary_w])
+    sum_hdr.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), NAVY_LIGHT),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, NAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+
+    rows = [
+        [Paragraph('<b>TOTAL MARKS</b>', ST['small_b_left']),
+         Paragraph(f'<b>{total_marks}</b>', ST['right_b'])],
+        [Paragraph('<b>AVERAGE (%)</b>', ST['small_b_left']),
+         Paragraph(f'<b>{average}</b>', ST['right_b'])],
+        [Paragraph('<b>CLASS POSITION</b>', ST['small_b_left']),
+         Paragraph(f'<b>{position} / {total_class}</b>', ST['right_b'])],
+        [Paragraph('<b>GENDER POSITION</b>', ST['small_b_left']),
+         Paragraph(f'<b>{gender_pos} / {gender_total}</b>', ST['right_b'])],
+        [Paragraph('<b>DIVISION</b>', ST['small_b_left']),
+         Paragraph(f'<b>{division}</b>', ST['right_b'])],
+        [Paragraph('<b>POINTS</b>', ST['small_b_left']),
+         Paragraph(f'<b>{points}</b>', ST['right_b'])],
+    ]
+    sum_body = Table(rows, colWidths=[lw, rw])
+    sum_body.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, GRID_COLOR),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('BACKGROUND', (0, 0), (-1, -1), LIGHT_BG),
+    ]))
+
+    summary_col = Table(
+        [[sum_hdr], [sum_body]], colWidths=[summary_w])
+    summary_col.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+
+    combined = Table(
+        [[tbl, summary_col]],
+        colWidths=[sub_tbl_w, summary_w + 6])
+    combined.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    return combined
+
+
+def _build_lower_section(ST, marks, full_names, grades,
+                         requirements_data, use_req):
+    """Three columns: comments | best/worst subjects | requirements."""
+    col_w = PAGE_W / 3
+    inner = col_w - 6
+
+    # ── Teacher's Comments ──
+    c_hdr = _section_header("TEACHER'S COMMENTS", ST, inner)
+    c_body = Paragraph(
+        'Class Teacher: ___________________________________________<br/><br/>'
+        'Academic Master: _________________________________________<br/><br/>'
+        'Head Teacher: ____________________________________________',
+        ST['comment_body'])
+    comments = _boxed([c_hdr, c_body], inner)
+
+    # ── Best & Weakest Subjects ──
+    bw_hdr = _section_header("BEST & WEAKEST SUBJECTS", ST, inner)
+
+    if marks:
+        best_i = marks.index(max(marks))
+        worst_i = marks.index(min(marks))
+        best_name, best_mk, best_gr = full_names[best_i], marks[best_i], grades[best_i]
+        worst_name, worst_mk, worst_gr = full_names[worst_i], marks[worst_i], grades[worst_i]
+    else:
+        best_name = worst_name = '-'
+        best_mk = worst_mk = 0
+        best_gr = worst_gr = '-'
+
+    qw = inner / 4
+    bw_data = [
+        [Paragraph('<b>BEST SUBJECT</b>', ST['small_b']), '',
+         Paragraph('<b>WEAKEST SUBJECT</b>', ST['small_b']), ''],
+        [Paragraph(best_name, ST['small_c']), '',
+         Paragraph(worst_name, ST['small_c']), ''],
+        [Paragraph('<b>MARKS</b>', ST['small_b']),
+         Paragraph('<b>GRADE</b>', ST['small_b']),
+         Paragraph('<b>MARKS</b>', ST['small_b']),
+         Paragraph('<b>GRADE</b>', ST['small_b'])],
+        [Paragraph(f'<b>{best_mk}</b>', ST['center_b']),
+         Paragraph(f'<b>{best_gr}</b>', ST['center_b']),
+         Paragraph(f'<b>{worst_mk}</b>', ST['center_b']),
+         Paragraph(f'<b>{worst_gr}</b>', ST['center_b'])],
+    ]
+    bw_tbl = Table(bw_data, colWidths=[qw] * 4)
+    bw_tbl.setStyle(TableStyle([
+        ('SPAN', (0, 0), (1, 0)), ('SPAN', (2, 0), (3, 0)),
+        ('SPAN', (0, 1), (1, 1)), ('SPAN', (2, 1), (3, 1)),
+        ('GRID', (0, 2), (-1, -1), 0.5, NAVY),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    best_worst = _boxed([bw_hdr, bw_tbl], inner)
+
+    # ── School Requirements ──
+    rq_hdr = _section_header("SCHOOL REQUIREMENTS", ST, inner)
+    rq_rows = [
+        [Paragraph('<b>NO.</b>', ST['small_b']),
+         Paragraph('<b>ITEM</b>', ST['small_b']),
+         Paragraph('<b>STATUS</b>', ST['small_b'])]]
+    if use_req and requirements_data:
+        for i, (item, qty) in enumerate(requirements_data, 1):
+            rq_rows.append([
+                Paragraph(str(i), ST['small_c']),
+                Paragraph(item, ST['small']),
+                Paragraph('\u2713', ST['small_c'])])
+    else:
+        rq_rows.append([
+            Paragraph('-', ST['small_c']),
+            Paragraph('-', ST['small']),
+            Paragraph('-', ST['small_c'])])
+
+    rq_tbl = Table(rq_rows, colWidths=[
+        0.3 * inch, inner - 0.3 * inch - 0.5 * inch, 0.5 * inch])
+    rq_tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), NAVY_LIGHT),
+        ('GRID', (0, 0), (-1, -1), 0.5, GRID_COLOR),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    reqs = _boxed([rq_hdr, rq_tbl], inner)
+
+    row = Table([[comments, best_worst, reqs]],
+                colWidths=[col_w, col_w, col_w])
+    row.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    return row
+
+
+def _build_signatures(ST, head_teacher, academic_master, stamp_path):
+    """Signature section with four columns."""
+    col_w = PAGE_W / 4
+
+    stamp_cell = ''
+    if stamp_path:
+        try:
+            stamp_cell = Image(stamp_path, width=0.8 * inch, height=0.8 * inch)
+        except Exception:
+            stamp_cell = Paragraph('OFFICIAL<br/>SCHOOL STAMP', ST['small_c'])
+    else:
+        stamp_cell = Paragraph('OFFICIAL<br/>SCHOOL STAMP', ST['small_c'])
+
+    data = [
+        [Paragraph('<b>CLASS TEACHER</b>', ST['sig_hdr']),
+         Paragraph('<b>ACADEMIC MASTER</b>', ST['sig_hdr']),
+         Paragraph('<b>HEAD TEACHER</b>', ST['sig_hdr']),
+         Paragraph('<b>PARENT / GUARDIAN</b>', ST['sig_hdr'])],
+        [Paragraph('Signature: _______________', ST['sig']),
+         Paragraph('Signature: _______________', ST['sig']),
+         Paragraph('Signature: _______________', ST['sig']),
+         Paragraph('Signature: _______________', ST['sig'])],
+        [Paragraph('Name: _______________', ST['sig']),
+         Paragraph(
+             f'Name: {academic_master}' if academic_master
+             else 'Name: _______________', ST['sig']),
+         Paragraph(
+             f'Name: {head_teacher}' if head_teacher
+             else 'Name: _______________', ST['sig']),
+         Paragraph('Name: _______________', ST['sig'])],
+        [Paragraph('Date: _______________', ST['sig']),
+         Paragraph('Date: _______________', ST['sig']),
+         Paragraph('Date: _______________', ST['sig']),
+         Paragraph('Date: _______________', ST['sig'])],
+    ]
+
+    tbl = Table(data, colWidths=[col_w] * 4)
+    tbl.setStyle(TableStyle([
+        ('LINEABOVE', (0, 0), (-1, 0), 1, NAVY),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    return tbl
+
+
+# ── tiny helpers ──
+
+def _section_header(title, ST, width):
+    t = Table(
+        [[Paragraph(f'<b>{title}</b>', ST['section_hdr'])]],
+        colWidths=[width])
+    t.setStyle(TableStyle([
+        ('LINEBELOW', (0, 0), (-1, 0), 1, NAVY),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    return t
+
+
+def _boxed(items, width):
+    rows = [[item] for item in items]
+    t = Table(rows, colWidths=[width])
+    t.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return t
