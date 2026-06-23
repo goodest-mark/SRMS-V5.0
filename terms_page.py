@@ -217,19 +217,28 @@ class TermsPage(QWidget):
         conn = connect()
         cur = conn.cursor()
 
-        cur.execute("""
-            UPDATE terms
-            SET is_active=0
-        """)
+        try:
+            cur.execute("""
+                UPDATE terms
+                SET is_active=0
+            """)
 
-        cur.execute("""
-            UPDATE terms
-            SET is_active=1
-            WHERE id=?
-        """, (term_id,))
+            cur.execute("""
+                UPDATE terms
+                SET is_active=1
+                WHERE id=?
+            """, (term_id,))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            QMessageBox.critical(
+                self,
+                "Database Error",
+                f"Failed to activate term: {e}"
+            )
+        finally:
+            conn.close()
 
         self.load()
 

@@ -111,9 +111,20 @@ class SettingsPage(QWidget):
         self.backup_folder.setText(settings.get('backup_folder', './backups'))
 
     def save_settings(self):
+        # Validate numeric inputs
+        o_counted = self.o_level_counted.text().strip()
+        a_principal = self.a_level_principal.text().strip()
+
+        if not o_counted.isdigit() or not (1 <= int(o_counted) <= 20):
+            QMessageBox.warning(self, "Validation Error", "O-Level Counted Subjects must be a number between 1 and 20.")
+            return
+        if not a_principal.isdigit() or not (1 <= int(a_principal) <= 10):
+            QMessageBox.warning(self, "Validation Error", "A-Level Principal Subjects must be a number between 1 and 10.")
+            return
+
         data = [
-            ('o_level_counted', self.o_level_counted.text()),
-            ('a_level_principal', self.a_level_principal.text()),
+            ('o_level_counted', o_counted),
+            ('a_level_principal', a_principal),
             ('show_logo', '1' if self.show_logo.isChecked() else '0'),
             ('show_watermark', '1' if self.show_watermark.isChecked() else '0'),
             ('show_gender_summary', '1' if self.show_gender_summary.isChecked() else '0'),
@@ -157,5 +168,6 @@ def get_setting(key, default=None):
         res = cur.fetchone()
         conn.close()
         return res[0] if res else default
-    except:
+    except Exception as e:
+        print(f"[ERROR] Failed to read setting '{key}': {e}")
         return default

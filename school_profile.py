@@ -10,6 +10,17 @@ from PySide6.QtCore import Qt
 from database import connect
 from security_settings import authorize_action
 
+_ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+
+
+def _is_safe_image_path(path):
+    """Validate that the file path points to a real image file (no path traversal)."""
+    if not path:
+        return False
+    real_path = os.path.realpath(path)
+    ext = os.path.splitext(real_path)[1].lower()
+    return ext in _ALLOWED_IMAGE_EXTENSIONS and os.path.isfile(real_path)
+
 
 class SchoolProfilePage(QWidget):
     def __init__(self):
@@ -154,25 +165,25 @@ class SchoolProfilePage(QWidget):
 
     def upload_logo(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Logo", "", "Images (*.png *.jpg *.jpeg)")
-        if file_path:
+        if file_path and _is_safe_image_path(file_path):
             self.logo_path = file_path
             self.show_preview(self.logo_preview, file_path)
 
     def upload_stamp(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Stamp", "", "Images (*.png *.jpg *.jpeg)")
-        if file_path:
+        if file_path and _is_safe_image_path(file_path):
             self.stamp_path = file_path
             self.show_preview(self.stamp_preview, file_path)
 
     def upload_login_background(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Login Background", "", "Images (*.png *.jpg *.jpeg)")
-        if file_path:
+        if file_path and _is_safe_image_path(file_path):
             self.login_bg_path = file_path
             self.show_preview(self.login_bg_preview, file_path)
 
     def upload_dashboard_background(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Dashboard Background", "", "Images (*.png *.jpg *.jpeg)")
-        if file_path:
+        if file_path and _is_safe_image_path(file_path):
             self.dashboard_bg_path = file_path
             self.show_preview(self.dashboard_bg_preview, file_path)
 
@@ -216,8 +227,9 @@ class SchoolProfilePage(QWidget):
                 if self.stamp_path: self.show_preview(self.stamp_preview, self.stamp_path)
                 if self.login_bg_path: self.show_preview(self.login_bg_preview, self.login_bg_path)
                 if self.dashboard_bg_path: self.show_preview(self.dashboard_bg_preview, self.dashboard_bg_path)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[ERROR] Failed to load school profile: {e}")
+            QMessageBox.warning(self, "Load Error", f"Could not load school profile data: {e}")
 
     def save_profile(self):
         if not authorize_action(self, "School Profile Changes"):
@@ -244,8 +256,8 @@ class SchoolProfilePage(QWidget):
             conn.commit()
             conn.close()
             QMessageBox.information(self, "Success", "School Profile Configuration Saved.")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+        except Exception:
+            QMessageBox.critical(self, "Error", "An unexpected error occurred while saving the school profile.")
 
     def reset_form(self):
         self.school_name.clear()

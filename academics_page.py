@@ -112,6 +112,6 @@ class AcademicsPage(QWidget):
                 if callable(method):
                     try:
                         method()
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"[ERROR] Failed to call {method_name}: {e}")
                     break

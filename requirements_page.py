@@ -374,7 +374,8 @@ class RequirementsPage(QWidget):
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     """, (year_id, term_id, level, class_name, str(item), str(qty), str(notes or "")))
                     imported += 1
-                except:
+                except Exception as e:
+                    print(f"[ERROR] Failed to import requirement '{item}': {e}")
                     continue
                     
             conn.commit()
