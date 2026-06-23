@@ -223,9 +223,9 @@ class ExcelResultsImport(QWidget):
                 try:
                     marks = float(marks_raw)
                     if not (0 <= marks <= 100):
-                        raise ValueError("Range Error")
-                except:
-                    self.add_log(idx + 1, f"Invalid Marks for {adm_no}: {marks_raw}", "ERROR")
+                        raise ValueError("Marks out of range (must be 0-100)")
+                except (ValueError, TypeError) as e:
+                    self.add_log(idx + 1, f"Invalid Marks for {adm_no}: {marks_raw} ({e})", "ERROR")
                     errors += 1
                     continue
 

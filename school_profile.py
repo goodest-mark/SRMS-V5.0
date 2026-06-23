@@ -216,8 +216,9 @@ class SchoolProfilePage(QWidget):
                 if self.stamp_path: self.show_preview(self.stamp_preview, self.stamp_path)
                 if self.login_bg_path: self.show_preview(self.login_bg_preview, self.login_bg_path)
                 if self.dashboard_bg_path: self.show_preview(self.dashboard_bg_preview, self.dashboard_bg_path)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[ERROR] Failed to load school profile: {e}")
+            QMessageBox.warning(self, "Load Error", f"Could not load school profile data: {e}")
 
     def save_profile(self):
         if not authorize_action(self, "School Profile Changes"):

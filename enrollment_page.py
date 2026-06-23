@@ -440,7 +440,8 @@ class EnrollmentPage(QWidget):
                         ON CONFLICT(admission_no, subject_name, academic_year_id, term_id) DO NOTHING
                     """, (adm, subject, year_id, term_id))
                     imported += 1
-                except:
+                except Exception as e:
+                    print(f"[ERROR] Failed to import enrollment for '{adm}' in '{subject}': {e}")
                     continue
                     
             conn.commit()

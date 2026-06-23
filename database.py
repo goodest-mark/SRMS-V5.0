@@ -16,6 +16,17 @@ def connect():
 def init_db():
     conn = connect()
     cur = conn.cursor()
+    try:
+        _init_db_inner(conn, cur)
+    except Exception as e:
+        conn.rollback()
+        print(f"[CRITICAL] Database initialization failed: {e}")
+        raise
+    finally:
+        conn.close()
+
+
+def _init_db_inner(conn, cur):
 
     # =========================
     # STUDENTS
@@ -463,4 +474,3 @@ def init_db():
     """)
 
     conn.commit()
-    conn.close()

@@ -532,11 +532,9 @@ class DashboardHome(QWidget):
             )
 
         except Exception as error:
-
-            print(
-                "Dashboard Error:",
-                error
-            )
+            print(f"[ERROR] Dashboard failed to load: {error}")
+            self.school_lbl.setText("Dashboard Error")
+            self.exam_lbl.setText(f"Could not load data: {error}")
 
         finally:
             conn.close()

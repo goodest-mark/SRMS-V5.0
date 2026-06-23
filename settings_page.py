@@ -157,5 +157,6 @@ def get_setting(key, default=None):
         res = cur.fetchone()
         conn.close()
         return res[0] if res else default
-    except:
+    except Exception as e:
+        print(f"[ERROR] Failed to read setting '{key}': {e}")
         return default

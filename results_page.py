@@ -657,7 +657,8 @@ class ResultsPage(QWidget):
                                 marks=excluded.marks
                         """, (str(adm), subject_name, int(marks), exam_id))
                         imported += 1
-                    except:
+                    except Exception as e:
+                        print(f"[ERROR] Failed to import result for '{adm}': {e}")
                         continue
                         
             conn.commit()

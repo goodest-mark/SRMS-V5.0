@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+import sqlite3
+
 from class_utils import get_classes
 from database import connect
 from event_bus import EventBus
@@ -489,7 +491,8 @@ class StudentsPage(QWidget):
                         updated += 1
                     else:
                         imported += 1
-                except:
+                except Exception as e:
+                    print(f"[ERROR] Failed to import student '{adm}': {e}")
                     rejected += 1
                     continue
                     
