@@ -259,7 +259,7 @@ class ExcelResultsImport(QWidget):
             
             EventBus.emit("RESULTS_UPDATED")
 
-        except Exception as e:
-            QMessageBox.critical(self, "System Error", str(e))
+        except Exception:
+            QMessageBox.critical(self, "System Error", "An unexpected error occurred during import. Please verify the file format.")
         finally:
             self.progress.setVisible(False)

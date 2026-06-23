@@ -560,9 +560,9 @@ class ResultsPage(QWidget):
                     DO UPDATE SET marks = excluded.marks
                 """, (admission_no, subject_name, marks, exam_id))
             conn.commit()
-        except Exception as e:
+        except Exception:
             conn.rollback()
-            QMessageBox.critical(self, "Database Error", str(e))
+            QMessageBox.critical(self, "Database Error", "An unexpected error occurred while saving results.")
             return
         finally:
             conn.close()
@@ -670,8 +670,8 @@ class ResultsPage(QWidget):
             EventBus.emit("RESULTS_UPDATED")
             QMessageBox.information(self, "Import Complete", f"Imported {imported} marks.")
             
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Import failed: {str(e)}")
+        except Exception:
+            QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")
 
     def _clear_table(self):
         self.loading_table = True

@@ -1,5 +1,6 @@
 import hashlib
 import os
+import secrets
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -214,8 +215,12 @@ class SecuritySettingsPage(QWidget):
         QMessageBox.information(self, "Success", "Admin passcode changed successfully.")
 
 
-def hash_passcode(value):
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+def hash_passcode(value, salt=None):
+    """Hash a passcode using PBKDF2-HMAC-SHA256 with a random salt."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac("sha256", value.encode("utf-8"), salt.encode("utf-8"), iterations=260000)
+    return f"{salt}${dk.hex()}"
 
 
 def get_security_passcode():
@@ -232,12 +237,20 @@ def check_passcode(value):
     if not saved:
         return False
 
-    hashed_value = hash_passcode(value)
-    if saved == hashed_value:
+    if "$" in saved:
+        # New PBKDF2 format: salt$hash
+        salt, stored_hash = saved.split("$", 1)
+        dk = hashlib.pbkdf2_hmac("sha256", value.encode("utf-8"), salt.encode("utf-8"), iterations=260000)
+        return secrets.compare_digest(dk.hex(), stored_hash)
+
+    # Legacy SHA-256 format (no salt separator) — verify then upgrade
+    legacy_hash = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    if secrets.compare_digest(saved, legacy_hash):
+        # Auto-upgrade to PBKDF2 on successful login
+        update_passcode(value)
         return True
 
-    # Backward compatibility for legacy plaintext passcodes
-    return saved == value
+    return False
 
 
 def update_passcode(value):

@@ -282,11 +282,11 @@ class StudentsPage(QWidget):
                 "That admission number is already registered.",
             )
             return
-        except Exception as error:
+        except Exception:
             QMessageBox.critical(
                 self,
                 "Database Error",
-                str(error),
+                "An unexpected error occurred while saving the student record.",
             )
             return
         finally:
@@ -362,11 +362,11 @@ class StudentsPage(QWidget):
                 (self.selected_id,),
             )
             conn.commit()
-        except Exception as error:
+        except Exception:
             QMessageBox.critical(
                 self,
                 "Database Error",
-                str(error),
+                "An unexpected error occurred while deleting the student record.",
             )
             return
         finally:
@@ -507,5 +507,5 @@ class StudentsPage(QWidget):
                                   f"- Existing Records Updated: {updated}\n"
                                   f"- Records Rejected (Invalid Data): {rejected}")
             
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Import failed: {str(e)}")
+        except Exception:
+            QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")
