@@ -4,7 +4,8 @@ from PySide6.QtWidgets import QApplication
 from splash import SplashScreen
 from main_window import MainWindow
 from database import init_db
-from theme import APP_STYLE
+from settings_page import get_setting
+from theme import get_theme
 
 
 def start_app():
@@ -12,13 +13,14 @@ def start_app():
     init_db()
 
     app = QApplication(sys.argv)
-    app.setStyleSheet(APP_STYLE)
+    saved_theme = get_setting('theme', 'Dark')
+    app.setStyleSheet(get_theme(saved_theme))
 
     def show_main():
 
         global window
         window = MainWindow()
-        window.show()
+        window.showMaximized()
 
     splash = SplashScreen(on_finish=show_main)
     splash.show()

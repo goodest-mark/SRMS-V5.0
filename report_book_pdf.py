@@ -218,8 +218,8 @@ def generate_report_book(parent, exam_id, class_name, save_path):
 
     try:
         doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
-        conn.close()
         return True, "Report Book generated successfully."
     except Exception as e:
-        conn.close()
         return False, str(e)
+    finally:
+        conn.close()

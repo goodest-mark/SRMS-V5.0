@@ -224,11 +224,70 @@ class ExcelResultsImport(QWidget):
 
                 # Save Results (Update or Insert)
                 cur.execute("""
-                    INSERT INTO results (admission_no, subject_name, marks, exam_id)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(admission_no, subject_name, exam_id) 
-                    DO UPDATE SET marks = excluded.marks
-                """, (adm_no, subject_name, int(marks), exam_id))
+                    SELECT t.id, t.academic_year_id 
+                    FROM exams e
+                    JOIN terms t ON e.term_id = t.id
+                    WHERE e.id = ?
+                """, (exam_id,))
+                term_res = cur.fetchone()
+                if not term_res:
+                    QMessageBox.critical(self, "Error", "Invalid Academic Context for selected Exam.")
+                    return
+                term_id, year_id = term_res
+
+                for idx, row in enumerate(rows):
+                    self.progress.setValue(int(((idx + 1) / total_rows) * 100))
+                    
+                    # Basic row check
+                    if not row or len(row) < 2:
+                        self.add_log(idx + 1, "Empty or incomplete row", "SKIPPED")
+                        skipped += 1
+                        continue
+
+                    adm_no = str(row[0]).strip()
+                    marks_raw = row[1]
+
+                    if not adm_no or marks_raw is None:
+                        self.add_log(idx + 1, f"Missing data: {adm_no} / {marks_raw}", "SKIPPED")
+                        skipped += 1
+                        continue
+
+                    # Validate numeric marks
+                    try:
+                        marks = float(marks_raw)
+                        if not (0 <= marks <= 100):
+                            raise ValueError("Marks out of range (must be 0-100)")
+                    except (ValueError, TypeError) as e:
+                        self.add_log(idx + 1, f"Invalid Marks for {adm_no}: {marks_raw} ({e})", "ERROR")
+                        errors += 1
+                        continue
+
+                    # Validate Student & Enrollment
+                    cur.execute("""
+                        SELECT 1 FROM enrollments 
+                        WHERE admission_no=? AND subject_name=? AND academic_year_id=? AND term_id=?
+                    """, (adm_no, subject_name, year_id, term_id))
+                    
+                    if not cur.fetchone():
+                        self.add_log(idx + 1, f"{adm_no} not enrolled in {subject_name} this term.", "ERROR")
+                        errors += 1
+                        continue
+
+                    # Save Results (Update or Insert)
+                    cur.execute("""
+                        INSERT INTO results (admission_no, subject_name, marks, exam_id)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(admission_no, subject_name, exam_id) 
+                        DO UPDATE SET marks = excluded.marks
+                    """, (adm_no, subject_name, int(marks), exam_id))
+                    
+                    imported += 1
+                    # self.add_log(idx + 1, f"Imported {adm_no}", "SUCCESS") # Too much noise if table is big
+
+                conn.commit()
+
+                QMessageBox.information(self, "Import Complete", 
+                                      f"Summary:\nImported: {imported}\nSkipped: {skipped}\nErrors: {errors}")
                 
                 imported += 1
                 # self.add_log(idx + 1, f"Imported {adm_no}", "SUCCESS") # Too much noise if table is big

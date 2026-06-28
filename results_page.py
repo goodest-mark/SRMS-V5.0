@@ -480,8 +480,8 @@ class ResultsPage(QWidget):
                         ON CONFLICT(admission_no, subject_name, exam_id)
                         DO UPDATE SET marks = excluded.marks
                     """, (admission_no, subject_name, marks, exam_id))
-        except Exception:
-            QMessageBox.critical(self, "Database Error", "An unexpected error occurred while saving results.")
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error", f"An unexpected error occurred while saving results: {e}")
             return
 
         # V4.1: Automatically refresh subject completion
@@ -573,8 +573,8 @@ class ResultsPage(QWidget):
             EventBus.emit("RESULTS_UPDATED")
             QMessageBox.information(self, "Import Complete", f"Imported {imported} marks.")
             
-        except Exception:
-            QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Import failed: {e}")
 
     def _clear_table(self):
         self.loading_table = True
