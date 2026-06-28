@@ -14,7 +14,8 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtCore import Qt
 
-from database import connect
+from db_utils import fetch_all, fetch_one, execute
+from ui_helpers import show_error, confirm_action
 
 # Legacy / unused module imports mocked to prevent ImportError
 AddStudentWindow = None
@@ -145,27 +146,21 @@ class MainWindow(QMainWindow):
     # =========================
 
     def load_data(self):
-        conn = connect()
-        try:
-            cur = conn.cursor()
-            text = self.search.text()
+        text = self.search.text()
 
-            if text:
-                cur.execute("""
-                    SELECT id, admission_no, full_name, gender, class, stream
-                    FROM students
-                    WHERE full_name LIKE ? OR admission_no LIKE ?
-                    ORDER BY id DESC
-                """, (f"%{text}%", f"%{text}%"))
-            else:
-                cur.execute("""
-                    SELECT id, admission_no, full_name, gender, class, stream
-                    FROM students
-                    ORDER BY id DESC
-                """)
-            rows = cur.fetchall()
-        finally:
-            conn.close()
+        if text:
+            rows = fetch_all("""
+                SELECT id, admission_no, full_name, gender, class, stream
+                FROM students
+                WHERE full_name LIKE ? OR admission_no LIKE ?
+                ORDER BY id DESC
+            """, (f"%{text}%", f"%{text}%"))
+        else:
+            rows = fetch_all("""
+                SELECT id, admission_no, full_name, gender, class, stream
+                FROM students
+                ORDER BY id DESC
+            """)
 
         self.table.setRowCount(len(rows))
         for r, row in enumerate(rows):
@@ -212,17 +207,11 @@ class MainWindow(QMainWindow):
 
         admission = self.table.item(row, 1).text()
 
-        conn = connect()
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT id, admission_no, full_name, gender, class, stream
-                FROM students
-                WHERE admission_no=?
-            """, (admission,))
-            student = cur.fetchone()
-        finally:
-            conn.close()
+        student = fetch_one("""
+            SELECT id, admission_no, full_name, gender, class, stream
+            FROM students
+            WHERE admission_no=?
+        """, (admission,))
 
         if student:
             self.edit_win = EditStudentWindow(student, self.load_data)
@@ -237,28 +226,11 @@ class MainWindow(QMainWindow):
         row = self.table.currentRow()
 
         if row < 0:
-            QMessageBox.warning(self, "Error", "Select student first")
+            show_error(self, "Select student first")
             return
 
         admission = self.table.item(row, 1).text()
 
-        reply = QMessageBox.question(
-            self,
-            "Delete",
-            f"Delete {admission}?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
-            conn = connect()
-            try:
-                cur = conn.cursor()
-                cur.execute(
-                    "DELETE FROM students WHERE admission_no=?",
-                    (admission,)
-                )
-                conn.commit()
-            finally:
-                conn.close()
-
+        if confirm_action(self, "Delete", f"Delete {admission}?"):
+            execute("DELETE FROM students WHERE admission_no=?", (admission,))
             self.load_data()

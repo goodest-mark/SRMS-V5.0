@@ -9,8 +9,9 @@ from PySide6.QtWidgets import (
     QGridLayout
 )
 
-from database import connect
+from db_utils import fetch_all, get_cursor
 from class_utils import get_classes
+from ui_helpers import show_info
 
 
 class AssignClassesPage(QWidget):
@@ -95,21 +96,14 @@ class AssignClassesPage(QWidget):
         if not self.teacher_id:
             return
 
-        conn = connect()
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT class_name
-            FROM teacher_classes
-            WHERE teacher_id=?
-        """, (self.teacher_id,))
-
         assigned = {
             row[0]
-            for row in cur.fetchall()
+            for row in fetch_all("""
+                SELECT class_name
+                FROM teacher_classes
+                WHERE teacher_id=?
+            """, (self.teacher_id,))
         }
-
-        conn.close()
 
         for chk in self.checkboxes:
 
@@ -121,22 +115,14 @@ class AssignClassesPage(QWidget):
         if not self.teacher_id:
             return
 
-        conn = connect()
-        cur = conn.cursor()
-
-        try:
-
+        with get_cursor(commit=True) as cur:
             cur.execute("""
                 DELETE FROM teacher_classes
                 WHERE teacher_id=?
-            """, (
-                self.teacher_id,
-            ))
+            """, (self.teacher_id,))
 
             for chk in self.checkboxes:
-
                 if chk.isChecked():
-
                     cur.execute("""
                         INSERT INTO teacher_classes(
                             teacher_id,
@@ -148,14 +134,5 @@ class AssignClassesPage(QWidget):
                         chk.text()
                     ))
 
-            conn.commit()
-
-            QMessageBox.information(
-                self,
-                "Success",
-                "Class assignments saved."
-            )
-
-        finally:
-            conn.close()
+        show_info(self, "Class assignments saved.")
 

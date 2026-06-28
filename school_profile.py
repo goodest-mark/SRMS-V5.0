@@ -249,8 +249,8 @@ class SchoolProfilePage(QWidget):
                     self.dashboard_bg_path, self.watermark_text.text() or "CONFIDENTIAL"
                 ))
             QMessageBox.information(self, "Success", "School Profile Configuration Saved.")
-        except Exception:
-            QMessageBox.critical(self, "Error", "An unexpected error occurred while saving the school profile.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An unexpected error occurred while saving the school profile: {e}")
 
     def reset_form(self):
         self.school_name.clear()

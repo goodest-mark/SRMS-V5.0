@@ -7,9 +7,10 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 
-from database import connect
+from db_utils import fetch_one, get_cursor
 from event_bus import EventBus
 from system_state import SystemState
+from ui_helpers import show_error, show_info
 from theme import APP_STYLE
 
 
@@ -56,82 +57,50 @@ class AddExamWindow(QWidget):
         )
 
         if not exam_name:
-
-            QMessageBox.warning(
-                self,
-                "Error",
-                "Enter exam name"
-            )
-
+            show_error(self, "Enter exam name")
             return
 
-        conn = connect()
-        cur = conn.cursor()
+        row = fetch_one("""
+            SELECT id
+            FROM terms
+            WHERE is_active=1
+            LIMIT 1
+        """)
+
+        if not row:
+            show_error(self, "No active term")
+            return
+
+        term_id = row[0]
+        level = SystemState.get_level()
 
         try:
+            with get_cursor(commit=True) as cur:
+                cur.execute("""
+                    UPDATE exams
+                    SET status='CLOSED'
+                    WHERE level=?
+                      AND status='OPEN'
+                """, (level,))
 
-            cur.execute("""
-                SELECT id
-                FROM terms
-                WHERE is_active=1
-                LIMIT 1
-            """)
-
-            row = cur.fetchone()
-
-            if not row:
-
-                QMessageBox.warning(
-                    self,
-                    "Error",
-                    "No active term"
-                )
-
-                conn.close()
-                return
-
-            term_id = row[0]
-            level = SystemState.get_level()
-
-            cur.execute("""
-                UPDATE exams
-                SET status='CLOSED'
-                WHERE level=?
-                  AND status='OPEN'
-            """, (level,))
-
-            cur.execute("""
-                INSERT INTO exams(
+                cur.execute("""
+                    INSERT INTO exams(
+                        exam_name,
+                        term_id,
+                        level,
+                        status
+                    )
+                    VALUES (?, ?, ?, ?)
+                """, (
                     exam_name,
                     term_id,
                     level,
-                    status
-                )
-                VALUES (?, ?, ?, ?)
-            """, (
-                exam_name,
-                term_id,
-                level,
-                "OPEN"
-            ))
+                    "OPEN"
+                ))
 
-            conn.commit()
             EventBus.emit("EXAMS_UPDATED")
-
-            QMessageBox.information(
-                self,
-                "Success",
-                "Exam Saved Successfully"
-            )
-
+            show_info(self, "Exam Saved Successfully")
             self.exam_name.clear()
 
         except Exception as e:
-
-            QMessageBox.warning(
-                self,
-                "Error",
-                str(e)
-            )
-
-        conn.close()
+            show_error(self, str(e))

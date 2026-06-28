@@ -20,6 +20,8 @@ from db_utils import get_cursor, fetch_all
 from system_state import SystemState
 from event_bus import EventBus
 from class_utils import get_classes
+from ui_helpers import show_error, show_info
+import combo_loaders
 
 
 class EnrollmentPage(QWidget):
@@ -158,11 +160,7 @@ class EnrollmentPage(QWidget):
     # =========================
 
     def on_level_changed(self):
-        self.class_box.blockSignals(True)
-        self.class_box.clear()
-        self.class_box.addItems(["-- Select Class --"] + get_classes())
-        self.class_box.blockSignals(False)
-        
+        combo_loaders.load_classes(self.class_box, placeholder="-- Select Class --")
         self.student_box.clear()
         self.clear_tables()
 
@@ -174,23 +172,11 @@ class EnrollmentPage(QWidget):
     # =========================
 
     def load_years(self):
-        self.year_box.blockSignals(True)
-        self.year_box.clear()
-        rows = fetch_all("SELECT id, year_name FROM academic_years ORDER BY year_name DESC")
-        for row in rows:
-            self.year_box.addItem(row[1], row[0])
-        self.year_box.blockSignals(False)
+        combo_loaders.load_years(self.year_box)
         self.load_terms()
 
     def load_terms(self):
-        self.term_box.blockSignals(True)
-        self.term_box.clear()
-        year_id = self.year_box.currentData()
-        if year_id:
-            rows = fetch_all("SELECT id, term_name FROM terms WHERE academic_year_id=? ORDER BY term_name", (year_id,))
-            for row in rows:
-                self.term_box.addItem(row[1], row[0])
-        self.term_box.blockSignals(False)
+        combo_loaders.load_terms(self.term_box, self.year_box.currentData())
 
     def load_students(self):
         self.student_box.blockSignals(True)
@@ -305,7 +291,7 @@ class EnrollmentPage(QWidget):
         term_id = self.term_box.currentData()
         
         if not (adm_no and year_id and term_id):
-            QMessageBox.warning(self, "Error", "Please select all filters correctly.")
+            show_error(self, "Please select all filters correctly.")
             return
 
         enrolled_subjects = []
@@ -325,7 +311,7 @@ class EnrollmentPage(QWidget):
                         VALUES (?, ?, ?, ?)
                     """, (adm_no, sub, year_id, term_id))
             
-            QMessageBox.information(self, "Success", "Enrollments saved successfully.")
+            show_info(self, "Enrollments saved successfully.")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", "An unexpected error occurred while saving enrollments.")
@@ -349,7 +335,7 @@ class EnrollmentPage(QWidget):
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
         if not (year_id and term_id):
-            QMessageBox.warning(self, "Error", "Select Year and Term first")
+            show_error(self, "Select Year and Term first")
             return
             
         data = fetch_all("""
@@ -369,7 +355,7 @@ class EnrollmentPage(QWidget):
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
         if not (year_id and term_id):
-            QMessageBox.warning(self, "Error", "Select Year and Term first")
+            show_error(self, "Select Year and Term first")
             return
             
         path = excel_utils.get_import_file(self)
@@ -411,7 +397,7 @@ class EnrollmentPage(QWidget):
                         continue
             
             self.load_enrollment_data()
-            QMessageBox.information(self, "Import Complete", f"Imported {imported} enrollment records.")
+            show_info(self, f"Imported {imported} enrollment records.", title="Import Complete")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")

@@ -2,7 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit,
     QPushButton, QComboBox, QMessageBox
 )
-from database import connect
+from db_utils import execute
+from ui_helpers import show_info
 
 
 class EditStudentWindow(QWidget):
@@ -53,25 +54,19 @@ class EditStudentWindow(QWidget):
         self.setLayout(layout)
 
     def update_student(self):
-        conn = connect()
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                UPDATE students
-                SET full_name=?, gender=?, class=?, stream=?
-                WHERE admission_no=?
-            """, (
-                self.name.text(),
-                self.gender.currentText(),
-                self.class_box.currentText(),
-                self.stream.text(),
-                self.admission.text()
-            ))
-            conn.commit()
-        finally:
-            conn.close()
+        execute("""
+            UPDATE students
+            SET full_name=?, gender=?, class=?, stream=?
+            WHERE admission_no=?
+        """, (
+            self.name.text(),
+            self.gender.currentText(),
+            self.class_box.currentText(),
+            self.stream.text(),
+            self.admission.text()
+        ))
 
         self.refresh_callback()
 
-        QMessageBox.information(self, "Success", "Student Updated")
+        show_info(self, "Student Updated")
         self.close()

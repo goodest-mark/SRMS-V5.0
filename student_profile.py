@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap, QColor
 from PySide6.QtCore import Qt
 
-from database import connect
+from db_utils import fetch_one, fetch_all
 from ranking_engine import compute_student_scores
 from grade_utils import get_grade, get_points
 
@@ -66,24 +66,19 @@ class StudentProfile(QDialog):
         self.build_ui()
 
     def load_data(self):
-        with connect() as conn:
-            cur = conn.cursor()
+        self.basic_info = fetch_one("""
+            SELECT admission_no, full_name, gender, class, stream, level
+            FROM students
+            WHERE admission_no=?
+        """, (self.admission_no,))
 
-            cur.execute("""
-                SELECT admission_no, full_name, gender, class, stream, level
-                FROM students
-                WHERE admission_no=?
-            """, (self.admission_no,))
-            self.basic_info = cur.fetchone()
-
-            cur.execute("""
-                SELECT r.subject_name, e.exam_name, r.marks
-                FROM results r
-                JOIN exams e ON e.id=r.exam_id
-                WHERE r.admission_no=? AND e.level=?
-                ORDER BY e.id DESC
-            """, (self.admission_no, self.level))
-            self.results = cur.fetchall()
+        self.results = fetch_all("""
+            SELECT r.subject_name, e.exam_name, r.marks
+            FROM results r
+            JOIN exams e ON e.id=r.exam_id
+            WHERE r.admission_no=? AND e.level=?
+            ORDER BY e.id DESC
+        """, (self.admission_no, self.level))
 
         ranking = compute_student_scores(self.level)
         self.rank_info = next(

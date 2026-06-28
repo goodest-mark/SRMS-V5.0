@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from database import connect
+from db_utils import fetch_all, get_cursor
 from system_state import SystemState
 from event_bus import EventBus
 from class_utils import get_classes
@@ -166,29 +166,11 @@ class RequirementsPage(QWidget):
         self.class_box.blockSignals(False)
 
     def load_years(self):
-        self.year_box.blockSignals(True)
-        self.year_box.clear()
-        conn = connect()
-        cur = conn.cursor()
-        cur.execute("SELECT id, year_name FROM academic_years ORDER BY year_name DESC")
-        for row in cur.fetchall():
-            self.year_box.addItem(row[1], row[0])
-        conn.close()
-        self.year_box.blockSignals(False)
+        combo_loaders.load_years(self.year_box)
         self.load_terms()
 
     def load_terms(self):
-        self.term_box.blockSignals(True)
-        self.term_box.clear()
-        year_id = self.year_box.currentData()
-        if year_id:
-            conn = connect()
-            cur = conn.cursor()
-            cur.execute("SELECT id, term_name FROM terms WHERE academic_year_id=? ORDER BY term_name", (year_id,))
-            for row in cur.fetchall():
-                self.term_box.addItem(row[1], row[0])
-            conn.close()
-        self.term_box.blockSignals(False)
+        combo_loaders.load_terms(self.term_box, self.year_box.currentData())
 
     def load_data(self):
         year_id = self.year_box.currentData()
@@ -200,9 +182,6 @@ class RequirementsPage(QWidget):
             self.table.setRowCount(0)
             return
 
-        conn = connect()
-        cur = conn.cursor()
-
         query = "SELECT id, item_name, quantity, notes FROM requirements WHERE academic_year_id=? AND term_id=? AND level=?"
         params = [year_id, term_id, level]
 
@@ -212,9 +191,7 @@ class RequirementsPage(QWidget):
         
         query += " ORDER BY item_name ASC"
         
-        cur.execute(query, tuple(params))
-        rows = cur.fetchall()
-        conn.close()
+        rows = fetch_all(query, tuple(params))
 
         self.table.setRowCount(len(rows))
         for r, row in enumerate(rows):
@@ -232,29 +209,27 @@ class RequirementsPage(QWidget):
         class_name = self.class_box.currentText()
 
         if not item or not qty or class_name == "-- All Classes --":
-            QMessageBox.warning(self, "Error", "Item Name, Quantity and a specific Class are required.")
+            show_error(self, "Item Name, Quantity and a specific Class are required.")
             return
-
-        conn = connect()
-        cur = conn.cursor()
 
         try:
             if self.selected_id is None:
-                cur.execute("""
-                    INSERT INTO requirements (academic_year_id, term_id, level, class_name, item_name, quantity, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (year_id, term_id, level, class_name, item, qty, notes))
+                with get_cursor(commit=True) as cur:
+                    cur.execute("""
+                        INSERT INTO requirements (academic_year_id, term_id, level, class_name, item_name, quantity, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (year_id, term_id, level, class_name, item, qty, notes))
             else:
-                cur.execute("""
-                    UPDATE requirements 
-                    SET item_name=?, quantity=?, notes=?
-                    WHERE id=?
-                """, (item, qty, notes, self.selected_id))
+                with get_cursor(commit=True) as cur:
+                    cur.execute("""
+                        UPDATE requirements 
+                        SET item_name=?, quantity=?, notes=?
+                        WHERE id=?
+                    """, (item, qty, notes, self.selected_id))
             
-            conn.commit()
             self.clear_form()
             self.load_data()
-            QMessageBox.information(self, "Success", "Requirement saved.")
+            show_info(self, "Requirement saved.")
         except Exception as e:
             print(f"[ERROR] Failed to save requirement: {e}")
             QMessageBox.critical(self, "Error", "An unexpected error occurred while saving the requirement.")
@@ -321,21 +296,16 @@ class RequirementsPage(QWidget):
         class_name = self.class_box.currentText()
         
         if not (year_id and term_id):
-            QMessageBox.warning(self, "Error", "Select Context first")
+            show_error(self, "Select Context first")
             return
             
-        conn = connect()
-        cur = conn.cursor()
-        
         query = "SELECT item_name, quantity, notes FROM requirements WHERE academic_year_id=? AND term_id=? AND level=?"
         params = [year_id, term_id, level]
         if class_name != "-- All Classes --":
             query += " AND class_name=?"
             params.append(class_name)
             
-        cur.execute(query, tuple(params))
-        data = cur.fetchall()
-        conn.close()
+        data = fetch_all(query, tuple(params))
         
         excel_utils.export_to_excel(
             self, 
@@ -351,7 +321,7 @@ class RequirementsPage(QWidget):
         class_name = self.class_box.currentText()
         
         if not (year_id and term_id) or class_name == "-- All Classes --":
-            QMessageBox.warning(self, "Error", "Select a specific Context (Year, Term, Class) first")
+            show_error(self, "Select a specific Context (Year, Term, Class) first")
             return
             
         path = excel_utils.get_import_file(self)
@@ -362,32 +332,27 @@ class RequirementsPage(QWidget):
             sheet = wb.active
             rows = list(sheet.iter_rows(min_row=12, values_only=True))
             
-            conn = connect()
-            cur = conn.cursor()
-            
             imported = 0
-            for row in rows:
-                if not row or len(row) < 3 or not row[0]: continue
-                
-                item = row[0]
-                qty = row[1]
-                notes = row[2]
-                
-                try:
-                    cur.execute("""
-                        INSERT INTO requirements (academic_year_id, term_id, level, class_name, item_name, quantity, notes)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (year_id, term_id, level, class_name, str(item), str(qty), str(notes or "")))
-                    imported += 1
-                except Exception as e:
-                    print(f"[ERROR] Failed to import requirement '{item}': {e}")
-                    continue
+            with get_cursor(commit=True) as cur:
+                for row in rows:
+                    if not row or len(row) < 3 or not row[0]: continue
                     
-            conn.commit()
-            conn.close()
+                    item = row[0]
+                    qty = row[1]
+                    notes = row[2]
+                    
+                    try:
+                        cur.execute("""
+                            INSERT INTO requirements (academic_year_id, term_id, level, class_name, item_name, quantity, notes)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (year_id, term_id, level, class_name, str(item), str(qty), str(notes or "")))
+                        imported += 1
+                    except Exception as e:
+                        print(f"[ERROR] Failed to import requirement '{item}': {e}")
+                        continue
             
             self.load_data()
-            QMessageBox.information(self, "Import Complete", f"Imported {imported} requirement items.")
+            show_info(self, f"Imported {imported} requirement items.", title="Import Complete")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")

@@ -19,10 +19,11 @@ from PySide6.QtWidgets import (
 )
 
 from class_utils import get_classes
-from database import connect
+from db_utils import fetch_all, fetch_one
 from event_bus import EventBus
 from system_state import SystemState
 from theme import APP_STYLE
+import combo_loaders
 
 
 class ResultsDashboard(QWidget):
@@ -174,55 +175,10 @@ class ResultsDashboard(QWidget):
         self.load_dashboard()
 
     def load_exams(self):
-        current_exam_id = self.exam.currentData()
-        level = SystemState.get_level()
-
-        conn = connect()
-
-        try:
-            cur = conn.cursor()
-            # Default: Load OPEN exams
-            cur.execute("""
-                SELECT id, exam_name
-                FROM exams
-                WHERE status='OPEN'
-                  AND level=?
-                ORDER BY id
-            """, (level,))
-            rows = cur.fetchall()
-        finally:
-            conn.close()
-
-        self.exam.blockSignals(True)
-        self.exam.clear()
-
-        for exam_id, exam_name in rows:
-            self.exam.addItem(exam_name, exam_id)
-
-        index = self.exam.findData(current_exam_id)
-
-        if index >= 0:
-            self.exam.setCurrentIndex(index)
-        elif self.exam.count() > 0:
-            self.exam.setCurrentIndex(0)
-
-        self.exam.blockSignals(False)
+        combo_loaders.load_open_exams(self.exam)
 
     def load_classes(self):
-        current_class = self.class_box.currentText()
-
-        self.class_box.blockSignals(True)
-        self.class_box.clear()
-        self.class_box.addItems(get_classes())
-
-        index = self.class_box.findText(current_class)
-
-        if index >= 0:
-            self.class_box.setCurrentIndex(index)
-        elif self.class_box.count() > 0:
-            self.class_box.setCurrentIndex(0)
-
-        self.class_box.blockSignals(False)
+        combo_loaders.load_classes(self.class_box)
 
     def load_dashboard(self):
         exam_id = self.exam.currentData()
@@ -234,54 +190,37 @@ class ResultsDashboard(QWidget):
             self._set_summary(0, 0)
             return
 
-        conn = connect()
-
-        try:
-            cur = conn.cursor()
-
-            # Derive Academic Context (Year and Term) from the selected Exam
-            cur.execute("""
-                SELECT e.term_id, t.academic_year_id
-                FROM exams e
-                JOIN terms t ON e.term_id = t.id
-                WHERE e.id = ?
-            """, (exam_id,))
-            context = cur.fetchone()
+        from db_utils import get_exam_context
+        context = get_exam_context(exam_id)
+        
+        if not context:
+            self.table.setRowCount(0)
+            self._set_summary(0, 0)
+            return
             
-            if not context:
-                self.table.setRowCount(0)
-                self._set_summary(0, 0)
-                return
-                
-            term_id, year_id = context
+        year_id, term_id = context
 
-            # DASHBOARD LOGIC V4: 
-            # - Expected = COUNT(DISTINCT admission_no) from enrollments for specific term/year
-            # - Only show subjects enrolled by students in the selected class
-            cur.execute("""
-                SELECT 
-                    e.subject_name,
-                    COUNT(DISTINCT e.admission_no) as expected,
-                    COUNT(DISTINCT r.admission_no) as entered
-                FROM enrollments e
-                JOIN students s ON s.admission_no = e.admission_no
-                LEFT JOIN results r ON r.subject_name = e.subject_name
-                    AND r.exam_id = ?
-                    AND r.admission_no = e.admission_no
-                WHERE s.class = ? AND s.level = ?
-                  AND e.academic_year_id = ? AND e.term_id = ?
-                GROUP BY e.subject_name
-                ORDER BY e.subject_name
-            """, (
-                exam_id,
-                class_name,
-                level,
-                year_id,
-                term_id
-            ))
-            rows = cur.fetchall()
-        finally:
-            conn.close()
+        rows = fetch_all("""
+            SELECT 
+                e.subject_name,
+                COUNT(DISTINCT e.admission_no) as expected,
+                COUNT(DISTINCT r.admission_no) as entered
+            FROM enrollments e
+            JOIN students s ON s.admission_no = e.admission_no
+            LEFT JOIN results r ON r.subject_name = e.subject_name
+                AND r.exam_id = ?
+                AND r.admission_no = e.admission_no
+            WHERE s.class = ? AND s.level = ?
+              AND e.academic_year_id = ? AND e.term_id = ?
+            GROUP BY e.subject_name
+            ORDER BY e.subject_name
+        """, (
+            exam_id,
+            class_name,
+            level,
+            year_id,
+            term_id
+        ))
 
         overall_expected = sum(row[1] for row in rows)
         overall_entered = sum(row[2] for row in rows)

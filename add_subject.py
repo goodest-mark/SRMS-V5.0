@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (
     QComboBox
 )
 
-from database import connect
+from db_utils import fetch_one, get_cursor
+from ui_helpers import show_error, show_info
 from theme import APP_STYLE
 
 
@@ -113,70 +114,34 @@ class AddSubjectWindow(QWidget):
         counted = self.counted.currentText()
 
         if not code or not name:
-
-            QMessageBox.warning(
-                self,
-                "Error",
-                "All fields required"
-            )
-
+            show_error(self, "All fields required")
             return
 
-        conn = connect()
+        existing = fetch_one(
+            "SELECT subject_code FROM subjects WHERE subject_code=?",
+            (code,)
+        )
+
+        if existing:
+            show_error(self, "Subject Code Already Exists")
+            return
+
         try:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT subject_code
-                FROM subjects
-                WHERE subject_code=?
-                """,
-                (code,)
-            )
+            with get_cursor(commit=True) as cur:
+                cur.execute("""
+                    INSERT INTO subjects(
+                        subject_code,
+                        subject_name,
+                        is_counted
+                    )
+                    VALUES(?,?,?)
+                """, (code, name, counted))
 
-            if cur.fetchone():
-                QMessageBox.warning(
-                    self,
-                    "Error",
-                    "Subject Code Already Exists"
-                )
-                return
-
-            cur.execute(
-                """
-                INSERT INTO subjects(
-                    subject_code,
-                    subject_name,
-                    is_counted
-                )
-                VALUES(?,?,?)
-                """,
-                (
-                    code,
-                    name,
-                    counted
-                )
-            )
-
-            conn.commit()
-
-            QMessageBox.information(
-                self,
-                "Success",
-                "Subject Saved Successfully"
-            )
-
+            show_info(self, "Subject Saved Successfully")
             self.code.clear()
             self.name.clear()
             self.counted.setCurrentIndex(0)
 
         except Exception as e:
-
-            QMessageBox.warning(
-                self,
-                "Error",
-                str(e)
-            )
-        finally:
-            conn.close()
+            show_error(self, str(e))
         
