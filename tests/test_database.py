@@ -146,8 +146,14 @@ class TestInitDb:
         cur.execute("SELECT admin_passcode FROM system_security")
         row = cur.fetchone()
         conn.close()
-        expected_hash = hashlib.sha256("000000".encode("utf-8")).hexdigest()
-        assert row[0] == expected_hash
+        # The passcode is stored as "salt$hash" using PBKDF2
+        stored = row[0]
+        assert "$" in stored
+        salt, dk_hex = stored.split("$", 1)
+        expected_dk = hashlib.pbkdf2_hmac(
+            "sha256", "000000".encode("utf-8"), salt.encode("utf-8"), iterations=260000
+        )
+        assert dk_hex == expected_dk.hex()
 
     def test_idempotent_init(self, initialized_db):
         """Calling init_db twice should not raise or duplicate data."""
