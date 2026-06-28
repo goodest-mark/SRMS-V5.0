@@ -297,11 +297,11 @@ def generate_report_book(parent, exam_id, class_name, save_path):
 
     try:
         doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
-        conn.close()
         return True, 'Report cards generated successfully.'
     except Exception as e:
-        conn.close()
         return False, str(e)
+    finally:
+        conn.close()
 
 
 # ======================================================================
@@ -331,8 +331,8 @@ def _build_header(ST, school_name, motto, addr, phone, email, website,
         try:
             logo = Image(logo_path, width=0.7 * inch, height=0.7 * inch)
             center_parts.append([logo])
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARNING] Could not load logo '{logo_path}': {e}")
     center_parts.append(
         [Paragraph(f'<b>{school_name.upper()}</b>', ST['title'])])
     if motto:

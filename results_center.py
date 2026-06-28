@@ -156,8 +156,5 @@ class ResultsCenter(QWidget):
                 subject_name
             )
         except Exception as error:
-            print(
-                "ResultsCenter error:",
-                error
-            )
+            print(f"[ERROR] ResultsCenter failed to open results entry: {error}")
 
