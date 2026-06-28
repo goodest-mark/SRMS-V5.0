@@ -1,10 +1,13 @@
+import os
+
 from PySide6.QtGui import QIcon, QPainter, QColor, QPen
 from PySide6.QtCore import (
     QSize, Qt, QPropertyAnimation, QEasingCurve,
-    QRect, QRectF, Property, Signal
+    QParallelAnimationGroup, QRectF, Property, Signal
 )
 
 from PySide6.QtWidgets import (
+    QApplication,
     QMainWindow,
     QWidget,
     QVBoxLayout,
@@ -12,9 +15,10 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLabel,
     QStackedWidget,
-    QComboBox,
     QSizePolicy
 )
+
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class LevelToggleSwitch(QWidget):
@@ -28,6 +32,7 @@ class LevelToggleSwitch(QWidget):
         self._thumb_x = 4.0
         self.setFixedSize(120, 36)
         self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setToolTip(
             "Slide to switch between O-Level and A-Level"
         )
@@ -60,9 +65,21 @@ class LevelToggleSwitch(QWidget):
             self.update()
 
     def mousePressEvent(self, event):
-        self._checked = not self._checked
-        self.setChecked(self._checked)
-        self.toggled.emit(self._checked)
+        if not self.isEnabled():
+            return
+        new_state = not self._checked
+        self.setChecked(new_state)
+        self.toggled.emit(new_state)
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
+            if not self.isEnabled():
+                return
+            new_state = not self._checked
+            self.setChecked(new_state)
+            self.toggled.emit(new_state)
+        else:
+            super().keyPressEvent(event)
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -118,7 +135,13 @@ class LevelToggleSwitch(QWidget):
 from event_bus import EventBus
 from system_state import SystemState
 from help_guide import HelpGuideDialog
+from settings_page import get_setting
 from theme import get_theme
+
+
+def _icon(name):
+    """Return a QIcon using an absolute path from assets/icons/."""
+    return QIcon(os.path.join(_BASE_DIR, "assets", "icons", name))
 
 from dashboard_home import DashboardHome
 from students_page import StudentsPage
@@ -167,7 +190,7 @@ class MainWindow(QMainWindow):
 
         # Help button — SVG icon
         self.help_btn = QPushButton()
-        self.help_btn.setIcon(QIcon("assets/icons/help.svg"))
+        self.help_btn.setIcon(_icon("help.svg"))
         self.help_btn.setIconSize(QSize(22, 22))
         self.help_btn.setToolTip("Getting Started Guide")
         self.help_btn.setFixedSize(42, 42)
@@ -190,12 +213,12 @@ class MainWindow(QMainWindow):
         self.theme_btn.setIconSize(QSize(22, 22))
         self.theme_btn.setFixedSize(42, 42)
         self.theme_btn.setCursor(Qt.PointingHandCursor)
-        self.current_theme = "Dark"
+        self.current_theme = get_setting('theme', 'Dark')
         self._update_theme_btn()
         self.theme_btn.clicked.connect(self.toggle_theme)
 
         self.refresh_btn = QPushButton()
-        self.refresh_btn.setIcon(QIcon("assets/icons/refresh.svg"))
+        self.refresh_btn.setIcon(_icon("refresh.svg"))
         self.refresh_btn.setToolTip("Refresh")
         self.refresh_btn.setIconSize(QSize(20,20))
         self.refresh_btn.setFixedSize(42,42)
@@ -275,6 +298,10 @@ class MainWindow(QMainWindow):
             QEasingCurve.InOutQuad
         )
 
+        self.sidebar_anim_group = QParallelAnimationGroup()
+        self.sidebar_anim_group.addAnimation(self.sidebar_anim_max)
+        self.sidebar_anim_group.addAnimation(self.sidebar_anim_min)
+
         sidebar = QVBoxLayout(self.sidebar_widget)
         sidebar.setSpacing(10)
         sidebar.setContentsMargins(16,16,16,16)
@@ -315,41 +342,15 @@ class MainWindow(QMainWindow):
 
         self.btn_security = QPushButton("Security")
 
-        self.btn_dashboard.setIcon(
-            QIcon("assets/icons/dashboard.svg")
-        )
-
-        self.btn_students.setIcon(
-            QIcon("assets/icons/students.svg")
-        )
-
-        self.btn_teachers.setIcon(
-            QIcon("assets/icons/teachers.svg")
-        )
-
-        self.btn_academics.setIcon(
-            QIcon("assets/icons/academics.svg")
-        )
-
-        self.btn_exams.setIcon(
-            QIcon("assets/icons/exams.svg")
-        )
-
-        self.btn_results.setIcon(
-            QIcon("assets/icons/results.svg")
-        )
-
-        self.btn_school.setIcon(
-            QIcon("assets/icons/school.svg")
-        )
-
-        self.btn_settings.setIcon(
-            QIcon("assets/icons/settings.svg")
-        )
-
-        self.btn_security.setIcon(
-            QIcon("assets/icons/security.svg")
-        )
+        self.btn_dashboard.setIcon(_icon("dashboard.svg"))
+        self.btn_students.setIcon(_icon("students.svg"))
+        self.btn_teachers.setIcon(_icon("teachers.svg"))
+        self.btn_academics.setIcon(_icon("academics.svg"))
+        self.btn_exams.setIcon(_icon("exams.svg"))
+        self.btn_results.setIcon(_icon("results.svg"))
+        self.btn_school.setIcon(_icon("school.svg"))
+        self.btn_settings.setIcon(_icon("settings.svg"))
+        self.btn_security.setIcon(_icon("security.svg"))
 
 
         self.nav_buttons = [
@@ -429,7 +430,9 @@ class MainWindow(QMainWindow):
 
         self.active_btn = None
 
+        self._nav_labels = {}
         for btn in self.nav_buttons:
+            self._nav_labels[btn] = btn.text()
             btn.setCursor(Qt.PointingHandCursor)
             btn.setIconSize(QSize(28,28))
             btn.setMinimumHeight(54)
@@ -682,19 +685,17 @@ class MainWindow(QMainWindow):
             else:
                 btn.setMinimumHeight(54)
                 btn.setStyleSheet(self.sidebar_button_style)
-                btn.setText(btn.toolTip())
+                btn.setText(self._nav_labels.get(btn, btn.toolTip()))
 
         self.update_highlight(self.active_btn)
 
-        # Animate both min and max width together
-        self.sidebar_anim_max.stop()
-        self.sidebar_anim_min.stop()
+        # Animate both min and max width together via group
+        self.sidebar_anim_group.stop()
         self.sidebar_anim_max.setStartValue(current_w)
         self.sidebar_anim_max.setEndValue(target_width)
         self.sidebar_anim_min.setStartValue(current_w)
         self.sidebar_anim_min.setEndValue(target_width)
-        self.sidebar_anim_max.start()
-        self.sidebar_anim_min.start()
+        self.sidebar_anim_group.start()
 
     def toggle_level(self, is_a_level):
         if is_a_level:
@@ -709,24 +710,32 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def toggle_theme(self):
-        """Toggle between Light and Dark themes."""
+        """Toggle between Light and Dark themes and persist."""
         if self.current_theme == "Dark":
             self.current_theme = "Light"
         else:
             self.current_theme = "Dark"
 
-        from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
         if app:
             app.setStyleSheet(get_theme(self.current_theme))
         self._update_theme_btn()
+        self._persist_theme(self.current_theme)
+
+    def _persist_theme(self, theme_name):
+        """Save theme choice to system_settings."""
+        from db_utils import execute
+        try:
+            execute(
+                "REPLACE INTO system_settings (setting_key, setting_value) VALUES (?, ?)",
+                ('theme', theme_name))
+        except Exception:
+            pass
 
     def _update_theme_btn(self):
         """Update the theme button icon based on current theme."""
         if self.current_theme == "Dark":
-            self.theme_btn.setIcon(
-                QIcon("assets/icons/sun.svg")
-            )
+            self.theme_btn.setIcon(_icon("sun.svg"))
             self.theme_btn.setStyleSheet("""
                 QPushButton{
                     background:rgba(251,191,36,0.12);
@@ -738,9 +747,7 @@ class MainWindow(QMainWindow):
                 }
             """)
         else:
-            self.theme_btn.setIcon(
-                QIcon("assets/icons/moon.svg")
-            )
+            self.theme_btn.setIcon(_icon("moon.svg"))
             self.theme_btn.setStyleSheet("""
                 QPushButton{
                     background:rgba(99,102,241,0.12);
@@ -754,7 +761,7 @@ class MainWindow(QMainWindow):
 
     def _update_breadcrumb(self, button):
         """Update breadcrumb based on current page."""
-        page_name = button.toolTip() if button else ""
+        page_name = self._nav_labels.get(button, "") if button else ""
         if page_name and page_name != "Dashboard":
             self.breadcrumb.setText(f" > {page_name}")
         else:
@@ -840,8 +847,8 @@ class MainWindow(QMainWindow):
     def _apply_theme(self, theme_name):
         """Apply theme from settings change event."""
         self.current_theme = theme_name
-        from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
         if app:
             app.setStyleSheet(get_theme(theme_name))
         self._update_theme_btn()
+        self._persist_theme(theme_name)

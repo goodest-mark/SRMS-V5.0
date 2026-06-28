@@ -5,16 +5,16 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
-    PageBreak, Image, HRFlowable
+    PageBreak, Image
 )
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 from database import connect
 from settings_page import get_setting
 from watermark import draw_watermark
 from ranking_engine import compute_student_scores
-from grade_utils import get_grade, get_points
+from grade_utils import get_grade
 
 # Color scheme
 NAVY = colors.HexColor('#1B3A5C')
@@ -134,8 +134,10 @@ def generate_report_book(parent, exam_id, class_name, save_path):
     academic_master = profile[8] if profile else ""
     watermark_text = (profile[9] if profile and profile[9]
                       else "CONFIDENTIAL")
-    school_website = (profile[10] if profile and len(profile) > 10
-                      and profile[10] else "")
+    try:
+        school_website = profile[10] if profile and len(profile) > 10 and profile[10] else ""
+    except (IndexError, TypeError):
+        school_website = ""
 
     # ── Academic context ──
     cur.execute("""

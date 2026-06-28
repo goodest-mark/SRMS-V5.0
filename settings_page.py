@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
     QPushButton, QMessageBox, QLabel, QGroupBox, QCheckBox, QComboBox, QScrollArea
 )
-from db_utils import get_cursor, fetch_all, execute, execute_many
+from db_utils import fetch_all, execute, execute_many
 from security_settings import authorize_action
 from event_bus import EventBus
 
@@ -104,7 +104,10 @@ class SettingsPage(QWidget):
         self.auto_promotion.setChecked(settings.get('auto_promotion') == '1')
         self.confirm_promotion.setChecked(settings.get('confirm_promotion') == '1')
         self.auto_backup.setChecked(settings.get('auto_backup') == '1')
-        self.theme.setCurrentText(settings.get('theme', 'Dark'))
+        saved_theme = settings.get('theme', 'Dark')
+        if self.theme.findText(saved_theme) == -1:
+            saved_theme = 'Dark'
+        self.theme.setCurrentText(saved_theme)
         self.default_level.setCurrentText(settings.get('default_level', 'O_LEVEL'))
         self.backup_folder.setText(settings.get('backup_folder', './backups'))
 
@@ -161,4 +164,13 @@ def get_setting(key, default=None):
         return res[0] if res else default
     except Exception as e:
         print(f"[ERROR] Failed to read setting '{key}': {e}")
+        return default
+
+
+def get_int_setting(key, default):
+    """Return an integer system setting, falling back to *default* on any error."""
+    raw = get_setting(key, str(default))
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
         return default
