@@ -17,6 +17,7 @@ from ui_helpers import confirm_action, show_error
 from system_state import SystemState
 from event_bus import EventBus
 from subject_dialog import SubjectDialog
+from security_settings import authorize_action
 
 
 class SubjectsPage(QWidget):
@@ -211,6 +212,9 @@ class SubjectsPage(QWidget):
         if not confirm_action(self, "Delete", "Delete selected subject?"):
             return
 
+        if not authorize_action(self, "Delete Subject"):
+            return
+
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM subjects WHERE id=?", (subject_id,))
 
@@ -299,4 +303,4 @@ class SubjectsPage(QWidget):
             QMessageBox.information(self, "Import Complete", f"Imported {imported} subjects.")
             
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Import failed: {str(e)}")
+            QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")

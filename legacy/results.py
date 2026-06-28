@@ -12,8 +12,6 @@ from PySide6.QtWidgets import (
     QHeaderView
 )
 
-import sqlite3
-
 from database import connect
 from theme import APP_STYLE
 from grade_utils import get_grade, get_points
@@ -145,7 +143,7 @@ class ResultsWindow(QWidget):
 
     def load_subjects(self):
 
-        conn = sqlite3.connect("srms.db")
+        conn = connect()
         cur = conn.cursor()
 
         cur.execute("""

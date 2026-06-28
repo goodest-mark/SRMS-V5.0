@@ -156,7 +156,8 @@ def to_excel(parent, data):
         wb.save(path)
         QMessageBox.information(parent, "Success", f"Broadsheet exported to {path}")
     except Exception as e:
-        QMessageBox.critical(parent, "Export Error", str(e))
+        print(f"[ERROR] Broadsheet export failed: {e}")
+        QMessageBox.critical(parent, "Export Error", "An unexpected error occurred during export.")
 
 
 def to_pdf(parent, data):
@@ -432,4 +433,5 @@ def to_pdf(parent, data):
         doc.build(elements, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
         QMessageBox.information(parent, "Success", f"Broadsheet exported to {path}")
     except Exception as e:
-        QMessageBox.critical(parent, "Export Error", str(e))
+        print(f"[ERROR] Broadsheet export failed: {e}")
+        QMessageBox.critical(parent, "Export Error", "An unexpected error occurred during export.")

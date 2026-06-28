@@ -141,19 +141,20 @@ class TestInitDb:
 
     def test_system_security_default_passcode(self, initialized_db):
         import hashlib
+        import secrets as _secrets
         conn = sqlite3.connect(initialized_db)
         cur = conn.cursor()
         cur.execute("SELECT admin_passcode FROM system_security")
         row = cur.fetchone()
         conn.close()
-        # The passcode is stored as "salt$hash" using PBKDF2
         stored = row[0]
-        assert "$" in stored
-        salt, dk_hex = stored.split("$", 1)
-        expected_dk = hashlib.pbkdf2_hmac(
-            "sha256", "000000".encode("utf-8"), salt.encode("utf-8"), iterations=260000
+        assert "$" in stored, "Passcode should use PBKDF2 salt$hash format"
+        salt, stored_hash = stored.split("$", 1)
+        dk = hashlib.pbkdf2_hmac(
+            "sha256", "000000".encode("utf-8"),
+            salt.encode("utf-8"), iterations=260000,
         )
-        assert dk_hex == expected_dk.hex()
+        assert _secrets.compare_digest(dk.hex(), stored_hash)
 
     def test_idempotent_init(self, initialized_db):
         """Calling init_db twice should not raise or duplicate data."""

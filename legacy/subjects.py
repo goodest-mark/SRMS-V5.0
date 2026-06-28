@@ -10,8 +10,7 @@ from PySide6.QtWidgets import (
     QHeaderView
 )
 
-import sqlite3
-
+from database import connect
 from theme import APP_STYLE
 from add_subject import AddSubjectWindow
 
@@ -124,9 +123,7 @@ class SubjectsWindow(QWidget):
 
     def load_data(self):
 
-        conn = sqlite3.connect(
-            "srms.db"
-        )
+        conn = connect()
 
         cur = conn.cursor()
 
@@ -193,9 +190,7 @@ class SubjectsWindow(QWidget):
 
         if reply == QMessageBox.Yes:
 
-            conn = sqlite3.connect(
-                "srms.db"
-            )
+            conn = connect()
 
             cur = conn.cursor()
 

@@ -141,6 +141,9 @@ class ExamsWindow(QWidget):
         if row < 0:
             return
 
+        if not authorize_action(self, "Toggle Exam Status"):
+            return
+
         exam_id = self.table.item(row, 0).text()
         status = self.table.item(row, 5).text()
         level = self.table.item(row, 4).text()

@@ -80,7 +80,7 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
         wb.save(path)
         QMessageBox.information(parent, "Success", f"Template saved to {path}")
     except Exception as e:
-        QMessageBox.critical(parent, "Error", f"Failed to save template: {str(e)}")
+        QMessageBox.critical(parent, "Error", "Failed to save template. Please check the file path and try again.")
 
 def export_to_excel(parent, filename, headers, data):
     path, _ = QFileDialog.getSaveFileName(parent, "Export Data", filename, "Excel Files (*.xlsx)")
@@ -95,7 +95,7 @@ def export_to_excel(parent, filename, headers, data):
         wb.save(path)
         QMessageBox.information(parent, "Success", f"Data exported to {path}")
     except Exception as e:
-        QMessageBox.critical(parent, "Error", f"Failed to export data: {str(e)}")
+        QMessageBox.critical(parent, "Error", "Failed to export data. Please check the file path and try again.")
 
 def get_import_file(parent):
     path, _ = QFileDialog.getOpenFileName(parent, "Select Excel File", "", "Excel Files (*.xlsx *.xls)")

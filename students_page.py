@@ -22,6 +22,7 @@ from system_state import SystemState
 import openpyxl
 import excel_utils
 from student_profile import StudentProfile
+from security_settings import authorize_action
 
 
 class StudentsPage(QWidget):
@@ -286,6 +287,9 @@ class StudentsPage(QWidget):
         )
 
         if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        if not authorize_action(self, "Delete Student"):
             return
 
         try:

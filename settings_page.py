@@ -1,3 +1,6 @@
+import os
+import re
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
     QPushButton, QMessageBox, QLabel, QGroupBox, QCheckBox, QComboBox, QScrollArea
@@ -5,6 +8,8 @@ from PySide6.QtWidgets import (
 from db_utils import fetch_all, execute, execute_many
 from security_settings import authorize_action
 from event_bus import EventBus
+
+_SAFE_BACKUP_PATH = re.compile(r'^[\w./ \\:-]+$')
 
 class SettingsPage(QWidget):
     def __init__(self):
@@ -112,6 +117,9 @@ class SettingsPage(QWidget):
         self.backup_folder.setText(settings.get('backup_folder', './backups'))
 
     def save_settings(self):
+        if not authorize_action(self, "System Settings Changes"):
+            return
+
         # Validate numeric inputs
         o_counted = self.o_level_counted.text().strip()
         a_principal = self.a_level_principal.text().strip()
@@ -122,6 +130,13 @@ class SettingsPage(QWidget):
         if not a_principal.isdigit() or not (1 <= int(a_principal) <= 10):
             QMessageBox.warning(self, "Validation Error", "A-Level Principal Subjects must be a number between 1 and 10.")
             return
+
+        backup_path = self.backup_folder.text().strip()
+        if backup_path:
+            normalized = os.path.normpath(backup_path)
+            if not _SAFE_BACKUP_PATH.match(normalized) or '..' in normalized.split(os.sep):
+                QMessageBox.warning(self, "Validation Error", "Backup folder path contains invalid characters or traversal sequences.")
+                return
 
         data = [
             ('o_level_counted', o_counted),
