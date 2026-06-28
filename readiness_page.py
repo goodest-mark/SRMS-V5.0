@@ -19,10 +19,11 @@ from PySide6.QtWidgets import (
 )
 
 from class_utils import get_classes
-from database import connect
+from db_utils import fetch_all
 from event_bus import EventBus
 from system_state import SystemState
 from theme import APP_STYLE
+import combo_loaders
 
 
 class ReadinessPage(QWidget):
@@ -160,53 +161,10 @@ class ReadinessPage(QWidget):
         self.load_readiness()
 
     def load_exams(self):
-        current_exam_id = self.exam.currentData()
-        level = SystemState.get_level()
-
-        conn = connect()
-
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT id, exam_name
-                FROM exams
-                WHERE level=?
-                ORDER BY id DESC
-            """, (level,))
-            rows = cur.fetchall()
-        finally:
-            conn.close()
-
-        self.exam.blockSignals(True)
-        self.exam.clear()
-
-        for exam_id, exam_name in rows:
-            self.exam.addItem(exam_name, exam_id)
-
-        index = self.exam.findData(current_exam_id)
-
-        if index >= 0:
-            self.exam.setCurrentIndex(index)
-        elif self.exam.count() > 0:
-            self.exam.setCurrentIndex(0)
-
-        self.exam.blockSignals(False)
+        combo_loaders.load_all_exams(self.exam)
 
     def load_classes(self):
-        current_class = self.class_box.currentText()
-
-        self.class_box.blockSignals(True)
-        self.class_box.clear()
-        self.class_box.addItems(get_classes())
-
-        index = self.class_box.findText(current_class)
-
-        if index >= 0:
-            self.class_box.setCurrentIndex(index)
-        elif self.class_box.count() > 0:
-            self.class_box.setCurrentIndex(0)
-
-        self.class_box.blockSignals(False)
+        combo_loaders.load_classes(self.class_box)
 
     def load_readiness(self):
         exam_id = self.exam.currentData()
@@ -225,38 +183,31 @@ class ReadinessPage(QWidget):
             else "COUNTED"
         )
 
-        conn = connect()
-
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT s.admission_no,
-                       s.full_name,
-                       COUNT(DISTINCT sub.subject_name)
-                FROM students s
-                LEFT JOIN results r
-                  ON r.admission_no=s.admission_no
-                 AND r.exam_id=?
-                LEFT JOIN subjects sub
-                  ON sub.subject_name=r.subject_name
-                 AND sub.level=s.level
-                 AND sub.subject_type=?
-                WHERE s.level=?
-                  AND s.class=?
-                GROUP BY s.id,
-                         s.admission_no,
-                         s.full_name
-                ORDER BY s.full_name,
-                         s.admission_no
-            """, (
-                exam_id,
-                subject_type,
-                level,
-                class_name,
-            ))
-            rows = cur.fetchall()
-        finally:
-            conn.close()
+        rows = fetch_all("""
+            SELECT s.admission_no,
+                   s.full_name,
+                   COUNT(DISTINCT sub.subject_name)
+            FROM students s
+            LEFT JOIN results r
+              ON r.admission_no=s.admission_no
+             AND r.exam_id=?
+            LEFT JOIN subjects sub
+              ON sub.subject_name=r.subject_name
+             AND sub.level=s.level
+             AND sub.subject_type=?
+            WHERE s.level=?
+              AND s.class=?
+            GROUP BY s.id,
+                     s.admission_no,
+                     s.full_name
+            ORDER BY s.full_name,
+                     s.admission_no
+        """, (
+            exam_id,
+            subject_type,
+            level,
+            class_name,
+        ))
 
         ready_count = sum(
             available >= required

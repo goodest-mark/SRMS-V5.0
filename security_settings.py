@@ -16,7 +16,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGraphicsBlurEffect
 
-from database import connect
+from db_utils import fetch_one, get_cursor
 
 
 class PasscodeEntryWidget(QWidget):
@@ -224,11 +224,7 @@ def hash_passcode(value, salt=None):
 
 
 def get_security_passcode():
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT admin_passcode FROM system_security ORDER BY id DESC LIMIT 1")
-    result = cur.fetchone()
-    conn.close()
+    result = fetch_one("SELECT admin_passcode FROM system_security ORDER BY id DESC LIMIT 1")
     return result[0] if result else None
 
 
@@ -254,15 +250,12 @@ def check_passcode(value):
 
 
 def update_passcode(value):
-    conn = connect()
-    cur = conn.cursor()
     hashed_value = hash_passcode(value)
-    cur.execute(
-        "UPDATE system_security SET admin_passcode=?, last_changed=CURRENT_TIMESTAMP WHERE id=(SELECT id FROM system_security ORDER BY id DESC LIMIT 1)",
-        (hashed_value,)
-    )
-    conn.commit()
-    conn.close()
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            "UPDATE system_security SET admin_passcode=?, last_changed=CURRENT_TIMESTAMP WHERE id=(SELECT id FROM system_security ORDER BY id DESC LIMIT 1)",
+            (hashed_value,)
+        )
 
 
 def authorize_action(parent, action_name="Secure Action"):
@@ -273,16 +266,10 @@ def authorize_action(parent, action_name="Secure Action"):
 
 
 def get_school_profile_from_db():
-    conn = connect()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT school_name, school_address, school_phone, school_email, school_logo, head_teacher, academic_master, watermark_text, login_background, dashboard_background FROM school_profile LIMIT 1"
-        )
-        row = cur.fetchone()
-        if not row:
-            return {}
-        keys = ['school_name', 'school_address', 'school_phone', 'school_email', 'school_logo', 'head_teacher', 'academic_master', 'watermark_text', 'login_background', 'dashboard_background']
-        return {keys[i]: row[i] or '' for i in range(len(keys))}
-    finally:
-        conn.close()
+    keys = ['school_name', 'school_address', 'school_phone', 'school_email', 'school_logo', 'head_teacher', 'academic_master', 'watermark_text', 'login_background', 'dashboard_background']
+    row = fetch_one(
+        "SELECT school_name, school_address, school_phone, school_email, school_logo, head_teacher, academic_master, watermark_text, login_background, dashboard_background FROM school_profile LIMIT 1"
+    )
+    if not row:
+        return {}
+    return {keys[i]: row[i] or '' for i in range(len(keys))}

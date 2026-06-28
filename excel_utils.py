@@ -3,7 +3,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.drawing.image import Image as ExcelImage
 from PySide6.QtWidgets import QFileDialog, QMessageBox
-from database import connect
+from db_utils import fetch_one
 import os
 
 def download_template(parent, filename, title, headers, instructions=None, samples=None):
@@ -16,11 +16,7 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
         ws.title = "Template"
 
         # 1. School Header
-        conn = connect()
-        cur = conn.cursor()
-        cur.execute("SELECT school_name, school_address, school_phone, school_email FROM school_profile LIMIT 1")
-        profile = cur.fetchone()
-        conn.close()
+        profile = fetch_one("SELECT school_name, school_address, school_phone, school_email FROM school_profile LIMIT 1")
 
         school_name = profile[0].upper() if profile and profile[0] else "SCHOOL MANAGEMENT SYSTEM"
         school_contact = f"{profile[1] if profile and profile[1] else '-'} | {profile[2] if profile and profile[2] else '-'} | {profile[3] if profile and profile[3] else '-'}"

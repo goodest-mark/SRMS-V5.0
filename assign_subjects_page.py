@@ -7,7 +7,7 @@ QPushButton,
 QLabel
 )
 
-from database import connect
+from db_utils import fetch_all, get_cursor
 
 class AssignSubjectsPage(QWidget):
     def __init__(self):
@@ -75,26 +75,23 @@ class AssignSubjectsPage(QWidget):
         self.available_subjects.clear()
         self.assigned_subjects.clear()
 
-        conn = connect()
-        cur = conn.cursor()
+        all_subjects = [
+            row[0]
+            for row in fetch_all("""
+                SELECT subject_name
+                FROM subjects
+                ORDER BY subject_name
+            """)
+        ]
 
-        cur.execute("""
-            SELECT subject_name
-            FROM subjects
-            ORDER BY subject_name
-        """)
-
-        all_subjects = [row[0] for row in cur.fetchall()]
-
-        cur.execute("""
-            SELECT subject_name
-            FROM teacher_subjects
-            WHERE teacher_id=?
-        """, (self.teacher_id,))
-
-        assigned = [row[0] for row in cur.fetchall()]
-
-        conn.close()
+        assigned = [
+            row[0]
+            for row in fetch_all("""
+                SELECT subject_name
+                FROM teacher_subjects
+                WHERE teacher_id=?
+            """, (self.teacher_id,))
+        ]
 
         for subject in all_subjects:
             if subject in assigned:
@@ -109,17 +106,12 @@ class AssignSubjectsPage(QWidget):
 
         subject = item.text()
 
-        conn = connect()
-        cur = conn.cursor()
-        try:
+        with get_cursor(commit=True) as cur:
             cur.execute("""
                 INSERT OR IGNORE INTO teacher_subjects(
                     teacher_id, subject_name
                 ) VALUES (?,?)
             """, (self.teacher_id, subject))
-            conn.commit()
-        finally:
-            conn.close()
 
         self.load_data()
 
@@ -130,15 +122,10 @@ class AssignSubjectsPage(QWidget):
 
         subject = item.text()
 
-        conn = connect()
-        cur = conn.cursor()
-        try:
+        with get_cursor(commit=True) as cur:
             cur.execute("""
                 DELETE FROM teacher_subjects
                 WHERE teacher_id=? AND subject_name=?
             """, (self.teacher_id, subject))
-            conn.commit()
-        finally:
-            conn.close()
 
         self.load_data()

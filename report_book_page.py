@@ -4,11 +4,12 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
-from database import connect
 from system_state import SystemState
 from event_bus import EventBus
 from class_utils import get_classes
 from ranking_engine import compute_student_scores
+from ui_helpers import show_error, show_info
+import combo_loaders
 import report_card_v5 as report_book_pdf
 
 
@@ -107,46 +108,18 @@ class ReportBookPage(QWidget):
 
     def refresh_all(self):
         self.load_years()
-        self.class_box.clear()
-        self.class_box.addItems(get_classes())
+        combo_loaders.load_classes(self.class_box)
 
     def load_years(self):
-        self.year_box.blockSignals(True)
-        self.year_box.clear()
-        conn = connect()
-        cur = conn.cursor()
-        cur.execute("SELECT id, year_name FROM academic_years ORDER BY year_name DESC")
-        for row in cur.fetchall():
-            self.year_box.addItem(row[1], row[0])
-        conn.close()
-        self.year_box.blockSignals(False)
+        combo_loaders.load_years(self.year_box)
         self.load_terms()
 
     def load_terms(self):
-        self.term_box.blockSignals(True)
-        self.term_box.clear()
-        year_id = self.year_box.currentData()
-        if year_id:
-            conn = connect()
-            cur = conn.cursor()
-            cur.execute("SELECT id, term_name FROM terms WHERE academic_year_id=? ORDER BY term_name", (year_id,))
-            for row in cur.fetchall():
-                self.term_box.addItem(row[1], row[0])
-            conn.close()
-        self.term_box.blockSignals(False)
+        combo_loaders.load_terms(self.term_box, self.year_box.currentData())
         self.load_exams()
 
     def load_exams(self):
-        self.exam_box.clear()
-        term_id = self.term_box.currentData()
-        level = SystemState.get_level()
-        if term_id:
-            conn = connect()
-            cur = conn.cursor()
-            cur.execute("SELECT id, exam_name FROM exams WHERE term_id=? AND level=? ORDER BY id", (term_id, level))
-            for row in cur.fetchall():
-                self.exam_box.addItem(row[1], row[0])
-            conn.close()
+        combo_loaders.load_exams(self.exam_box, self.term_box.currentData())
 
     def update_summary(self):
         exam_id = self.exam_box.currentData()
@@ -154,7 +127,7 @@ class ReportBookPage(QWidget):
         level = SystemState.get_level()
 
         if not (exam_id and class_name):
-            QMessageBox.warning(self, "Error", "Please select all context filters.")
+            show_error(self, "Please select all context filters.")
             return
 
         ranking = compute_student_scores(level, exam_id)
@@ -180,7 +153,7 @@ class ReportBookPage(QWidget):
         class_name = self.class_box.currentText()
         
         if not (exam_id and class_name):
-            QMessageBox.warning(self, "Error", "Please select all context filters.")
+            show_error(self, "Please select all context filters.")
             return
 
         save_path, _ = QFileDialog.getSaveFileName(self, "Save Report Book", f"Class_Report_Book_{class_name}.pdf", "PDF Files (*.pdf)")
@@ -201,6 +174,6 @@ class ReportBookPage(QWidget):
         self.status_label.setText("")
 
         if success:
-            QMessageBox.information(self, "Success", message)
+            show_info(self, message)
         else:
-            QMessageBox.critical(self, "Error", message)
+            show_error(self, message)

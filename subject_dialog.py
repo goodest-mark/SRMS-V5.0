@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 
-from database import connect
+from db_utils import fetch_one, get_cursor
+from ui_helpers import show_error, show_info
 
 
 class SubjectDialog(QDialog):
@@ -81,10 +82,7 @@ class SubjectDialog(QDialog):
 
     def load_subject(self):
 
-        conn = connect()
-        cur = conn.cursor()
-
-        cur.execute("""
+        row = fetch_one("""
             SELECT
                 subject_name,
                 level,
@@ -92,10 +90,6 @@ class SubjectDialog(QDialog):
             FROM subjects
             WHERE id=?
         """, (self.subject_id,))
-
-        row = cur.fetchone()
-
-        conn.close()
 
         if not row:
             return
@@ -116,50 +110,27 @@ class SubjectDialog(QDialog):
         name = self.name.text().strip()
 
         if not name:
-
-            QMessageBox.warning(
-                self,
-                "Error",
-                "Subject name required"
-            )
-
+            show_error(self, "Subject name required")
             return
 
-        conn = connect()
-        cur = conn.cursor()
-
         try:
+            with get_cursor(commit=True) as cur:
+                cur.execute("""
+                    UPDATE subjects
+                    SET
+                        subject_name=?,
+                        level=?,
+                        subject_type=?
+                    WHERE id=?
+                """, (
+                    name,
+                    self.level.currentText(),
+                    self.subject_type.currentText(),
+                    self.subject_id
+                ))
 
-            cur.execute("""
-                UPDATE subjects
-                SET
-                    subject_name=?,
-                    level=?,
-                    subject_type=?
-                WHERE id=?
-            """, (
-                name,
-                self.level.currentText(),
-                self.subject_type.currentText(),
-                self.subject_id
-            ))
-
-            conn.commit()
-
-            QMessageBox.information(
-                self,
-                "Success",
-                "Subject updated"
-            )
-
+            show_info(self, "Subject updated")
             self.accept()
 
         except Exception as e:
-
-            QMessageBox.warning(
-                self,
-                "Error",
-                str(e)
-            )
-
-        conn.close()
+            show_error(self, str(e))

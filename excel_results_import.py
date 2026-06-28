@@ -7,9 +7,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from database import connect
+from db_utils import fetch_all, get_cursor, get_exam_context
 from system_state import SystemState
 from event_bus import EventBus
 from class_utils import get_classes
+from ui_helpers import show_error, show_info, confirm_action
+import combo_loaders
 
 
 class ExcelResultsImport(QWidget):
@@ -108,14 +111,7 @@ class ExcelResultsImport(QWidget):
         self.log_table.setRowCount(0)
 
     def load_exams(self):
-        self.exam_box.clear()
-        level = SystemState.get_level()
-        conn = connect()
-        cur = conn.cursor()
-        cur.execute("SELECT id, exam_name FROM exams WHERE level=? AND status='OPEN' ORDER BY id", (level,))
-        for row in cur.fetchall():
-            self.exam_box.addItem(row[1], row[0])
-        conn.close()
+        combo_loaders.load_open_exams(self.exam_box)
 
     def load_subjects(self):
         self.subject_box.clear()
@@ -123,21 +119,14 @@ class ExcelResultsImport(QWidget):
         if class_name == "-- Select Class --": return
 
         level = SystemState.get_level()
-        conn = connect()
-        cur = conn.cursor()
-        
-        # Load only subjects that have enrollments for this class
-        cur.execute("""
+        for row in fetch_all("""
             SELECT DISTINCT e.subject_name 
             FROM enrollments e
             JOIN students s ON s.admission_no = e.admission_no
             WHERE s.class=? AND s.level=?
             ORDER BY e.subject_name
-        """, (class_name, level))
-        
-        for row in cur.fetchall():
+        """, (class_name, level)):
             self.subject_box.addItem(row[0])
-        conn.close()
 
     def browse_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx *.xls)")
@@ -165,12 +154,11 @@ class ExcelResultsImport(QWidget):
         class_name = self.class_box.currentText()
 
         if not exam_id or not subject_name or class_name == "-- Select Class --" or not self.selected_file:
-            QMessageBox.warning(self, "Error", "Please select Exam, Class, Subject and File first.")
+            show_error(self, "Please select Exam, Class, Subject and File first.")
             return
 
-        reply = QMessageBox.question(self, "Confirm", "Start importing results? This will overwrite existing marks.", 
-                                   QMessageBox.Yes | QMessageBox.No)
-        if reply == QMessageBox.No: return
+        if not confirm_action(self, "Confirm", "Start importing results? This will overwrite existing marks."):
+            return
 
         self.log_table.setRowCount(0)
         self.progress.setVisible(True)
@@ -187,20 +175,14 @@ class ExcelResultsImport(QWidget):
             skipped = 0
             errors = 0
 
-            # Derive Academic context from Exam
+            context = get_exam_context(exam_id)
+            if not context:
+                show_error(self, "Invalid Academic Context for selected Exam.")
+                return
+            year_id, term_id = context
+
             conn = connect()
             cur = conn.cursor()
-            cur.execute("""
-                SELECT t.id, t.academic_year_id 
-                FROM exams e
-                JOIN terms t ON e.term_id = t.id
-                WHERE e.id = ?
-            """, (exam_id,))
-            term_res = cur.fetchone()
-            if not term_res:
-                QMessageBox.critical(self, "Error", "Invalid Academic Context for selected Exam.")
-                return
-            term_id, year_id = term_res
 
             for idx, row in enumerate(rows):
                 self.progress.setValue(int(((idx + 1) / total_rows) * 100))
@@ -254,12 +236,11 @@ class ExcelResultsImport(QWidget):
             conn.commit()
             conn.close()
 
-            QMessageBox.information(self, "Import Complete", 
-                                  f"Summary:\nImported: {imported}\nSkipped: {skipped}\nErrors: {errors}")
+            show_info(self, f"Summary:\nImported: {imported}\nSkipped: {skipped}\nErrors: {errors}", title="Import Complete")
             
             EventBus.emit("RESULTS_UPDATED")
 
         except Exception:
-            QMessageBox.critical(self, "System Error", "An unexpected error occurred during import. Please verify the file format.")
+            show_error(self, "An unexpected error occurred during import. Please verify the file format.", title="System Error")
         finally:
             self.progress.setVisible(False)

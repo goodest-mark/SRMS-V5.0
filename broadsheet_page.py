@@ -5,18 +5,21 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from database import connect
+from db_utils import fetch_all, fetch_one
 from system_state import SystemState
 from event_bus import EventBus
-from settings_page import get_setting # Import get_setting
+from settings_page import get_setting
 from security_settings import get_school_profile_from_db
-from grade_utils import get_grade, get_points # Needed for subject performance analysis
+from grade_utils import get_grade, get_points
+from ui_helpers import show_error, show_info
+from table_utils import setup_table
+import combo_loaders
 
 from PySide6.QtWidgets import QFrame
 from class_utils import get_classes
 from ranking_engine import compute_student_scores
 import broadsheet_export
-from datetime import datetime # For generated date
+from datetime import datetime
 
 class BroadsheetPage(QWidget):
     def __init__(self):
@@ -134,11 +137,7 @@ class BroadsheetPage(QWidget):
         self.gender_summary_group = QGroupBox("Gender Summary")
         gender_summary_layout = QVBoxLayout(self.gender_summary_group)
         self.gender_table = QTableWidget()
-        self.gender_table.setColumnCount(2)
-        self.gender_table.setHorizontalHeaderLabels(["Gender", "Count"])
-        self.gender_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.gender_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.gender_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        setup_table(self.gender_table, ["Gender", "Count"])
         gender_summary_layout.addWidget(self.gender_table)
         summary_panels_layout.addWidget(self.gender_summary_group)
 
@@ -146,11 +145,7 @@ class BroadsheetPage(QWidget):
         self.division_summary_group = QGroupBox("Division Summary")
         division_summary_layout = QVBoxLayout(self.division_summary_group)
         self.division_table = QTableWidget()
-        self.division_table.setColumnCount(2)
-        self.division_table.setHorizontalHeaderLabels(["Division", "Students"])
-        self.division_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.division_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.division_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        setup_table(self.division_table, ["Division", "Students"])
         division_summary_layout.addWidget(self.division_table)
         summary_panels_layout.addWidget(self.division_summary_group)
 
@@ -173,11 +168,7 @@ class BroadsheetPage(QWidget):
         self.top_students_group = QGroupBox("Top 10 Students")
         top_students_layout = QVBoxLayout(self.top_students_group)
         self.top_students_table = QTableWidget()
-        self.top_students_table.setColumnCount(5)
-        self.top_students_table.setHorizontalHeaderLabels(["Pos", "Adm No", "Name", "Avg", "Div"])
-        self.top_students_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.top_students_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.top_students_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        setup_table(self.top_students_table, ["Pos", "Adm No", "Name", "Avg", "Div"])
         top_students_layout.addWidget(self.top_students_table)
         self.scroll_layout.addWidget(self.top_students_group)
 
@@ -185,11 +176,7 @@ class BroadsheetPage(QWidget):
         self.bottom_students_group = QGroupBox("Bottom 10 Students")
         bottom_students_layout = QVBoxLayout(self.bottom_students_group)
         self.bottom_students_table = QTableWidget()
-        self.bottom_students_table.setColumnCount(5)
-        self.bottom_students_table.setHorizontalHeaderLabels(["Pos", "Adm No", "Name", "Avg", "Div"])
-        self.bottom_students_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.bottom_students_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.bottom_students_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        setup_table(self.bottom_students_table, ["Pos", "Adm No", "Name", "Avg", "Div"])
         bottom_students_layout.addWidget(self.bottom_students_table)
         self.scroll_layout.addWidget(self.bottom_students_group)
 
@@ -197,11 +184,7 @@ class BroadsheetPage(QWidget):
         self.subject_perf_group = QGroupBox("Subject Performance Analysis")
         subject_perf_layout = QVBoxLayout(self.subject_perf_group)
         self.subject_perf_table = QTableWidget()
-        self.subject_perf_table.setColumnCount(4)
-        self.subject_perf_table.setHorizontalHeaderLabels(["Subject", "Average", "Passes", "Fails"])
-        self.subject_perf_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.subject_perf_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.subject_perf_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        setup_table(self.subject_perf_table, ["Subject", "Average", "Passes", "Fails"])
         subject_perf_layout.addWidget(self.subject_perf_table)
         self.scroll_layout.addWidget(self.subject_perf_group)
 
@@ -228,46 +211,18 @@ class BroadsheetPage(QWidget):
 
     def refresh_all(self):
         self.load_years()
-        self.class_box.clear()
-        self.class_box.addItems(get_classes())
+        combo_loaders.load_classes(self.class_box)
 
     def load_years(self):
-        self.year_box.blockSignals(True)
-        self.year_box.clear()
-        conn = connect()
-        cur = conn.cursor()
-        cur.execute("SELECT id, year_name FROM academic_years ORDER BY year_name DESC")
-        for row in cur.fetchall():
-            self.year_box.addItem(row[1], row[0])
-        conn.close()
-        self.year_box.blockSignals(False)
+        combo_loaders.load_years(self.year_box)
         self.load_terms()
 
     def load_terms(self):
-        self.term_box.blockSignals(True)
-        self.term_box.clear()
-        year_id = self.year_box.currentData()
-        if year_id:
-            conn = connect()
-            cur = conn.cursor()
-            cur.execute("SELECT id, term_name FROM terms WHERE academic_year_id=? ORDER BY term_name", (year_id,))
-            for row in cur.fetchall():
-                self.term_box.addItem(row[1], row[0])
-            conn.close()
-        self.term_box.blockSignals(False)
+        combo_loaders.load_terms(self.term_box, self.year_box.currentData())
         self.load_exams()
 
     def load_exams(self):
-        self.exam_box.clear()
-        term_id = self.term_box.currentData()
-        level = SystemState.get_level()
-        if term_id:
-            conn = connect()
-            cur = conn.cursor()
-            cur.execute("SELECT id, exam_name FROM exams WHERE term_id=? AND level=? ORDER BY id", (term_id, level))
-            for row in cur.fetchall():
-                self.exam_box.addItem(row[1], row[0])
-            conn.close()
+        combo_loaders.load_exams(self.exam_box, self.term_box.currentData())
 
     def get_broadsheet_data(self):
         # This method is now responsible for gathering ALL data needed for UI and export
@@ -287,42 +242,33 @@ class BroadsheetPage(QWidget):
             return None # No students in this class for the selected exam
 
         # 2. Get all enrolled subjects for this class/term
-        conn = connect()
-        cur = conn.cursor()
-        
-        cur.execute("""
+        year_row = fetch_one("""
             SELECT academic_year_id FROM terms WHERE id = (SELECT term_id FROM exams WHERE id=?)
         """, (exam_id,))
-        year_row = cur.fetchone()
         if not year_row:
-            conn.close()
             return None
         year_id = year_row[0]
         term_id = self.term_box.currentData()
 
-        cur.execute("""
+        subjects = [r[0] for r in fetch_all("""
             SELECT DISTINCT e.subject_name 
             FROM enrollments e
             JOIN students s ON e.admission_no = s.admission_no
             WHERE s.class = ? AND e.academic_year_id = ? AND e.term_id = ?
             ORDER BY e.subject_name
-        """, (class_name, year_id, term_id))
-        subjects = [r[0] for r in cur.fetchall()]
+        """, (class_name, year_id, term_id))]
 
         # 3. Get all marks for these students/exam
-        cur.execute("""
+        results_raw = fetch_all("""
             SELECT admission_no, subject_name, marks
             FROM results
             WHERE exam_id = ?
         """, (exam_id,))
-        results_raw = cur.fetchall()
         
         marks_map = {}
         for adm, sub, marks in results_raw:
             if adm not in marks_map: marks_map[adm] = {}
             marks_map[adm][sub] = marks
-            
-        conn.close()
 
         # 4. Assemble final rows
         rows = []
@@ -480,7 +426,7 @@ class BroadsheetPage(QWidget):
         self.all_broadsheet_data = self.get_broadsheet_data() # Store data for export
         data = self.all_broadsheet_data
         if not data:
-            QMessageBox.warning(self, "No Data", "No results found for the selected criteria.")
+            show_error(self, "No results found for the selected criteria.", title="No Data")
             return
 
         subjects = data['subjects']
@@ -636,12 +582,12 @@ class BroadsheetPage(QWidget):
 
     def export_excel(self):
         if not self.all_broadsheet_data:
-            QMessageBox.warning(self, "No Data", "Please preview the broadsheet first.")
+            show_error(self, "Please preview the broadsheet first.", title="No Data")
             return
         broadsheet_export.to_excel(self, self.all_broadsheet_data)
 
     def export_pdf(self):
         if not self.all_broadsheet_data:
-            QMessageBox.warning(self, "No Data", "Please preview the broadsheet first.")
+            show_error(self, "Please preview the broadsheet first.", title="No Data")
             return
         broadsheet_export.to_pdf(self, self.all_broadsheet_data)

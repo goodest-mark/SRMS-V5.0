@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem
 )
 
-from database import connect
+from db_utils import fetch_one, fetch_all
 
 
 class TeacherProfilePage(QWidget):
@@ -195,10 +195,7 @@ class TeacherProfilePage(QWidget):
 
         self.teacher_id = teacher_id
 
-        conn = connect()
-        cur = conn.cursor()
-
-        cur.execute("""
+        teacher = fetch_one("""
             SELECT
                 teacher_no,
                 full_name,
@@ -209,11 +206,7 @@ class TeacherProfilePage(QWidget):
                 level
             FROM teachers
             WHERE id=?
-        """, (
-            teacher_id,
-        ))
-
-        teacher = cur.fetchone()
+        """, (teacher_id,))
 
         if teacher:
 
@@ -251,40 +244,24 @@ class TeacherProfilePage(QWidget):
 
         self.subjects_list.clear()
 
-        cur.execute("""
+        for row in fetch_all("""
             SELECT subject_name
             FROM teacher_subjects
             WHERE teacher_id=?
             ORDER BY subject_name
-        """, (
-            teacher_id,
-        ))
-
-        for row in cur.fetchall():
-
+        """, (teacher_id,)):
             self.subjects_list.addItem(
-                QListWidgetItem(
-                    row[0]
-                )
+                QListWidgetItem(row[0])
             )
 
         self.classes_list.clear()
 
-        cur.execute("""
+        for row in fetch_all("""
             SELECT class_name
             FROM teacher_classes
             WHERE teacher_id=?
             ORDER BY class_name
-        """, (
-            teacher_id,
-        ))
-
-        for row in cur.fetchall():
-
+        """, (teacher_id,)):
             self.classes_list.addItem(
-                QListWidgetItem(
-                    row[0]
-                )
+                QListWidgetItem(row[0])
             )
-
-        conn.close()

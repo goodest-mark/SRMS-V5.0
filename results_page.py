@@ -24,6 +24,8 @@ from class_utils import get_classes
 from db_utils import get_cursor, fetch_all, get_exam_context
 from event_bus import EventBus
 from system_state import SystemState
+from ui_helpers import show_error, show_info
+import combo_loaders
 
 
 class MarksDelegate(QStyledItemDelegate):
@@ -306,44 +308,10 @@ class ResultsPage(QWidget):
         self.load_subjects()
 
     def load_exams(self):
-        current_exam_id = self.exam.currentData()
-        level = SystemState.get_level()
-
-        rows = fetch_all("""
-            SELECT id, exam_name
-            FROM exams
-            WHERE level=? AND status='OPEN'
-            ORDER BY id
-        """, (level,))
-
-        self.exam.blockSignals(True)
-        self.exam.clear()
-
-        for exam_id, exam_name in rows:
-            self.exam.addItem(exam_name, exam_id)
-
-        index = self.exam.findData(current_exam_id)
-        if index >= 0:
-            self.exam.setCurrentIndex(index)
-        elif self.exam.count() > 0:
-            self.exam.setCurrentIndex(0)
-
-        self.exam.blockSignals(False)
+        combo_loaders.load_open_exams(self.exam)
 
     def load_classes(self):
-        current_class = self.class_box.currentText()
-
-        self.class_box.blockSignals(True)
-        self.class_box.clear()
-        self.class_box.addItems(get_classes())
-
-        index = self.class_box.findText(current_class)
-        if index >= 0:
-            self.class_box.setCurrentIndex(index)
-        elif self.class_box.count() > 0:
-            self.class_box.setCurrentIndex(0)
-
-        self.class_box.blockSignals(False)
+        combo_loaders.load_classes(self.class_box)
 
     def load_subjects(self):
         exam_id = self.exam.currentData()
@@ -475,7 +443,7 @@ class ResultsPage(QWidget):
         subject_name = self.subject.currentData()
 
         if exam_id is None or not subject_name:
-            QMessageBox.warning(self, "Missing Filters", "Select an exam, class and subject.")
+            show_error(self, "Select an exam, class and subject.", title="Missing Filters")
             return
 
         marks_to_save = []
@@ -500,7 +468,7 @@ class ResultsPage(QWidget):
             marks_to_save.append((admission_item.text(), marks))
 
         if invalid_rows:
-            QMessageBox.warning(self, "Invalid Marks", f"Check row(s): {', '.join(map(str, invalid_rows))}")
+            show_error(self, f"Check row(s): {', '.join(map(str, invalid_rows))}", title="Invalid Marks")
             return
 
         try:
@@ -520,7 +488,7 @@ class ResultsPage(QWidget):
         self.load_subjects()
         EventBus.emit("RESULTS_UPDATED")
 
-        QMessageBox.information(self, "Success", "Results Saved Successfully")
+        show_info(self, "Results Saved Successfully")
 
     def update_summary(self, _item=None):
         if self.loading_table:
@@ -560,7 +528,7 @@ class ResultsPage(QWidget):
         subject_name = self.subject.currentData()
         
         if not (exam_id and subject_name):
-            QMessageBox.warning(self, "Error", "Select Exam and Subject first")
+            show_error(self, "Select Exam and Subject first")
             return
             
         path = excel_utils.get_import_file(self)
