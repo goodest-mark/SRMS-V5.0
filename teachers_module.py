@@ -136,5 +136,5 @@ class TeachersModule(QWidget):
 
         try:
             self.list_page.load()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[ERROR] TeachersModule failed to load teacher list: {e}")

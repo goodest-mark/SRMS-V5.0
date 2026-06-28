@@ -20,7 +20,7 @@ def start_app():
 
         global window
         window = MainWindow()
-        window.show()
+        window.showMaximized()
 
     splash = SplashScreen(on_finish=show_main)
     splash.show()

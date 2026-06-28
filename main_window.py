@@ -160,7 +160,6 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("SRMS V5")
-        self.resize(1400, 850)
 
         root = QWidget()
         self.setCentralWidget(root)
@@ -792,9 +791,12 @@ class MainWindow(QMainWindow):
                 subject_name
             )
         except Exception as error:
-            print(
-                "MainWindow error:",
-                error
+            print(f"[ERROR] MainWindow failed to open results entry: {error}")
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self,
+                "Navigation Error",
+                f"Could not open results entry: {error}",
             )
 
     # =====================================
@@ -838,7 +840,7 @@ class MainWindow(QMainWindow):
                 try:
                     method()
                 except Exception as error:
-                    print(error)
+                    print(f"[ERROR] Failed to refresh {type(page).__name__}.{method_name}: {error}")
 
                 break
 
