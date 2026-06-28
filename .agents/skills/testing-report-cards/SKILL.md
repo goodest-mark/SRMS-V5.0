@@ -12,8 +12,8 @@ SRMS is a PySide6 desktop app for school result management. The report card gene
 
 ### Dependencies
 ```bash
-cd /home/ubuntu/SRMS
-pip install PySide6 reportlab openpyxl
+cd /home/ubuntu/repos/SRMS
+pip install PySide6 reportlab openpyxl pandas pytest
 ```
 
 ### Database Seeding
@@ -44,10 +44,34 @@ Open the PDF in Chrome: `file:///tmp/test_report.pdf`
 ## Code Architecture
 - `report_book_page.py` — GUI page that triggers generation (imports `report_card_v5` as `report_book_pdf`)
 - `report_card_v5.py` — Main PDF generation (uses ReportLab)
+- `report_book_pdf.py` — Alternative report book PDF generation
 - `ranking_engine.py` — Computes student scores, positions, divisions
 - `grade_utils.py` — Grade/points mapping (O-Level: A=1, B=2, C=3, D=4, F=5; A-Level has extra S=6 grade)
 - `division_utils.py` — Division lookup from division_rules table
 - `settings_page.py` — `get_setting(key, default)` reads from system_settings table
+- `db_utils.py` — Shared `get_cursor()` context manager for safe DB access
+- `database.py` — `connect()` returns raw connection; `init_db()` creates schema + seeds defaults
+
+## Testing Error Handling
+
+### Approach
+Error handling in UI modules (students_page.py, results_page.py, school_profile.py, main_window.py) uses QMessageBox dialogs that require a running PySide6 event loop. For headless testing:
+- **Runtime tests**: Call `generate_report_book()` and `report_book_pdf.generate_report_book()` with invalid save paths to verify error messages are returned (not swallowed)
+- **Static verification**: Check source code for anti-patterns like bare `except Exception:` (without `as e`) or `except: pass`
+
+### Key Findings
+- ReportLab 5.0.0's `Image()` constructor does **NOT** validate file paths at construction time — errors only surface during `doc.build()`. So the logo warning path in `_build_header` cannot be triggered by simply providing a bad logo path. The `Image()` object is created successfully and the exception only occurs later during PDF rendering.
+- Both `report_card_v5.py` and `report_book_pdf.py` use `try/finally` to ensure `conn.close()` is called. Test by calling with an invalid save path (e.g. `/proc/nonexistent/test.pdf`) — should return `(False, "[Errno 2] No such file...")`.
+- GUI error dialogs (QMessageBox) in students_page, results_page, school_profile, main_window can only be verified via static code analysis in headless mode.
+
+### Running Tests
+```bash
+# Existing unit tests
+python -m pytest tests/ -v
+
+# Error handling verification (creates temp DB, runs assertions, cleans up)
+# Write a script that seeds data and calls generate_report_book with bad inputs
+```
 
 ## Key Test Scenarios
 
@@ -65,15 +89,23 @@ Open the PDF in Chrome: `file:///tmp/test_report.pdf`
 - Verify both `report_card_v5.py` and `report_book_pdf.py` handle this without crashing
 
 ### 4. Edge Cases
-- Student with fewer subjects than required → should show as INCOMPLETE
-- Missing school_profile → verify graceful fallback
-- Missing subjects short names → verify column headers still render
+- Student with fewer subjects than required — should show as INCOMPLETE
+- Missing school_profile — verify graceful fallback
+- Missing subjects short names — verify column headers still render
+
+### 5. Connection Leak Testing
+- Call `generate_report_book` with invalid save path (e.g. `/proc/nonexistent/test.pdf`)
+- Should return `(False, "<error message>")` without leaking DB connections
+- Do the same for `report_book_pdf.generate_report_book`
 
 ## Common Issues
 - Each student may generate 2 pages (landscape A4 overflows with rich content)
 - TERM field may display just the number if term_name format varies
 - `SystemState.level` defaults to "O_LEVEL" — set it before calling ranking for A-Level tests
 - The `watermark.py` module uses hardcoded canvas positioning (300, 400) — watermark position may vary on different page sizes
+- The repo path is `/home/ubuntu/repos/SRMS` (not `/home/ubuntu/SRMS`)
+- The existing test suite has a pre-existing failure in `test_system_security_default_passcode` (hash mismatch due to random salt in PBKDF2) — this is unrelated to report card changes
+- No CI is configured on this repo — tests must be run locally
 
 ## Devin Secrets Needed
 None — this is a local SQLite application with no external dependencies or API keys.
