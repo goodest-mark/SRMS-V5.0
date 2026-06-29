@@ -93,6 +93,10 @@ class SettingsPage(QWidget):
         self.container_layout.addLayout(btn_layout)
 
         scroll.setWidget(container)
+        # ensure the container's size reflects its contents so the scroll area
+        # can provide scrollbars that reach the bottom-most widgets
+        container.adjustSize()
+        scroll.setWidgetResizable(False)
         layout.addWidget(scroll)
         self.load_settings()
 

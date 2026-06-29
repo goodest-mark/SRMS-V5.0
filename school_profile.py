@@ -156,11 +156,15 @@ class SchoolProfilePage(QWidget):
         btns_layout.addWidget(self.reset_btn)
         
         container_layout.addLayout(btns_layout)
-        container_layout.addStretch()
-        
+        # don't add a stretch here; allow the container to size to its contents
+
         scroll.setWidget(container)
+        # ensure the container's size reflects its contents so the scroll area
+        # can provide scrollbars that reach the bottom-most widgets
+        container.adjustSize()
+        scroll.setWidgetResizable(False)
         layout.addWidget(scroll)
-        
+
         self.load()
 
     def upload_logo(self):

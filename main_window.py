@@ -172,12 +172,6 @@ class MainWindow(QMainWindow):
 
         top_bar = QHBoxLayout()
 
-        self.title = QLabel("SRMS V5")
-        self.title.setStyleSheet("""
-            font-size:24px;
-            font-weight:bold;
-        """)
-
         # Level toggle - slide switch
         self.level_switch = LevelToggleSwitch()
         current_level = SystemState.get_level()
@@ -207,16 +201,6 @@ class MainWindow(QMainWindow):
         """)
         self.help_btn.clicked.connect(self.show_help)
 
-        # Theme toggle button — SVG icon
-        self.theme_btn = QPushButton()
-        self.theme_btn.setToolTip("Switch between Light and Dark theme")
-        self.theme_btn.setIconSize(QSize(22, 22))
-        self.theme_btn.setFixedSize(42, 42)
-        self.theme_btn.setCursor(Qt.PointingHandCursor)
-        self.current_theme = get_setting('theme', 'Dark')
-        self._update_theme_btn()
-        self.theme_btn.clicked.connect(self.toggle_theme)
-
         self.refresh_btn = QPushButton()
         self.refresh_btn.setIcon(_icon("refresh.svg"))
         self.refresh_btn.setToolTip("Refresh")
@@ -245,92 +229,6 @@ class MainWindow(QMainWindow):
             padding: 0 8px;
         """)
 
-        top_bar.addWidget(self.title)
-        top_bar.addWidget(self.breadcrumb)
-        top_bar.addStretch()
-        top_bar.addWidget(self.help_btn)
-        top_bar.addWidget(self.theme_btn)
-        top_bar.addWidget(self.level_switch)
-        top_bar.addWidget(self.refresh_btn)
-
-        # =====================================
-        # BODY
-        # =====================================
-
-        body = QHBoxLayout()
-        body.setContentsMargins(0,0,0,0)
-        body.setSpacing(16)
-
-        # =====================================
-        # SIDEBAR
-        # =====================================
-
-        
-        self.sidebar_widget = QWidget()
-        self.sidebar_widget.setFixedWidth(240)
-        self.sidebar_widget.setSizePolicy(
-            QSizePolicy.Fixed,
-            QSizePolicy.Expanding
-        )
-
-        self.sidebar_widget.setStyleSheet("""
-        QWidget{
-            background:#0F172A;
-            border:1px solid rgba(148,163,184,0.15);
-            border-radius:22px;
-        }
-        """)
-
-        self.sidebar_anim_max = QPropertyAnimation(
-            self.sidebar_widget,
-            b"maximumWidth"
-        )
-        self.sidebar_anim_max.setDuration(240)
-        self.sidebar_anim_max.setEasingCurve(
-            QEasingCurve.InOutQuad
-        )
-        self.sidebar_anim_min = QPropertyAnimation(
-            self.sidebar_widget,
-            b"minimumWidth"
-        )
-        self.sidebar_anim_min.setDuration(240)
-        self.sidebar_anim_min.setEasingCurve(
-            QEasingCurve.InOutQuad
-        )
-
-        self.sidebar_anim_group = QParallelAnimationGroup()
-        self.sidebar_anim_group.addAnimation(self.sidebar_anim_max)
-        self.sidebar_anim_group.addAnimation(self.sidebar_anim_min)
-
-        sidebar = QVBoxLayout(self.sidebar_widget)
-        sidebar.setSpacing(10)
-        sidebar.setContentsMargins(16,16,16,16)
-
-        self.sidebar_collapsed = False
-
-        self.sidebar_toggle_btn = QPushButton("≡")
-        self.sidebar_toggle_btn.setFixedSize(36,36)
-        self.sidebar_toggle_btn.setCursor(Qt.PointingHandCursor)
-        self.sidebar_toggle_btn.setStyleSheet("""
-            QPushButton{
-                color:#CBD5E1;
-                background:rgba(255,255,255,0.06);
-                border:none;
-                border-radius:12px;
-                font-size:16px;
-                font-weight:700;
-            }
-            QPushButton:hover{
-                background:rgba(255,255,255,0.12);
-            }
-        """)
-        self.sidebar_toggle_btn.clicked.connect(self.toggle_sidebar)
-
-        toggle_row = QHBoxLayout()
-        toggle_row.addStretch()
-        toggle_row.addWidget(self.sidebar_toggle_btn)
-        sidebar.addLayout(toggle_row)
-
         self.btn_dashboard = QPushButton("Dashboard")
         self.btn_students = QPushButton("Students")
         self.btn_teachers = QPushButton("Teachers")
@@ -339,7 +237,6 @@ class MainWindow(QMainWindow):
         self.btn_results = QPushButton("Results")
         self.btn_school = QPushButton("School")
         self.btn_settings = QPushButton("Settings")
-
         self.btn_security = QPushButton("Security")
 
         self.btn_dashboard.setIcon(_icon("dashboard.svg"))
@@ -351,7 +248,6 @@ class MainWindow(QMainWindow):
         self.btn_school.setIcon(_icon("school.svg"))
         self.btn_settings.setIcon(_icon("settings.svg"))
         self.btn_security.setIcon(_icon("security.svg"))
-
 
         self.nav_buttons = [
             self.btn_dashboard,
@@ -365,82 +261,70 @@ class MainWindow(QMainWindow):
             self.btn_security
         ]
 
-        self.sidebar_button_style = """
+        self.nav_button_style = """
             QPushButton{
-                text-align:left;
-                padding:12px 18px 12px 20px;
-                border-radius:16px;
-                font-weight:700;
-                color:#E2E8F0;
-                font-size:14px;
-                background:transparent;
-                border:none;
-            }
-            QPushButton:hover{
-                background:rgba(255,255,255,0.08);
-            }
-        """
-
-        self.sidebar_button_style_collapsed = """
-            QPushButton{
-                padding:12px;
-                border-radius:16px;
-                font-weight:700;
-                color:#E2E8F0;
-                font-size:14px;
-                background:transparent;
-                border:none;
-            }
-            QPushButton:hover{
-                background:rgba(255,255,255,0.08);
-            }
-        """
-
-        self.sidebar_button_active_style = """
-            QPushButton{
-                background:qlineargradient(
-                    x1:0,y1:0,x2:1,y2:0,
-                    stop:0 #2563eb,
-                    stop:1 #3b82f6
-                );
-                color:#ffffff;
-                font-weight:700;
-                border:none;
-                border-radius:16px;
-                padding:12px 18px 12px 20px;
-                text-align:left;
-            }
-        """
-
-        self.sidebar_button_active_style_collapsed = """
-            QPushButton{
-                background:qlineargradient(
-                    x1:0,y1:0,x2:1,y2:0,
-                    stop:0 #2563eb,
-                    stop:1 #3b82f6
-                );
-                color:#ffffff;
-                font-weight:700;
-                border:none;
-                border-radius:16px;
-                padding:12px;
                 text-align:center;
+                padding:8px 14px;
+                border-radius:16px;
+                font-weight:700;
+                color:#E2E8F0;
+                font-size:13px;
+                background:transparent;
+                border:none;
+                min-width: 120px;
+            }
+            QPushButton:hover{
+                background:rgba(255,255,255,0.08);
+            }
+        """
+
+        self.nav_button_active_style = """
+            QPushButton{
+                background:qlineargradient(
+                    x1:0,y1:0,x2:1,y2:0,
+                    stop:0 #2563eb,
+                    stop:1 #3b82f6
+                );
+                color:#ffffff;
+                font-weight:700;
+                border:none;
+                border-radius:16px;
+                padding:10px 18px;
             }
         """
 
         self.active_btn = None
-
         self._nav_labels = {}
+
+        self.top_nav = QHBoxLayout()
+        self.top_nav.setSpacing(4)
+        self.top_nav.setContentsMargins(0, 0, 0, 0)
+
         for btn in self.nav_buttons:
             self._nav_labels[btn] = btn.text()
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setIconSize(QSize(28,28))
-            btn.setMinimumHeight(54)
-            btn.setStyleSheet(self.sidebar_button_style)
+            btn.setIconSize(QSize(20,20))
+            btn.setMinimumHeight(40)
+            btn.setStyleSheet(self.nav_button_style)
             btn.setToolTip(btn.text())
-            sidebar.addWidget(btn)
+            self.top_nav.addWidget(btn)
 
-        sidebar.addStretch()
+        self.top_nav_widget = QWidget()
+        self.top_nav_widget.setLayout(self.top_nav)
+        self.top_nav_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        top_bar.addWidget(self.top_nav_widget)
+        top_bar.addWidget(self.help_btn)
+        top_bar.addWidget(self.level_switch)
+        top_bar.addWidget(self.refresh_btn)
+
+        # =====================================
+        # BODY
+        # =====================================
+
+        body = QHBoxLayout()
+        body.setContentsMargins(0,0,0,0)
+        body.setSpacing(16)
 
         # =====================================
         # STACK
@@ -581,12 +465,8 @@ class MainWindow(QMainWindow):
             )
         )
 
-        body.addWidget(self.sidebar_widget)
         body.addWidget(self.stack)
-        body.setStretch(0, 0)
-        body.setStretch(1, 1)
-
-        self.update_sidebar_state()
+        body.setStretch(0, 1)
 
         self.main_layout.addLayout(top_bar)
         self.main_layout.addLayout(body)
@@ -616,6 +496,18 @@ class MainWindow(QMainWindow):
 
         self.refresh_all()
 
+        # =====================================
+        # WINDOW GEOMETRY
+        # =====================================
+        # 1. Set a fixed window size. This also disables resizing and the maximize button.
+        self.setFixedSize(1366, 768)
+
+        # 2. Center the window on the screen.
+        qr = self.frameGeometry()
+        cp = self.screen().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
+
     # =====================================
     # NAVIGATION
     # =====================================
@@ -636,18 +528,9 @@ class MainWindow(QMainWindow):
     ):
         for btn in self.nav_buttons:
             if btn == active_btn:
-                style = (
-                    self.sidebar_button_active_style_collapsed
-                    if self.sidebar_collapsed
-                    else self.sidebar_button_active_style
-                )
-                btn.setStyleSheet(style)
+                btn.setStyleSheet(self.nav_button_active_style)
             else:
-                btn.setStyleSheet(
-                    self.sidebar_button_style_collapsed
-                    if self.sidebar_collapsed
-                    else self.sidebar_button_style
-                )
+                btn.setStyleSheet(self.nav_button_style)
 
     # =====================================
     # LEVEL SWITCH
@@ -663,40 +546,6 @@ class MainWindow(QMainWindow):
     # SIDEBAR COLLAPSE
     # =====================================
 
-    def toggle_sidebar(self):
-        self.sidebar_collapsed = not self.sidebar_collapsed
-        self.update_sidebar_state()
-
-    def update_sidebar_state(self):
-        if self.sidebar_collapsed:
-            target_width = 88
-        else:
-            target_width = 240
-
-        current_w = self.sidebar_widget.width()
-
-        # Update text/style BEFORE animation so content matches target
-        for btn in self.nav_buttons:
-            btn.setIconSize(QSize(28, 28))
-            if self.sidebar_collapsed:
-                btn.setMinimumHeight(54)
-                btn.setStyleSheet(self.sidebar_button_style_collapsed)
-                btn.setText("")
-            else:
-                btn.setMinimumHeight(54)
-                btn.setStyleSheet(self.sidebar_button_style)
-                btn.setText(self._nav_labels.get(btn, btn.toolTip()))
-
-        self.update_highlight(self.active_btn)
-
-        # Animate both min and max width together via group
-        self.sidebar_anim_group.stop()
-        self.sidebar_anim_max.setStartValue(current_w)
-        self.sidebar_anim_max.setEndValue(target_width)
-        self.sidebar_anim_min.setStartValue(current_w)
-        self.sidebar_anim_min.setEndValue(target_width)
-        self.sidebar_anim_group.start()
-
     def toggle_level(self, is_a_level):
         if is_a_level:
             SystemState.set_level("A_LEVEL")
@@ -708,56 +557,6 @@ class MainWindow(QMainWindow):
         """Show the Getting Started guide dialog."""
         dialog = HelpGuideDialog(self)
         dialog.exec()
-
-    def toggle_theme(self):
-        """Toggle between Light and Dark themes and persist."""
-        if self.current_theme == "Dark":
-            self.current_theme = "Light"
-        else:
-            self.current_theme = "Dark"
-
-        app = QApplication.instance()
-        if app:
-            app.setStyleSheet(get_theme(self.current_theme))
-        self._update_theme_btn()
-        self._persist_theme(self.current_theme)
-
-    def _persist_theme(self, theme_name):
-        """Save theme choice to system_settings."""
-        from db_utils import execute
-        try:
-            execute(
-                "REPLACE INTO system_settings (setting_key, setting_value) VALUES (?, ?)",
-                ('theme', theme_name))
-        except Exception:
-            pass
-
-    def _update_theme_btn(self):
-        """Update the theme button icon based on current theme."""
-        if self.current_theme == "Dark":
-            self.theme_btn.setIcon(_icon("sun.svg"))
-            self.theme_btn.setStyleSheet("""
-                QPushButton{
-                    background:rgba(251,191,36,0.12);
-                    border:1px solid rgba(251,191,36,0.35);
-                    border-radius:12px;
-                }
-                QPushButton:hover{
-                    background:rgba(251,191,36,0.25);
-                }
-            """)
-        else:
-            self.theme_btn.setIcon(_icon("moon.svg"))
-            self.theme_btn.setStyleSheet("""
-                QPushButton{
-                    background:rgba(99,102,241,0.12);
-                    border:1px solid rgba(99,102,241,0.35);
-                    border-radius:12px;
-                }
-                QPushButton:hover{
-                    background:rgba(99,102,241,0.25);
-                }
-            """)
 
     def _update_breadcrumb(self, button):
         """Update breadcrumb based on current page."""

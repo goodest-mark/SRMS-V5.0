@@ -1,4 +1,5 @@
 import sys
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from splash import SplashScreen
@@ -20,7 +21,7 @@ def start_app():
 
         global window
         window = MainWindow()
-        window.showMaximized()
+        window.show()
 
     splash = SplashScreen(on_finish=show_main)
     splash.show()

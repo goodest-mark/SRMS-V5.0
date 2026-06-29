@@ -501,7 +501,6 @@ class BroadsheetPage(QWidget):
             total_h = min(total_h, max_allowed)
             if t == self.table: t.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             t.setMinimumHeight(total_h)
-            t.setMaximumHeight(total_h)
 
     def _update_class_performance_ui(self, class_performance):
         self.card_widgets['total_students'].setText(str(class_performance['total_students']))

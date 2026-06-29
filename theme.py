@@ -202,8 +202,8 @@ LIGHT_STYLE = """
 ========================================= */
 
 QWidget{
-    background:#f8fafc;
-    color:#1e293b;
+    background:#eef2f6;
+    color:#111827;
     font-family:Inter,Segoe UI,Arial;
     font-size:15px;
 }
@@ -222,11 +222,11 @@ QLabel{
 ========================================= */
 
 QLineEdit{
-    background:#ffffff;
-    border:1px solid #cbd5e1;
+    background:#f5f7f9;
+    border:1px solid #d1d9df;
     border-radius:12px;
     padding:10px 14px;
-    color:#1e293b;
+    color:#111827;
     min-height:22px;
 }
 
@@ -239,11 +239,11 @@ QLineEdit:focus{
 ========================================= */
 
 QComboBox{
-    background:#ffffff;
-    border:1px solid #cbd5e1;
+    background:#f5f7f9;
+    border:1px solid #d1d9df;
     border-radius:12px;
     padding:10px 14px;
-    color:#1e293b;
+    color:#111827;
     min-height:22px;
 }
 
@@ -257,11 +257,11 @@ QComboBox::drop-down{
 }
 
 QComboBox QAbstractItemView{
-    background:#ffffff;
-    color:#1e293b;
-    border:1px solid #e2e8f0;
-    selection-background-color:#dbeafe;
-    selection-color:#1e40af;
+    background:#f1f5f8;
+    color:#111827;
+    border:1px solid #e6eef3;
+    selection-background-color:#e6eef8;
+    selection-color:#0f172a;
 }
 
 /* =========================================
@@ -303,15 +303,15 @@ QPushButton:pressed{
 ========================================= */
 
 QTableWidget{
-    background:#ffffff;
-    border:1px solid #e2e8f0;
+    background:#f7fbfc;
+    border:1px solid #e6eef3;
     border-radius:14px;
 
-    color:#1e293b;
-    gridline-color:#e2e8f0;
+    color:#111827;
+    gridline-color:#e6eef3;
 
-    selection-background-color:#dbeafe;
-    selection-color:#1e40af;
+    selection-background-color:#e6eef8;
+    selection-color:#0f172a;
 }
 
 QTableWidget::item{
@@ -319,8 +319,8 @@ QTableWidget::item{
 }
 
 QTableWidget::item:selected{
-    background:#dbeafe;
-    color:#1e40af;
+    background:#e6eef8;
+    color:#0f172a;
 }
 
 /* =========================================
@@ -328,8 +328,8 @@ QTableWidget::item:selected{
 ========================================= */
 
 QHeaderView::section{
-    background:#f1f5f9;
-    color:#1e293b;
+    background:#eef4f7;
+    color:#111827;
 
     border:none;
 
@@ -348,7 +348,7 @@ QScrollBar:vertical{
 }
 
 QScrollBar::handle:vertical{
-    background:#93c5fd;
+    background:#b7d6f8;
     border-radius:5px;
 }
 
@@ -363,7 +363,7 @@ QScrollBar:horizontal{
 }
 
 QScrollBar::handle:horizontal{
-    background:#93c5fd;
+    background:#b7d6f8;
     border-radius:5px;
 }
 
@@ -377,7 +377,7 @@ QScrollBar::sub-line:horizontal{
 ========================================= */
 
 QMessageBox{
-    background:#ffffff;
+    background:#f7fbfc;
 }
 
 /* =========================================
@@ -385,9 +385,9 @@ QMessageBox{
 ========================================= */
 
 QToolTip{
-    background:#ffffff;
-    color:#1e293b;
-    border:1px solid #e2e8f0;
+    background:#f1f5f8;
+    color:#0f172a;
+    border:1px solid #e6eef3;
     padding:6px;
     border-radius:8px;
 }
