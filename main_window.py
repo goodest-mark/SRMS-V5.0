@@ -6,6 +6,8 @@ from PySide6.QtCore import (
     QParallelAnimationGroup, QRectF, Property, Signal
 )
 
+from progress_dialog import ProgressDialog
+
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -17,6 +19,8 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QSizePolicy
 )
+
+from progress_dialog import ProgressDialog
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
     QTabWidget,
 )
 
+from progress_dialog import ProgressDialog
+
 from grade_rules_page import GradeRulesPage
 from division_rules_page import DivisionRulesPage
 from subject_requirements_page import SubjectRequirementsPage

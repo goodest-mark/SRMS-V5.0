@@ -5,9 +5,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
     QPushButton, QMessageBox, QLabel, QGroupBox, QCheckBox, QComboBox, QScrollArea, QSizePolicy
 )
+
+from progress_dialog import ProgressDialog
 from db_utils import fetch_all, execute, execute_many
 from security_settings import authorize_action
-from academic_configuration_page import AcademicConfigurationPage
 
 _SAFE_BACKUP_PATH = re.compile(r'^[\w./ \\:-]+$')
 
@@ -100,15 +101,6 @@ class SettingsPage(QWidget):
         sys_form.addRow("Backup Folder Path:", self.backup_folder)
         right_column.addWidget(sys_group)
 
-
-        # Academic Configuration
-        academic_group = QGroupBox("ACADEMIC CONFIGURATION")
-        academic_group.setStyleSheet(group_style)
-
-        academic_layout = QVBoxLayout(academic_group)
-        academic_layout.addWidget(AcademicConfigurationPage(), 1)
-
-        self.container_layout.addWidget(academic_group, 1)
 
         # Buttons
         btn_layout = QHBoxLayout()

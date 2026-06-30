@@ -4,6 +4,8 @@ from PySide6.QtWidgets import (
     QLabel, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem,
     QHeaderView, QProgressBar, QApplication
 )
+
+from progress_dialog import ProgressDialog
 from PySide6.QtCore import Qt
 
 from database import connect

@@ -7,6 +7,8 @@ QPushButton,
 QLabel
 )
 
+from progress_dialog import ProgressDialog
+
 from db_utils import fetch_all, get_cursor
 
 class AssignSubjectsPage(QWidget):

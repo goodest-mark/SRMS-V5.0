@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 
+from progress_dialog import ProgressDialog
+
 from db_utils import fetch_one, get_cursor
 from ui_helpers import show_error, show_info
 

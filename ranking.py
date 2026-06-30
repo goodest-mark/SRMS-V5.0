@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QAbstractItemView
 )
+
+from progress_dialog import ProgressDialog
 from PySide6.QtCore import Qt
 
 from system_state import SystemState

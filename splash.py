@@ -7,10 +7,14 @@ from PySide6.QtWidgets import (
     QHBoxLayout
 )
 
+from progress_dialog import ProgressDialog
+
 from PySide6.QtCore import (
     Qt,
     QTimer
 )
+
+from progress_dialog import ProgressDialog
 
 
 class SplashScreen(QWidget):

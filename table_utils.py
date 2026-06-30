@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
     QHeaderView,
 )
 
+from progress_dialog import ProgressDialog
+
 
 def setup_table(table, headers, stretch=True):
     """Configure a QTableWidget with standard read-only, row-selection behavior.

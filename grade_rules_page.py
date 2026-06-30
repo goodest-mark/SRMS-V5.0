@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
 )
 
+from progress_dialog import ProgressDialog
+
 from PySide6.QtGui import QColor
 
 

@@ -8,7 +8,9 @@ QtW.QMessageBox.critical = lambda parent, title, msg: print('ERROR:', msg)
 
 # Prepare minimal sample data
 from datetime import datetime
+from progress_dialog import ProgressDialog
 from broadsheet_export import to_pdf
+from progress_dialog import ProgressDialog
 
 subjects = ['Mathematics', 'Biology', 'Chemistry']
 rows = []

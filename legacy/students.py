@@ -12,6 +12,8 @@ QLabel,
 QHeaderView
 )
 
+from progress_dialog import ProgressDialog
+
 from database import connect
 from system_state import SystemState
 from event_bus import EventBus

@@ -371,39 +371,39 @@ def _init_db_inner(conn, cur):
 
         cur.execute("SELECT COUNT(*) FROM grade_rules")
 
-if cur.fetchone()[0] == 0:
+        if cur.fetchone()[0] == 0:
 
-    grades = [
-
-        ("O_LEVEL","A",75,100,1,1),
-        ("O_LEVEL","B",65,74,2,2),
-        ("O_LEVEL","C",45,64,3,3),
-        ("O_LEVEL","D",30,44,4,4),
-        ("O_LEVEL","F",0,29,5,5),
-
-        ("A_LEVEL","A",80,100,1,1),
-        ("A_LEVEL","B",70,79,2,2),
-        ("A_LEVEL","C",60,69,3,3),
-        ("A_LEVEL","D",50,59,4,4),
-        ("A_LEVEL","E",40,49,5,5),
-        ("A_LEVEL","S",35,39,6,6),
-        ("A_LEVEL","F",0,34,7,7),
-
-    ]
-
-    cur.executemany("""
-
-        INSERT INTO grade_rules
-
-        (level,grade,min_mark,max_mark,points,sort_order)
-
-        VALUES(?,?,?,?,?,?)
-
+            grades = [
+        
+                ("O_LEVEL","A",75,100,1,1),
+                ("O_LEVEL","B",65,74,2,2),
+                ("O_LEVEL","C",45,64,3,3),
+                ("O_LEVEL","D",30,44,4,4),
+                ("O_LEVEL","F",0,29,5,5),
+        
+                ("A_LEVEL","A",80,100,1,1),
+                ("A_LEVEL","B",70,79,2,2),
+                ("A_LEVEL","C",60,69,3,3),
+                ("A_LEVEL","D",50,59,4,4),
+                ("A_LEVEL","E",40,49,5,5),
+                ("A_LEVEL","S",35,39,6,6),
+                ("A_LEVEL","F",0,34,7,7),
+        
+            ]
+        
+            cur.executemany("""
+        
+                INSERT INTO grade_rules
+        
+                (level,grade,min_mark,max_mark,points,sort_order)
+        
+                VALUES(?,?,?,?,?,?)
+        
         """, grades)
-
-    cur.executemany("""
-            INSERT INTO division_rules (level, division, min_points, max_points)
-            VALUES (?, ?, ?, ?)
+        
+            cur.executemany("""
+                    INSERT INTO division_rules (level, division, min_points, max_points)
+                    VALUES (?, ?, ?, ?)
         """,rules)
 
     # =========================

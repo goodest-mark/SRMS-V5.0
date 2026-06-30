@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QHeaderView
 )
 
+from progress_dialog import ProgressDialog
+
 from database import connect
 from theme import APP_STYLE
 from add_subject import AddSubjectWindow

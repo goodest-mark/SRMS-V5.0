@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QLayout,
     QScrollArea
 )
+
+from progress_dialog import ProgressDialog
 from PySide6.QtGui import QIcon, QFont
 from event_bus import EventBus
 from system_state import SystemState

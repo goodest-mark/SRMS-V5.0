@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
     QGridLayout
 )
 
+from progress_dialog import ProgressDialog
+
 from db_utils import fetch_all, get_cursor
 from class_utils import get_classes
 from ui_helpers import show_info

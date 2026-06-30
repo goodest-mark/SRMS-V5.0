@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
     QStackedWidget
 )
 
+from progress_dialog import ProgressDialog
+
 from results_page import ResultsPage
 from results_dashboard import ResultsDashboard
 from ranking import RankingPage

@@ -1,9 +1,14 @@
 import openpyxl
 from openpyxl.utils import get_column_letter
+from progress_dialog import ProgressDialog
 from openpyxl.styles import Font, Alignment, PatternFill
+from progress_dialog import ProgressDialog
 from openpyxl.drawing.image import Image as ExcelImage
+from progress_dialog import ProgressDialog
 from PySide6.QtWidgets import QFileDialog, QMessageBox
+from progress_dialog import ProgressDialog
 from db_utils import fetch_one
+from progress_dialog import ProgressDialog
 import os
 
 def download_template(parent, filename, title, headers, instructions=None, samples=None):

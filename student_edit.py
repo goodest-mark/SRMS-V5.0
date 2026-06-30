@@ -2,6 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit,
     QPushButton, QComboBox, QMessageBox
 )
+
+from progress_dialog import ProgressDialog
 from db_utils import execute
 from ui_helpers import show_info
 

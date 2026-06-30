@@ -2,6 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,
     QLabel, QGroupBox, QMessageBox, QFileDialog, QFrame
 )
+
+from progress_dialog import ProgressDialog
 from PySide6.QtCore import Qt, QThread, Signal
 
 from system_state import SystemState

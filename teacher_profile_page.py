@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QListWidgetItem
 )
 
+from progress_dialog import ProgressDialog
+
 from db_utils import fetch_one, fetch_all
 
 

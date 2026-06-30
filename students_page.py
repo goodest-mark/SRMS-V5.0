@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from progress_dialog import ProgressDialog
+
 import sqlite3
 
 from class_utils import get_classes

@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from progress_dialog import ProgressDialog
+
 from class_utils import get_classes
 from db_utils import fetch_all, fetch_one
 from event_bus import EventBus

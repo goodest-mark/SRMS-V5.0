@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QMessageBox,
 )
+
+from progress_dialog import ProgressDialog
 import openpyxl
 import excel_utils
 

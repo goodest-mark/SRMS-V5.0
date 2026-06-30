@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QWidget,
     QFrame
 )
+
+from progress_dialog import ProgressDialog
 import openpyxl
 import excel_utils
 

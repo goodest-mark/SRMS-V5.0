@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
 )
 
+from progress_dialog import ProgressDialog
+
 from db_utils import fetch_all, execute_many
 from event_bus import EventBus
 

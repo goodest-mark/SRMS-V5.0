@@ -1,19 +1,33 @@
 import os
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+from progress_dialog import ProgressDialog
 from openpyxl.drawing.image import Image as ExcelImage
+from progress_dialog import ProgressDialog
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QProgressDialog, QApplication
+from progress_dialog import ProgressDialog
 from reportlab.lib import colors
+from progress_dialog import ProgressDialog
 from reportlab.lib.pagesizes import landscape, A4
+from progress_dialog import ProgressDialog
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from progress_dialog import ProgressDialog
 from reportlab.platypus.flowables import HRFlowable
+from progress_dialog import ProgressDialog
 from reportlab.platypus import PageBreak, Frame, PageTemplate
+from progress_dialog import ProgressDialog
 from reportlab.platypus.flowables import Image # For PDF logo
+from progress_dialog import ProgressDialog
 from reportlab.lib.units import inch
+from progress_dialog import ProgressDialog
 from reportlab.lib.styles import getSampleStyleSheet
+from progress_dialog import ProgressDialog
 from reportlab.lib.styles import ParagraphStyle
+from progress_dialog import ProgressDialog
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from progress_dialog import ProgressDialog
 from PySide6.QtCore import Qt
+from progress_dialog import ProgressDialog
 
 
 def _make_progress(parent, title):
@@ -34,7 +48,7 @@ def _make_progress(parent, title):
 def _set_progress(progress, value, label):
     if progress is None:
         return
-    progress.setLabelText(f"{label} {value}%")
+    progress.setLabelText(f"{label}\n\nProgress: {value}%")
     progress.setValue(value)
     QApplication.processEvents()
 
@@ -124,11 +138,12 @@ def to_excel(parent, data):
                 row_vals.append(r['marks'][s])
             row_vals += [r['Total'], r['Average'], r['Points'], r['Division']]
             ws.append(row_vals)
-            if row_index == 1 or row_index == total_data_rows or row_index % 25 == 0:
-                _set_progress(progress, min(55, 10 + int((row_index / total_data_rows) * 45)), "Writing student rows")
-
-        _set_progress(progress, 60, "Styling workbook")
-
+            percent = 10 + int((row_index / total_data_rows) * 70)
+            _set_progress(
+                progress,
+                percent,
+                f"Writing student {row_index}/{total_data_rows}"
+            )
         # Add a border to the main table
         thin_border = Border(left=Side(style='thin'), 
                              right=Side(style='thin'), 
@@ -219,7 +234,9 @@ def to_excel(parent, data):
         ws.freeze_panes = f"E{header_row + 1}"
 
         _set_progress(progress, 90, "Saving Excel file")
+        _set_progress(progress, 95, "Saving workbook")
         wb.save(path)
+        _set_progress(progress, 100, "Export completed")
         _set_progress(progress, 100, "Export complete")
         QMessageBox.information(parent, "Success", f"Broadsheet exported to {path}")
     except Exception as e:
@@ -565,7 +582,9 @@ def to_pdf(parent, data):
 
         # Build PDF and apply watermark callbacks (header/footer applied via PageTemplate)
         _set_progress(progress, 80, "Rendering PDF pages")
+        _set_progress(progress, 95, "Generating PDF")
         doc.build(elements, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
+        _set_progress(progress, 100, "Finished")
         _set_progress(progress, 100, "Export complete")
         QMessageBox.information(parent, "Success", f"Broadsheet exported to {path}")
     except Exception as e:

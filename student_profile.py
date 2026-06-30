@@ -3,6 +3,8 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QFrame, QScrollArea, QWidget,
     QGridLayout, QGroupBox, QAbstractItemView
 )
+
+from progress_dialog import ProgressDialog
 from PySide6.QtGui import QPixmap, QColor
 from PySide6.QtCore import Qt
 

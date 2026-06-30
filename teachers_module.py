@@ -4,6 +4,8 @@ from PySide6.QtWidgets import (
     QStackedWidget
 )
 
+from progress_dialog import ProgressDialog
+
 from teachers_list_page import TeachersListPage
 from teacher_profile_page import TeacherProfilePage
 from assign_subjects_page import AssignSubjectsPage

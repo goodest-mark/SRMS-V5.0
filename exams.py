@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
+from progress_dialog import ProgressDialog
+
 from db_utils import get_cursor, fetch_all
 from table_utils import setup_table, populate_table
 from ui_helpers import confirm_action, show_error

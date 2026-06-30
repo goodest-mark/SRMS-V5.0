@@ -3,6 +3,8 @@ from PySide6.QtWidgets import (
     QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QGridLayout,
     QMessageBox, QGroupBox, QAbstractItemView, QFileDialog, QScrollArea
 )
+
+from progress_dialog import ProgressDialog
 from PySide6.QtCore import Qt
 
 from db_utils import fetch_all, fetch_one

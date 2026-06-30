@@ -11,6 +11,9 @@ from PySide6.QtWidgets import (
     QFileDialog
 )
 
+from progress_dialog import ProgressDialog
+
+
 import pandas as pd
 
 from db_utils import get_cursor, fetch_all

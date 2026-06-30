@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QHeaderView
 )
 
+from progress_dialog import ProgressDialog
+
 from database import connect
 from theme import APP_STYLE
 from grade_utils import get_grade, get_points
