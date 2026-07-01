@@ -6,13 +6,10 @@ from PySide6.QtWidgets import (
     QStackedWidget
 )
 
-from progress_dialog import ProgressDialog
-
 from results_page import ResultsPage
 from results_dashboard import ResultsDashboard
-from ranking import RankingPage
-from broadsheet_page import BroadsheetPage
-from report_book_page import ReportBookPage
+from readiness_page import ReadinessPage
+from excel_results_import import ExcelResultsImport
 
 
 class ResultsCenter(QWidget):
@@ -30,15 +27,13 @@ class ResultsCenter(QWidget):
 
         self.btn_entry = QPushButton("Results Entry")
         self.btn_dashboard = QPushButton("Dashboard")
-        self.btn_ranking = QPushButton("Ranking")
-        self.btn_broadsheet = QPushButton("Broadsheet")
-        self.btn_reports = QPushButton("Report Book")
+        self.btn_readiness = QPushButton("Readiness")
+        self.btn_import = QPushButton("Excel Import")
 
         nav.addWidget(self.btn_entry)
         nav.addWidget(self.btn_dashboard)
-        nav.addWidget(self.btn_ranking)
-        nav.addWidget(self.btn_broadsheet)
-        nav.addWidget(self.btn_reports)
+        nav.addWidget(self.btn_readiness)
+        nav.addWidget(self.btn_import)
 
         root.addLayout(nav)
 
@@ -50,15 +45,13 @@ class ResultsCenter(QWidget):
 
         self.results_entry_page = ResultsPage()
         self.dashboard_page = ResultsDashboard()
-        self.ranking_page = RankingPage()
-        self.broadsheet_page = BroadsheetPage()
-        self.report_book_page = ReportBookPage()
+        self.readiness_page = ReadinessPage()
+        self.import_page = ExcelResultsImport()
 
         self.stack.addWidget(self.results_entry_page)
         self.stack.addWidget(self.dashboard_page)
-        self.stack.addWidget(self.ranking_page)
-        self.stack.addWidget(self.broadsheet_page)
-        self.stack.addWidget(self.report_book_page)
+        self.stack.addWidget(self.readiness_page)
+        self.stack.addWidget(self.import_page)
 
         root.addWidget(self.stack)
 
@@ -78,21 +71,15 @@ class ResultsCenter(QWidget):
             )
         )
 
-        self.btn_ranking.clicked.connect(
+        self.btn_readiness.clicked.connect(
             lambda: self.stack.setCurrentWidget(
-                self.ranking_page
+                self.readiness_page
             )
         )
 
-        self.btn_broadsheet.clicked.connect(
+        self.btn_import.clicked.connect(
             lambda: self.stack.setCurrentWidget(
-                self.broadsheet_page
-            )
-        )
-
-        self.btn_reports.clicked.connect(
-            lambda: self.stack.setCurrentWidget(
-                self.report_book_page
+                self.import_page
             )
         )
 
@@ -101,39 +88,24 @@ class ResultsCenter(QWidget):
         )
 
     def load(self):
+        page = self.stack.currentWidget()
+        if page is None:
+            return
 
-        for page in [
-            self.results_entry_page,
-            self.dashboard_page,
-            self.ranking_page,
-            self.broadsheet_page,
-            self.report_book_page
-        ]:
+        for method_name in ("refresh_all", "load_data", "load"):
+            method = getattr(page, method_name, None)
+            if callable(method):
+                try:
+                    method()
+                except Exception as e:
+                    print(f"[ERROR] Failed to call {method_name}: {e}")
+                break
 
-            for method_name in (
-                "refresh_all",
-                "load_data",
-                "load"
-            ):
+    def open_readiness(self):
+        self.stack.setCurrentWidget(self.readiness_page)
 
-                method = getattr(
-                    page,
-                    method_name,
-                    None
-                )
-
-                if callable(method):
-                    try:
-                        method()
-                    except Exception as e:
-                        print(f"[ERROR] Failed to call {method_name}: {e}")
-                    break
-
-    def open_report_book(self):
-
-        self.stack.setCurrentWidget(
-            self.report_book_page
-        )
+    def open_import(self):
+        self.stack.setCurrentWidget(self.import_page)
 
 
     # =====================================
@@ -159,4 +131,3 @@ class ResultsCenter(QWidget):
             )
         except Exception as error:
             print(f"[ERROR] ResultsCenter failed to open results entry: {error}")
-

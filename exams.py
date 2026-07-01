@@ -4,17 +4,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QPushButton,
     QTableWidget,
-    QMessageBox,
 )
-
-from progress_dialog import ProgressDialog
 
 from db_utils import get_cursor, fetch_all
 from table_utils import setup_table, populate_table
 from ui_helpers import confirm_action, show_error
 from event_bus import EventBus
 from security_settings import authorize_action
-from theme import APP_STYLE
 from add_exam import AddExamWindow
 from system_state import SystemState
 
@@ -26,8 +22,6 @@ class ExamsWindow(QWidget):
         self.setWindowTitle("Examinations")
 
         self.resize(1000, 650)
-
-        self.setStyleSheet(APP_STYLE)
 
         layout = QVBoxLayout()
 
@@ -65,28 +59,10 @@ class ExamsWindow(QWidget):
             self.complete_exam
         )
 
-        self.reopen_btn = QPushButton(
-            "REOPEN COMPLETED"
-        )
-
-        self.reopen_btn.clicked.connect(
-            self.reopen_completed_exam
-        )
-
-        self.refresh_btn = QPushButton(
-            "REFRESH"
-        )
-
-        self.refresh_btn.clicked.connect(
-            self.load_data
-        )
-
         top.addWidget(self.add_btn)
         top.addWidget(self.delete_btn)
         top.addWidget(self.status_btn)
         top.addWidget(self.complete_btn)
-        top.addWidget(self.reopen_btn)
-        top.addWidget(self.refresh_btn)
 
         self.table = QTableWidget()
         setup_table(self.table, ["ID", "Exam", "Term", "Year", "Level", "Status"])
@@ -128,6 +104,7 @@ class ExamsWindow(QWidget):
             JOIN terms t ON e.term_id=t.id
             JOIN academic_years a ON t.academic_year_id=a.id
             WHERE e.level=?
+              AND e.status != 'COMPLETED'
             ORDER BY e.id DESC
         """, (level,))
 
@@ -171,7 +148,7 @@ class ExamsWindow(QWidget):
         if status == "COMPLETED":
             show_error(
                 self,
-                "Completed exams are read-only. Use REOPEN COMPLETED if edits are required."
+                "Completed exams are read-only. Manage historical results from History."
             )
             return
 
@@ -218,44 +195,6 @@ class ExamsWindow(QWidget):
         with get_cursor(commit=True) as cur:
             cur.execute("""
                 UPDATE exams SET status='COMPLETED' WHERE id=?
-            """, (exam_id,))
-
-        EventBus.emit("EXAMS_UPDATED")
-        EventBus.emit("RESULTS_UPDATED")
-
-    def reopen_completed_exam(self):
-
-        row = self.table.currentRow()
-
-        if row < 0:
-            show_error(self, "Select exam first")
-            return
-
-        exam_id = self.table.item(row, 0).text()
-        status = self.table.item(row, 5).text()
-        level = self.table.item(row, 4).text()
-
-        if status != "COMPLETED":
-            show_error(self, "Only completed exams can be reopened.")
-            return
-
-        if not confirm_action(
-            self,
-            "Reopen Completed Exam",
-            "Reopen this exam for editing? Other open exams for this level will be closed."
-        ):
-            return
-
-        if not authorize_action(self, "Reopen Completed Exam"):
-            return
-
-        with get_cursor(commit=True) as cur:
-            cur.execute("""
-                UPDATE exams SET status='CLOSED'
-                WHERE level=? AND id<>? AND status='OPEN'
-            """, (level, exam_id))
-            cur.execute("""
-                UPDATE exams SET status='OPEN' WHERE id=?
             """, (exam_id,))
 
         EventBus.emit("EXAMS_UPDATED")

@@ -24,14 +24,11 @@ class DivisionRulesPage(QWidget):
         super().__init__()
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20,20,20,20)
+        layout.setSpacing(15)
 
         self.title = QLabel()
-        self.title.setStyleSheet("""
-            font-size:22px;
-            font-weight:bold;
-            color:#60a5fa;
-            padding:8px;
-        """)
+        self.title.setProperty("variant", "accent")
 
         layout.addWidget(self.title)
 
@@ -50,14 +47,6 @@ class DivisionRulesPage(QWidget):
 
         self.save_btn = QPushButton("SAVE DIVISION RULES")
         self.reset_btn = QPushButton("RESTORE DEFAULTS")
-
-        self.save_btn.setStyleSheet(
-            "background:#10b981;font-weight:bold;padding:8px;"
-        )
-
-        self.reset_btn.setStyleSheet(
-            "background:#ef4444;font-weight:bold;padding:8px;"
-        )
 
         buttons.addWidget(self.save_btn)
         buttons.addWidget(self.reset_btn)
@@ -167,4 +156,3 @@ class DivisionRulesPage(QWidget):
         EventBus.emit(
             "DIVISION_RULES_CHANGED"
         )
-

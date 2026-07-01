@@ -24,32 +24,6 @@ class AcademicsPage(QWidget):
         self.tabs.setMovable(False)
         self.tabs.setUsesScrollButtons(False)
 
-        self.tabs.setStyleSheet("""
-        QTabWidget::pane {
-            border:1px solid #2f3f5b;
-            border-radius:8px;
-            background:#0f172a;
-        }
-
-        QTabBar::tab {
-            background:#1e293b;
-            color:white;
-            padding:10px 24px;
-            margin-right:2px;
-            border-top-left-radius:6px;
-            border-top-right-radius:6px;
-        }
-
-        QTabBar::tab:selected {
-            background:#2563eb;
-            font-weight:bold;
-        }
-
-        QTabBar::tab:hover {
-            background:#3b82f6;
-        }
-        """)
-
         root.addWidget(self.tabs)
 
         self.subjects_page = SubjectsPage()
@@ -65,26 +39,20 @@ class AcademicsPage(QWidget):
         self.tabs.setCurrentIndex(0)
 
     def load(self):
+        page = self.tabs.currentWidget()
+        if page is None:
+            return
 
-        for page in (
-            self.subjects_page,
-            self.enrollment_page,
-            self.years_page,
-            self.terms_page,
+        for method_name in (
+            "refresh_all",
+            "load_data",
+            "load",
+            "load_years",
         ):
-
-            for method_name in (
-                "refresh_all",
-                "load_data",
-                "load",
-                "load_years",
-            ):
-
-                method = getattr(page, method_name, None)
-
-                if callable(method):
-                    try:
-                        method()
-                    except Exception as e:
-                        print(f"[ERROR] Failed to call {method_name}: {e}")
-                    break
+            method = getattr(page, method_name, None)
+            if callable(method):
+                try:
+                    method()
+                except Exception as e:
+                    print(f"[ERROR] Failed to call {method_name}: {e}")
+                break

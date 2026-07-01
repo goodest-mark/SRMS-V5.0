@@ -1,12 +1,12 @@
 import sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
-from theme_manager import apply_theme
 
 from splash import SplashScreen
 from main_window import MainWindow
 from database import init_db
-from theme import get_theme
+from settings_page import get_setting
+from theme import apply_theme, normalize_theme_name
 
 
 def start_app():
@@ -14,9 +14,8 @@ def start_app():
     init_db()
 
     app = QApplication(sys.argv)
-    apply_theme(app, "blue")
-    from theme_manager import apply_theme
-    app.setStyleSheet(get_theme('Current'))
+    saved_theme = normalize_theme_name(get_setting("theme", "Blue"))
+    apply_theme(app, saved_theme)
 
     def show_main():
 

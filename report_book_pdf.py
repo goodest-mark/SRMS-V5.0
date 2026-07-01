@@ -12,13 +12,17 @@ from watermark import draw_watermark
 from ranking_engine import compute_student_scores
 from grade_utils import get_grade, get_points
 
-def generate_report_book(parent, exam_id, class_name, save_path):
+def generate_report_book(parent, exam_id, class_name, save_path, progress_callback=None):
     """
     Core PDF Generation Logic
     Generates a single PDF containing one page per student.
     """
     conn = connect()
     cur = conn.cursor()
+
+    def report_progress(percent, message):
+        if progress_callback is not None:
+            progress_callback(int(percent), message)
 
     # 1. Get School Profile
     cur.execute("SELECT school_name, school_address, school_phone, school_email, watermark_text FROM school_profile LIMIT 1")
@@ -41,6 +45,7 @@ def generate_report_book(parent, exam_id, class_name, save_path):
         return False, "Selected exam does not exist."
 
     term_name, year_name, exam_name, level, term_id, year_id = context
+    report_progress(5, "Loading exam context")
 
     # 3. Get Requirements for this class/term
     cur.execute("""
@@ -51,13 +56,14 @@ def generate_report_book(parent, exam_id, class_name, save_path):
     requirements_data = cur.fetchall()
 
     # 4. Get Ranking Data (Single source of truth)
-    ranking_data = compute_student_scores(level, exam_id)
+    ranking_data = compute_student_scores(level, exam_id, class_name)
     # Filter for selected class in-memory (No N+1 database queries)
     class_students = [s for s in ranking_data if s.get('class') == class_name]
 
     if not class_students:
         conn.close()
         return False, "No students found in this class with results."
+    report_progress(10, "Preparing report pages")
 
     # Check Settings
     use_watermark = get_setting('show_watermark', '1') == '1'
@@ -78,7 +84,8 @@ def generate_report_book(parent, exam_id, class_name, save_path):
     style_label = ParagraphStyle(name='Label', fontName='Helvetica-Bold', fontSize=10, alignment=TA_LEFT)
     style_value = ParagraphStyle(name='Value', fontSize=10, alignment=TA_LEFT)
 
-    for student in class_students:
+    total_students = max(len(class_students), 1)
+    for index, student in enumerate(class_students, start=1):
         adm = student['admission']
         
         # --- HEADER SECTION ---
@@ -215,9 +222,12 @@ def generate_report_book(parent, exam_id, class_name, save_path):
 
         # START NEW PAGE FOR NEXT STUDENT
         elements.append(PageBreak())
+        report_progress(10 + int((index / total_students) * 80), f"Building student {index}/{total_students}")
 
     try:
+        report_progress(95, "Rendering PDF")
         doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+        report_progress(100, "Report book generated")
         return True, "Report Book generated successfully."
     except Exception as e:
         return False, str(e)

@@ -37,7 +37,12 @@ class GradeRulesPage(QWidget):
         layout.setSpacing(15)
 
         self.title = QLabel()
-        self.title.setProperty("variant", "accent")
+        self.title.setStyleSheet("""
+            font-size:22px;
+            font-weight:bold;
+            color:#60a5fa;
+            padding:8px;
+        """)
         layout.addWidget(self.title)
 
         self.table = Table()
@@ -53,8 +58,10 @@ class GradeRulesPage(QWidget):
 
         layout.addWidget(self.table, 1)
         self.save_btn = PrimaryButton("SAVE GRADE RULES")
+        self.save_btn.setStyleSheet("background-color:#10b981;font-weight:bold;padding:8px;")
 
         self.reset_btn = PrimaryButton("RESTORE DEFAULTS")
+        self.reset_btn.setStyleSheet("background-color:#ef4444;font-weight:bold;padding:8px;")
 
         buttons = QHBoxLayout()
         buttons.addWidget(self.save_btn)
@@ -236,3 +243,4 @@ class GradeRulesPage(QWidget):
 
             for col in (1,2,3):
                 self.table.item(row,col).setBackground(QColor(color))
+

@@ -54,7 +54,7 @@ def load_exams(combo, term_id, level=None, *, status_filter=None):
     if term_id:
         if level is None:
             level = SystemState.get_level()
-        query = "SELECT id, exam_name FROM exams WHERE term_id=? AND level=?"
+        query = "SELECT id, exam_name FROM exams WHERE term_id=? AND level=? AND status!='COMPLETED'"
         params = [term_id, level]
         if status_filter:
             query += " AND status=?"
@@ -120,28 +120,55 @@ def load_results_exams(combo, level=None):
         SELECT id, exam_name, status
         FROM exams
         WHERE level=?
-          AND status IN ('OPEN', 'COMPLETED')
+          AND status IN ('OPEN', 'CLOSED')
         ORDER BY
             CASE status WHEN 'OPEN' THEN 0 ELSE 1 END,
             id DESC
         """,
         (level,),
     ):
-        label = exam_name if status == "OPEN" else f"{exam_name} [COMPLETED]"
+        label = exam_name if status == "OPEN" else f"{exam_name} [CLOSED]"
         combo.addItem(label, exam_id)
     _restore_by_data(combo, current)
     combo.blockSignals(False)
 
 
+def load_completed_exams(combo, term_id=None, level=None, search_text=""):
+    """Populate an exam combo box with COMPLETED exams for historical review."""
+    current = combo.currentData()
+    if level is None:
+        level = SystemState.get_level()
+    combo.blockSignals(True)
+    combo.clear()
+    query = """
+        SELECT id, exam_name
+        FROM exams
+        WHERE level=?
+          AND status='COMPLETED'
+    """
+    params = [level]
+    if term_id:
+        query += " AND term_id=?"
+        params.append(term_id)
+    if search_text:
+        query += " AND exam_name LIKE ?"
+        params.append(f"%{search_text}%")
+    query += " ORDER BY exam_name"
+    for row in fetch_all(query, tuple(params)):
+        combo.addItem(f"{row[1]} [COMPLETED]", row[0])
+    _restore_by_data(combo, current)
+    combo.blockSignals(False)
+
+
 def load_all_exams(combo, level=None):
-    """Populate an exam combo box with ALL exams (any status) for *level*."""
+    """Populate an exam combo box with active exams for *level*."""
     current = combo.currentData()
     if level is None:
         level = SystemState.get_level()
     combo.blockSignals(True)
     combo.clear()
     for row in fetch_all(
-        "SELECT id, exam_name FROM exams WHERE level=? ORDER BY id DESC",
+        "SELECT id, exam_name FROM exams WHERE level=? AND status!='COMPLETED' ORDER BY id DESC",
         (level,),
     ):
         combo.addItem(row[1], row[0])

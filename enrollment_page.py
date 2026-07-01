@@ -145,7 +145,6 @@ class EnrollmentPage(QWidget):
 
         self.save_btn = QPushButton("SAVE ENROLLMENTS")
         self.save_btn.setFixedHeight(40)
-        self.save_btn.setStyleSheet("background-color: #2ecc71; color: white; font-weight: bold;")
         self.save_btn.clicked.connect(self.save_enrollments)
         self.layout.addWidget(self.save_btn)
 

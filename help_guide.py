@@ -28,21 +28,12 @@ class HelpGuideDialog(QDialog):
         # Header
         header = QLabel("Welcome to SRMS V5")
         header.setAlignment(Qt.AlignCenter)
-        header.setStyleSheet("""
-            font-size: 22px;
-            font-weight: 800;
-            padding: 20px;
-            color: #2563eb;
-        """)
+        header.setProperty("variant", "accent")
         layout.addWidget(header)
 
         subtitle = QLabel("Follow these steps to get started")
         subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setStyleSheet("""
-            font-size: 14px;
-            color: #64748b;
-            padding-bottom: 10px;
-        """)
+        subtitle.setProperty("variant", "muted")
         layout.addWidget(subtitle)
 
         # Scrollable content
@@ -102,31 +93,15 @@ class HelpGuideDialog(QDialog):
 
         for title, description in steps:
             step_frame = QFrame()
-            step_frame.setStyleSheet("""
-                QFrame {
-                    border: 1px solid rgba(148, 163, 184, 0.2);
-                    border-radius: 12px;
-                    padding: 8px;
-                }
-            """)
+            step_frame.setObjectName("HelpStep")
             step_layout = QVBoxLayout(step_frame)
 
             title_label = QLabel(title)
-            title_label.setStyleSheet("""
-                font-size: 16px;
-                font-weight: 700;
-                border: none;
-                padding: 4px 0;
-            """)
+            title_label.setProperty("variant", "accent")
             title_label.setWordWrap(True)
 
             desc_label = QLabel(description)
-            desc_label.setStyleSheet("""
-                font-size: 14px;
-                line-height: 1.5;
-                border: none;
-                padding: 2px 0;
-            """)
+            desc_label.setProperty("variant", "muted")
             desc_label.setWordWrap(True)
 
             step_layout.addWidget(title_label)
@@ -135,11 +110,7 @@ class HelpGuideDialog(QDialog):
 
         # Tips section
         tips_title = QLabel("Quick Tips")
-        tips_title.setStyleSheet("""
-            font-size: 18px;
-            font-weight: 700;
-            padding-top: 10px;
-        """)
+        tips_title.setProperty("variant", "accent")
         content_layout.addWidget(tips_title)
 
         tips = [
@@ -151,7 +122,7 @@ class HelpGuideDialog(QDialog):
 
         for tip in tips:
             tip_label = QLabel(f"  {tip}")
-            tip_label.setStyleSheet("font-size: 14px; padding: 4px 0;")
+            tip_label.setProperty("variant", "muted")
             tip_label.setWordWrap(True)
             content_layout.addWidget(tip_label)
 
@@ -162,13 +133,5 @@ class HelpGuideDialog(QDialog):
         # Close button
         close_btn = QPushButton("Got It!")
         close_btn.setFixedHeight(44)
-        close_btn.setStyleSheet("""
-            QPushButton {
-                font-size: 16px;
-                font-weight: 700;
-                margin: 12px 30px;
-                border-radius: 14px;
-            }
-        """)
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)

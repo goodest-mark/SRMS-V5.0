@@ -1,4 +1,5 @@
 import os
+import tempfile
 from datetime import datetime
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -165,12 +166,23 @@ def generate_report_book(parent, exam_id, class_name, save_path):
     requirements_data = cur.fetchall()
 
     # ── Ranking ──
-    ranking_data = compute_student_scores(level, exam_id)
+    ranking_data = compute_student_scores(level, exam_id, class_name)
     class_students = [s for s in ranking_data if s.get('class') == class_name]
 
     if not class_students:
         conn.close()
         return False, "No students found in this class with results."
+
+    class_students = sorted(
+        class_students,
+        key=lambda x: (
+            -float(x.get('average', 0) or 0),
+            -float(x.get('total_marks', 0) or 0),
+            x.get('admission', '')
+        )
+    )
+    for pos, student in enumerate(class_students, start=1):
+        student['class_position'] = pos
 
     ready_students = [s for s in class_students if s['status'] == 'READY']
     total_in_class = len(ready_students)
@@ -271,9 +283,10 @@ def generate_report_book(parent, exam_id, class_name, save_path):
         gender_pos = gender_positions.get(adm, '-')
         gender_total = gender_counts.get(student_gender, '-')
 
+        class_position = student.get('class_position', student.get('position', '-'))
         elements.append(_build_results_and_summary(
             ST, short_names, full_names, marks_vals, grades_vals,
-            total_marks, average, student['position'], total_in_class,
+            total_marks, average, class_position, total_in_class,
             gender_pos, gender_total, student['division'],
             student['points']))
         elements.append(Spacer(1, 6))
@@ -300,6 +313,240 @@ def generate_report_book(parent, exam_id, class_name, save_path):
     try:
         doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
         return True, 'Report cards generated successfully.'
+    except Exception as e:
+        return False, str(e)
+    finally:
+        conn.close()
+
+
+def generate_student_report_card(parent, admission_no, level, save_path=None, progress_callback=None):
+    """
+    Generate a single-student PDF report card using the existing report-book layout.
+    The latest completed exam for the student's class is used as the report context.
+    """
+    conn = connect()
+    cur = conn.cursor()
+    ST = _get_styles()
+
+    def report_progress(percent, message):
+        if progress_callback is not None:
+            progress_callback(int(percent), message)
+
+    cur.execute("""
+        SELECT school_name, school_motto, school_address, school_phone,
+               school_email, school_logo, school_stamp, head_teacher,
+               academic_master, watermark_text, school_website
+        FROM school_profile LIMIT 1
+    """)
+    profile = cur.fetchone()
+
+    school_name = profile[0] if profile else "SCHOOL MANAGEMENT SYSTEM"
+    school_motto = profile[1] if profile and profile[1] else ""
+    school_addr = profile[2] if profile else "-"
+    school_phone = profile[3] if profile else ""
+    school_email = profile[4] if profile else ""
+    school_logo = (profile[5] if profile and profile[5]
+                   and os.path.exists(profile[5]) else None)
+    school_stamp = (profile[6] if profile and profile[6]
+                    and os.path.exists(profile[6]) else None)
+    head_teacher = profile[7] if profile else ""
+    academic_master = profile[8] if profile else ""
+    watermark_text = (profile[9] if profile and profile[9]
+                      else "CONFIDENTIAL")
+    try:
+        school_website = profile[10] if profile and len(profile) > 10 and profile[10] else ""
+    except (IndexError, TypeError):
+        school_website = ""
+
+    cur.execute("""
+        SELECT admission_no, full_name, gender, class, stream, level
+        FROM students
+        WHERE admission_no=? AND level=?
+    """, (admission_no, level))
+    student_row = cur.fetchone()
+    if not student_row:
+        conn.close()
+        return False, "Student record was not found."
+    report_progress(10, "Loading student record")
+
+    student_adm, student_name, student_gender, class_name, student_stream, _student_level = student_row
+
+    cur.execute("""
+        SELECT e.id, t.term_name, y.year_name, e.exam_name, e.level,
+               t.id, t.academic_year_id
+        FROM exams e
+        JOIN terms t ON e.term_id = t.id
+        JOIN academic_years y ON t.academic_year_id = y.id
+        WHERE e.level = ?
+          AND e.status = 'COMPLETED'
+          AND EXISTS (
+              SELECT 1
+              FROM results r
+              WHERE r.exam_id = e.id
+                AND r.admission_no = ?
+          )
+        ORDER BY e.id DESC
+        LIMIT 1
+    """, (level, student_adm))
+    context = cur.fetchone()
+    if not context:
+        conn.close()
+        return False, "No completed exam report is available for this student yet."
+    report_progress(25, "Loading exam context")
+
+    exam_id, term_name, year_name, exam_name, _, term_id, year_id = context
+
+    cur.execute("""
+        SELECT item_name, quantity
+        FROM requirements
+        WHERE academic_year_id=? AND term_id=? AND level=?
+          AND (class_name=? OR class_name='-- All Classes --')
+    """, (year_id, term_id, level, class_name))
+    requirements_data = cur.fetchall()
+
+    ranking_data = compute_student_scores(level, exam_id, class_name)
+    class_students = [s for s in ranking_data if s.get('class') == class_name]
+    if not class_students:
+        conn.close()
+        return False, "No completed class results are available for this student."
+
+    class_students = sorted(
+        class_students,
+        key=lambda x: (
+            -float(x.get('average', 0) or 0),
+            -float(x.get('total_marks', 0) or 0),
+            x.get('admission', '')
+        )
+    )
+    for pos, student in enumerate(class_students, start=1):
+        student['class_position'] = pos
+
+    ready_students = [s for s in class_students if s['status'] == 'READY']
+    total_in_class = len(ready_students)
+
+    gender_pos_tracker = {}
+    gender_counts = {}
+    gender_positions = {}
+    for s in class_students:
+        g = s.get('gender', '')
+        if g not in gender_counts:
+            gender_counts[g] = 0
+        if s['status'] == 'READY':
+            gender_counts[g] += 1
+            gender_pos_tracker.setdefault(g, 0)
+            gender_pos_tracker[g] += 1
+            gender_positions[s['admission']] = gender_pos_tracker[g]
+
+    target_student = next(
+        (s for s in class_students if s['admission'] == student_adm),
+        None
+    )
+    if not target_student:
+        conn.close()
+        return False, "The selected student does not have a completed report yet."
+    report_progress(50, "Preparing report data")
+
+    cur.execute("""
+        SELECT r.subject_name,
+               COALESCE(s.subject_short_name, r.subject_name),
+               r.marks
+        FROM results r
+        LEFT JOIN subjects s
+          ON s.subject_name = r.subject_name AND s.level = ?
+        WHERE r.admission_no=? AND r.exam_id=?
+        ORDER BY r.subject_name
+    """, (level, student_adm, exam_id))
+    marks_rows = cur.fetchall()
+
+    full_names, short_names, marks_vals, grades_vals = [], [], [], []
+    for fn, sn, mk in marks_rows:
+        g = get_grade(mk, level=level)
+        full_names.append(fn)
+        short_names.append(sn if sn != fn else fn[:4].upper())
+        marks_vals.append(mk)
+        grades_vals.append(g)
+    report_progress(70, "Building report sections")
+
+    total_marks = sum(marks_vals) if marks_vals else 0
+    num_subj = len(marks_vals)
+    average = round(total_marks / num_subj, 2) if num_subj else 0
+
+    if save_path is None:
+        output_dir = os.path.join(tempfile.gettempdir(), "srms_report_cards")
+        os.makedirs(output_dir, exist_ok=True)
+        safe_exam = "".join(ch for ch in str(exam_name) if ch.isalnum() or ch in (" ", "_", "-")).strip().replace(" ", "_")
+        safe_adm = student_adm.replace("/", "_")
+        save_path = os.path.join(output_dir, f"{safe_adm}_{safe_exam}.pdf")
+    else:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+
+    use_watermark = get_setting('show_watermark', '1') == '1'
+    use_req = get_setting('show_requirements', '1') == '1'
+    use_logo = get_setting('show_logo', '1') == '1'
+    generated_date = datetime.now().strftime("%d %B %Y")
+
+    def on_page(canvas, doc):
+        if use_watermark:
+            draw_watermark(canvas, doc, school_name, year_name, watermark_text)
+        canvas.saveState()
+        canvas.setStrokeColor(NAVY)
+        canvas.setLineWidth(2.5)
+        x = doc.leftMargin - 8
+        y = doc.bottomMargin - 8
+        w = doc.pagesize[0] - doc.leftMargin - doc.rightMargin + 16
+        h = doc.pagesize[1] - doc.topMargin - doc.bottomMargin + 16
+        canvas.rect(x, y, w, h)
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(
+        save_path, pagesize=PAGE_SIZE,
+        rightMargin=R_MARGIN, leftMargin=L_MARGIN,
+        topMargin=T_MARGIN, bottomMargin=B_MARGIN
+    )
+
+    class_position = target_student.get('class_position', target_student.get('position', '-'))
+
+    elements = [
+        _build_header(
+            ST, school_name, school_motto, school_addr, school_phone,
+            school_email, school_website, school_logo, use_logo,
+            year_name, term_name, exam_name, level, class_name,
+            student_stream or "-", generated_date
+        ),
+        Spacer(1, 6),
+        _build_student_info(
+            ST, student_name, student_adm, student_gender, f"SRMS-{year_name}-{student_adm.replace('/', '')}",
+            target_student['status']
+        ),
+        Spacer(1, 6),
+        _build_results_and_summary(
+            ST, short_names, full_names, marks_vals, grades_vals,
+            total_marks, average, class_position,
+            total_in_class, gender_positions.get(student_adm, '-'),
+            gender_counts.get(student_gender, '-'), target_student['division'],
+            target_student['points']
+        ),
+        Spacer(1, 6),
+        _build_lower_section(
+            ST, marks_vals, full_names, grades_vals,
+            requirements_data, use_req
+        ),
+        Spacer(1, 6),
+        _build_signatures(
+            ST, head_teacher, academic_master, school_stamp
+        ),
+        Spacer(1, 4),
+        Paragraph(
+            '<b>Note:</b> <i>This report is computer generated and does not require a signature except the above.</i>',
+            ST['note']
+        ),
+    ]
+
+    try:
+        report_progress(90, "Rendering PDF")
+        doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+        report_progress(100, "Report card generated")
+        return True, save_path
     except Exception as e:
         return False, str(e)
     finally:

@@ -82,7 +82,10 @@ def get_required_subjects(level=None):
         WHERE level=?
     """, (level,))
 
-    return row[0] if row else 0
+    if row and row[0] is not None:
+        return row[0]
+
+    return 3 if level == "A_LEVEL" else 7
 
 
 def get_best_of(level=None):
@@ -95,4 +98,7 @@ def get_best_of(level=None):
         WHERE level=?
     """, (level,))
 
-    return row[0] if row else 0
+    if row and row[0] is not None:
+        return row[0]
+
+    return 3 if level == "A_LEVEL" else 7

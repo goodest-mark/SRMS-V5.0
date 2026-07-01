@@ -1,10 +1,11 @@
-from PySide6.QtWidgets import QTableWidget,QHeaderView
+from PySide6.QtWidgets import QTableWidget, QHeaderView
+
 from ui.fonts import table
 from ui.metrics import TABLE_ROW_HEIGHT
 
-from ui.tables import Table
+
 def Table():
-    t=Table()
+    t = QTableWidget()
     t.setFont(table())
     t.setAlternatingRowColors(True)
     t.setSortingEnabled(True)

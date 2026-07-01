@@ -7,14 +7,10 @@ from PySide6.QtWidgets import (
     QHBoxLayout
 )
 
-from progress_dialog import ProgressDialog
-
 from PySide6.QtCore import (
     Qt,
     QTimer
 )
-
-from progress_dialog import ProgressDialog
 
 
 class SplashScreen(QWidget):
@@ -26,45 +22,6 @@ class SplashScreen(QWidget):
 
         self.setWindowTitle("SRMS V5")
         self._apply_main_window_geometry()
-
-        self.setStyleSheet("""
-        QWidget{
-            background:qlineargradient(
-                x1:0,y1:0,x2:1,y2:1,
-                stop:0 #020617,
-                stop:0.5 #081225,
-                stop:1 #0f172a
-            );
-        }
-
-        QLabel{
-            background:transparent;
-            color:white;
-        }
-
-        QFrame#centerCard{
-            background:rgba(15,23,42,0.96);
-            border:1px solid rgba(255,255,255,0.08);
-            border-radius:28px;
-        }
-
-        QProgressBar{
-            border:none;
-            border-radius:10px;
-            background:#0b1220;
-            min-height:18px;
-            max-height:18px;
-        }
-
-        QProgressBar::chunk{
-            border-radius:10px;
-            background:qlineargradient(
-                x1:0,y1:0,x2:1,y2:0,
-                stop:0 #2563eb,
-                stop:1 #60a5fa
-            );
-        }
-        """)
 
         root = QVBoxLayout(self)
         root.addStretch()
@@ -79,6 +36,7 @@ class SplashScreen(QWidget):
 
         card = QFrame()
         card.setObjectName("centerCard")
+        card.setObjectName("SplashCard")
         card.setMaximumWidth(900)
         card.setMinimumWidth(620)
 
@@ -91,13 +49,7 @@ class SplashScreen(QWidget):
 
         product = QLabel("SRMS")
         product.setAlignment(Qt.AlignCenter)
-
-        product.setStyleSheet("""
-            font-size:120px;
-            font-weight:900;
-            color:white;
-            letter-spacing:8px;
-        """)
+        product.setProperty("variant", "accent")
 
         # =====================================
         # VERSION
@@ -105,13 +57,7 @@ class SplashScreen(QWidget):
 
         version = QLabel("BUILD VERSION 5.0")
         version.setAlignment(Qt.AlignCenter)
-
-        version.setStyleSheet("""
-            color:#60a5fa;
-            font-size:18px;
-            font-weight:700;
-            letter-spacing:2px;
-        """)
+        version.setProperty("variant", "accent")
 
         # =====================================
         # SYSTEM NAME
@@ -122,12 +68,7 @@ class SplashScreen(QWidget):
         )
 
         system_name.setAlignment(Qt.AlignCenter)
-
-        system_name.setStyleSheet("""
-            font-size:28px;
-            font-weight:700;
-            color:white;
-        """)
+        system_name.setProperty("variant", "accent")
 
         # =====================================
         # TAGLINE
@@ -138,12 +79,7 @@ class SplashScreen(QWidget):
         )
 
         tagline.setAlignment(Qt.AlignCenter)
-
-        tagline.setStyleSheet("""
-            color:#93c5fd;
-            font-size:18px;
-            font-weight:600;
-        """)
+        tagline.setProperty("variant", "muted")
 
         # =====================================
         # DESCRIPTION
@@ -156,12 +92,7 @@ class SplashScreen(QWidget):
         )
 
         description.setAlignment(Qt.AlignCenter)
-
-        description.setStyleSheet("""
-            color:#cbd5e1;
-            font-size:14px;
-            line-height:1.6;
-        """)
+        description.setProperty("variant", "muted")
 
         # =====================================
         # LOADING LABEL
@@ -172,12 +103,7 @@ class SplashScreen(QWidget):
         )
 
         self.loading.setAlignment(Qt.AlignCenter)
-
-        self.loading.setStyleSheet("""
-            color:white;
-            font-size:15px;
-            font-weight:600;
-        """)
+        self.loading.setProperty("variant", "accent")
 
         # =====================================
         # PROGRESS
@@ -186,7 +112,8 @@ class SplashScreen(QWidget):
         self.progress = QProgressBar()
         self.progress.setMaximum(100)
         self.progress.setValue(0)
-        self.progress.setTextVisible(False)
+        self.progress.setTextVisible(True)
+        self.progress.setFormat("%p%")
 
         # =====================================
         # FOOTER
@@ -197,13 +124,7 @@ class SplashScreen(QWidget):
         )
 
         footer.setAlignment(Qt.AlignCenter)
-
-        footer.setStyleSheet("""
-            color:#60a5fa;
-            font-size:12px;
-            font-weight:bold;
-            letter-spacing:1px;
-        """)
+        footer.setProperty("variant", "accent")
 
         # =====================================
         # BUILD CARD
@@ -248,14 +169,24 @@ class SplashScreen(QWidget):
         # =====================================
 
         self.value = 0
+        self._finished = False
+        self._stages = [
+            (10, "Loading database engine..."),
+            (25, "Loading student records..."),
+            (40, "Loading academic modules..."),
+            (55, "Loading examination center..."),
+            (70, "Loading ranking engine..."),
+            (85, "Loading reports and exports..."),
+            (95, "Launching SRMS V5..."),
+        ]
 
         self.timer = QTimer()
         self.timer.timeout.connect(
             self.update_loading
         )
 
-        # ~5 seconds
-        self.timer.start(50)
+        # Slightly longer splash to let startup work settle.
+        self.timer.start(75)
 
 
     def _apply_main_window_geometry(self):
@@ -273,48 +204,23 @@ class SplashScreen(QWidget):
 
     def update_loading(self):
 
-        self.value += 1
+        if self._finished:
+            return
+
+        self.value = min(self.value + 2, 100)
 
         self.progress.setValue(self.value)
 
-        if self.value == 10:
-            self.loading.setText(
-                "Loading Student Records..."
-            )
+        for threshold, message in self._stages:
+            if self.value >= threshold:
+                self.loading.setText(message)
 
-        elif self.value == 25:
-            self.loading.setText(
-                "Loading Academic Modules..."
-            )
-
-        elif self.value == 40:
-            self.loading.setText(
-                "Loading Examination Center..."
-            )
-
-        elif self.value == 55:
-            self.loading.setText(
-                "Loading Ranking Engine..."
-            )
-
-        elif self.value == 70:
-            self.loading.setText(
-                "Loading Report Generator..."
-            )
-
-        elif self.value == 85:
-            self.loading.setText(
-                "Loading Dashboard Components..."
-            )
-
-        elif self.value == 95:
-            self.loading.setText(
-                "Launching SRMS V5..."
-            )
-
-        elif self.value >= 100:
+        if self.value >= 100:
+            self._finished = True
 
             self.timer.stop()
+            self.progress.setValue(100)
+            self.loading.setText("Launching SRMS V5...")
 
             self.on_finish()
 

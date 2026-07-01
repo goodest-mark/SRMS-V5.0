@@ -3,6 +3,7 @@ import os
 from PySide6.QtGui import QIcon, QPainter, QColor, QPen
 from PySide6.QtCore import (
     QSize, Qt, QPropertyAnimation, QEasingCurve,
+    QTimer,
     QParallelAnimationGroup, QRectF, Property, Signal
 )
 
@@ -138,7 +139,7 @@ class LevelToggleSwitch(QWidget):
 
 from event_bus import EventBus
 from system_state import SystemState
-from theme import get_theme
+from theme import normalize_theme_name, apply_theme as apply_app_theme
 
 
 def _icon(name):
@@ -147,13 +148,12 @@ def _icon(name):
 
 from dashboard_home import DashboardHome
 from students_page import StudentsPage
-from teachers_module import TeachersModule
 from academics_page import AcademicsPage
 from exams import ExamsWindow
 from results_center import ResultsCenter
+from historical_results_page import HistoricalResultsPage
 from school_center import SchoolCenter
 from settings_page import SettingsPage
-from security_settings import SecuritySettingsPage
 
 
 class MainWindow(QMainWindow):
@@ -189,7 +189,7 @@ class MainWindow(QMainWindow):
         )
 
 
-        self.current_theme = "Current"
+        self.current_theme = "Blue"
 
         # Breadcrumb label
         self.breadcrumb = QLabel("")
@@ -202,34 +202,31 @@ class MainWindow(QMainWindow):
 
         self.btn_dashboard = QPushButton("Dashboard")
         self.btn_students = QPushButton("Students")
-        self.btn_teachers = QPushButton("Teachers")
         self.btn_academics = QPushButton("Academics")
         self.btn_exams = QPushButton("Exams")
         self.btn_results = QPushButton("Results")
+        self.btn_history = QPushButton("History")
         self.btn_school = QPushButton("School")
         self.btn_settings = QPushButton("Settings")
-        self.btn_security = QPushButton("Security")
 
         self.btn_dashboard.setIcon(_icon("dashboard.svg"))
         self.btn_students.setIcon(_icon("students.svg"))
-        self.btn_teachers.setIcon(_icon("teachers.svg"))
         self.btn_academics.setIcon(_icon("academics.svg"))
         self.btn_exams.setIcon(_icon("exams.svg"))
         self.btn_results.setIcon(_icon("results.svg"))
+        self.btn_history.setIcon(_icon("dashboard.svg"))
         self.btn_school.setIcon(_icon("school.svg"))
         self.btn_settings.setIcon(_icon("settings.svg"))
-        self.btn_security.setIcon(_icon("security.svg"))
 
         self.nav_buttons = [
             self.btn_dashboard,
             self.btn_students,
-            self.btn_teachers,
             self.btn_academics,
             self.btn_exams,
             self.btn_results,
+            self.btn_history,
             self.btn_school,
             self.btn_settings,
-            self.btn_security
         ]
 
         self.nav_button_style = """
@@ -314,25 +311,28 @@ class MainWindow(QMainWindow):
 
         self.dashboard = DashboardHome()
         self.students = StudentsPage()
-        self.teachers = TeachersModule()
         self.academics = AcademicsPage()
         self.exams = ExamsWindow()
         self.results = ResultsCenter()
+        self.history = HistoricalResultsPage()
         self.school = SchoolCenter()
         self.settings = SettingsPage()
-        self.security = SecuritySettingsPage()
+        self._startup_warmup_pages = [
+            self.students,
+            self.academics,
+            self.exams,
+            self.results,
+            self.history,
+            self.school,
+            self.settings,
+        ]
+        self._startup_warmup_index = 0
+        self._page_last_refreshed = {}
 
         self.dashboard.open_students.connect(
             lambda: self.switch_page(
                 self.students,
                 self.btn_students
-            )
-        )
-
-        self.dashboard.open_teachers.connect(
-            lambda: self.switch_page(
-                self.teachers,
-                self.btn_teachers
             )
         )
 
@@ -357,26 +357,59 @@ class MainWindow(QMainWindow):
             )
         )
 
-        self.dashboard.open_reports.connect(
+        self.dashboard.open_ranking.connect(
+            lambda: (
+                self.switch_page(self.history, self.btn_history),
+                self.history.show_list()
+            )
+        )
+
+        self.dashboard.open_readiness.connect(
             lambda: (
                 self.switch_page(
                     self.results,
                     self.btn_results
                 ),
-                self.results.open_report_book()
+                self.results.open_readiness()
             )
         )
 
+        self.dashboard.open_history.connect(
+            lambda: self.switch_page(
+                self.history,
+                self.btn_history
+            )
+        )
+
+        self.dashboard.open_broadsheet.connect(
+            lambda: (
+                self.switch_page(self.history, self.btn_history),
+                self.history.show_list()
+            )
+        )
+
+        self.dashboard.open_report_book.connect(
+            lambda: (
+                self.switch_page(self.history, self.btn_history),
+                self.history.show_list()
+            )
+        )
+
+        self.dashboard.open_reports.connect(
+            lambda: (
+                self.switch_page(self.history, self.btn_history),
+                self.history.show_list()
+            )
+        )
 
         self.stack.addWidget(self.dashboard)
         self.stack.addWidget(self.students)
-        self.stack.addWidget(self.teachers)
         self.stack.addWidget(self.academics)
         self.stack.addWidget(self.exams)
         self.stack.addWidget(self.results)
+        self.stack.addWidget(self.history)
         self.stack.addWidget(self.school)
         self.stack.addWidget(self.settings)
-        self.stack.addWidget(self.security)
 
         # =====================================
         # NAVIGATION
@@ -393,13 +426,6 @@ class MainWindow(QMainWindow):
             lambda: self.switch_page(
                 self.students,
                 self.btn_students
-            )
-        )
-
-        self.btn_teachers.clicked.connect(
-            lambda: self.switch_page(
-                self.teachers,
-                self.btn_teachers
             )
         )
 
@@ -424,6 +450,13 @@ class MainWindow(QMainWindow):
             )
         )
 
+        self.btn_history.clicked.connect(
+            lambda: self.switch_page(
+                self.history,
+                self.btn_history
+            )
+        )
+
         self.btn_school.clicked.connect(
             lambda: self.switch_page(
                 self.school,
@@ -435,13 +468,6 @@ class MainWindow(QMainWindow):
             lambda: self.switch_page(
                 self.settings,
                 self.btn_settings
-            )
-        )
-
-        self.btn_security.clicked.connect(
-            lambda: self.switch_page(
-                self.security,
-                self.btn_security
             )
         )
 
@@ -459,6 +485,10 @@ class MainWindow(QMainWindow):
             "OPEN_RESULTS_ENTRY",
             self.open_results_entry
         )
+        EventBus.subscribe(
+            "THEME_CHANGED",
+            self.on_theme_changed
+        )
 
         # =====================================
         # DEFAULT PAGE
@@ -469,7 +499,7 @@ class MainWindow(QMainWindow):
             self.btn_dashboard
         )
 
-        self.refresh_all()
+        QTimer.singleShot(250, self._warmup_pages)
 
         # =====================================
         # WINDOW GEOMETRY
@@ -500,6 +530,9 @@ class MainWindow(QMainWindow):
         self.active_btn = button
         self.update_highlight(button)
         self._update_breadcrumb(button)
+        if page not in self._page_last_refreshed:
+            self._refresh_page(page)
+            self._page_last_refreshed[page] = True
 
     def update_highlight(
         self,
@@ -572,25 +605,28 @@ class MainWindow(QMainWindow):
                 f"Could not open results entry: {error}",
             )
 
+    def open_history_ranking(self, exam_id, class_name):
+        self.switch_page(self.history, self.btn_history)
+        self.history.activate_ranking(exam_id, class_name)
+
+    def open_history_broadsheet(self, exam_id, class_name):
+        self.switch_page(self.history, self.btn_history)
+        self.history.activate_broadsheet(exam_id, class_name)
+
+    def open_history_reports(self, exam_id, class_name):
+        self.switch_page(self.history, self.btn_history)
+        self.history.activate_reports(exam_id, class_name)
+
     # =====================================
     # REFRESH
     # =====================================
 
     def refresh_all(self):
-
-        for page in [
-            self.dashboard,
-            self.students,
-            self.teachers,
-            self.academics,
-            self.exams,
-            self.results,
-            self.school,
-            self.settings,
-            self.security
-        ]:
-
-            self._refresh_page(page)
+        self._refresh_page(self.dashboard)
+        self._refresh_page(self.stack.currentWidget())
+        current = self.stack.currentWidget()
+        if current is not None:
+            self._page_last_refreshed[current] = True
 
     @staticmethod
     def _refresh_page(page):
@@ -617,10 +653,30 @@ class MainWindow(QMainWindow):
 
                 break
 
-    def _apply_theme(self, theme_name="Current"):
-        """Apply the single supported application theme."""
-        self.current_theme = "Current"
+    def _warmup_pages(self):
+        if self._startup_warmup_index >= len(self._startup_warmup_pages):
+            return
+
+        page = self._startup_warmup_pages[self._startup_warmup_index]
+        self._startup_warmup_index += 1
+
+        try:
+            self._refresh_page(page)
+        finally:
+            self._page_last_refreshed[page] = True
+            QTimer.singleShot(250, self._warmup_pages)
+
+    def _apply_theme(self, theme_name="Blue"):
+        self.apply_theme(theme_name)
+
+    def on_theme_changed(self, theme_name):
+        self.apply_theme(theme_name)
+
+    def apply_theme(self, theme_name="Blue"):
+        """Apply the selected application theme."""
+        normalized = normalize_theme_name(theme_name)
+        self.current_theme = normalized
 
         app = QApplication.instance()
         if app:
-            app.setStyleSheet(get_theme("Current"))
+            apply_app_theme(app, normalized)

@@ -4,13 +4,13 @@ from grading_config import get_required_subjects, get_best_of
 from academic_rules import is_ranking_subject
 
 
-def compute_student_scores(level, exam_id=None):
+def compute_student_scores(level, exam_id=None, class_name=None):
     """
     Ranking Engine V3.3
 
-    Positions are based on TOTAL MARKS from all enrolled subjects with marks
-    for the selected exam. Division/points are still calculated for academic
-    summaries, but they do not determine rank.
+    Positions are based on AVERAGE across all results for the selected exam.
+    Total marks remain available for display and as a tie-breaker.
+    When class_name is provided, ranking is limited to that class.
     """
     with connect() as conn:
         cur = conn.cursor()
@@ -91,7 +91,7 @@ def compute_student_scores(level, exam_id=None):
 
     students_data = {}
     for row in rows:
-        adm, name, gender, class_name, subject, marks, subject_type = row
+        adm, name, gender, student_class, subject, marks, subject_type = row
 
         if has_enrollments and (adm, subject) not in enrolled_pairs:
             continue
@@ -108,7 +108,7 @@ def compute_student_scores(level, exam_id=None):
             students_data[adm] = {
                 "name": name,
                 "gender": gender,
-                "class": class_name,
+                "class": student_class,
                 "subjects": []
             }
 
@@ -119,6 +119,16 @@ def compute_student_scores(level, exam_id=None):
             "points": points,
             "subject_type": subject_type
         })
+
+    if not students_data:
+        return []
+
+    if class_name is not None:
+        students_data = {
+            adm: data
+            for adm, data in students_data.items()
+            if data["class"] == class_name
+        }
 
     if not students_data:
         return []
@@ -183,8 +193,8 @@ def compute_student_scores(level, exam_id=None):
 
     ready_students.sort(
         key=lambda x: (
-            -float(x["total_marks"]),
             -float(x["average"]),
+            -float(x["total_marks"]),
             x["admission"]
         )
     )

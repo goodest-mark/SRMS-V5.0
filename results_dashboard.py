@@ -24,7 +24,7 @@ from class_utils import get_classes
 from db_utils import fetch_all, fetch_one
 from event_bus import EventBus
 from system_state import SystemState
-from theme import APP_STYLE
+from theme import apply_theme
 import combo_loaders
 
 
@@ -42,9 +42,7 @@ class ResultsDashboard(QWidget):
 
         title = QLabel("RESULTS PREPARATION DASHBOARD")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet(
-            "font-size: 20px; font-weight: bold; color: white;"
-        )
+        title.setProperty("variant", "accent")
         layout.addWidget(title)
 
         filters = QHBoxLayout()
@@ -61,7 +59,6 @@ class ResultsDashboard(QWidget):
         self.subject_filter.addItems([
             "All",
             "Pending",
-            "Completed",
         ])
 
         self.refresh_btn = QPushButton("REFRESH")
@@ -98,9 +95,6 @@ class ResultsDashboard(QWidget):
 
         for label in summary_values:
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            label.setStyleSheet(
-                "font-size: 18px; font-weight: bold; color: white;"
-            )
 
         summary_layout.addWidget(QLabel("Expected Results"), 0, 0)
         summary_layout.addWidget(QLabel("Entered Results"), 0, 1)
@@ -254,9 +248,6 @@ class ResultsDashboard(QWidget):
                 status = "NOT STARTED"
                 status_color = QColor("#ef4444")
 
-            if selected_filter == "Completed" and status != "COMPLETE":
-                continue
-
             if selected_filter == "Pending" and status == "COMPLETE":
                 continue
 
@@ -346,7 +337,7 @@ class ResultsDashboard(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyleSheet(APP_STYLE)
+    apply_theme(app, "Blue")
 
     window = ResultsDashboard()
     window.show()

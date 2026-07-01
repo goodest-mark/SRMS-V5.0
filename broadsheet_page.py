@@ -23,15 +23,41 @@ from ranking_engine import compute_student_scores
 import broadsheet_export
 from datetime import datetime
 
+
+def _assign_class_positions(students):
+    """Assign 1..n positions within the filtered class ranking."""
+    class_students = sorted(
+        students,
+        key=lambda x: (
+            -float(x.get('average', 0) or 0),
+            -float(x.get('total_marks', 0) or 0),
+            x.get('admission', '')
+        )
+    )
+
+    for index, student in enumerate(class_students, start=1):
+        student = student
+        student['class_position'] = index
+
+    return class_students
+
+
 class BroadsheetPage(QWidget):
     def __init__(self):
         super().__init__()
         self.all_broadsheet_data = None # To store computed data for export
+        self.history_exam_id = None
+        self.history_class_name = None
+        self.history_term_id = None
+        self.history_year_id = None
         self.layout = QVBoxLayout(self)
         
         title = QLabel("ACADEMIC BROADSHEET MODULE")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
+        title.setProperty("variant", "accent")
         self.layout.addWidget(title)
+
+        self.context_label = QLabel("")
+        self.layout.addWidget(self.context_label)
 
         # =========================
         # FILTERS
@@ -69,7 +95,7 @@ class BroadsheetPage(QWidget):
 
         self.preview_btn = QPushButton("PREVIEW")
         self.preview_btn.clicked.connect(self.preview_broadsheet)
-        self.preview_btn.setStyleSheet("background-color: #3b82f6; color: white; font-weight: bold; min-width: 120px;")
+        self.preview_btn.setProperty("variant", "accent")
         
         self.excel_btn = QPushButton("EXPORT EXCEL")
         self.excel_btn.clicked.connect(self.export_excel)
@@ -94,15 +120,6 @@ class BroadsheetPage(QWidget):
         self.scroll_area.setWidget(self.scroll_content)
         self.layout.addWidget(self.scroll_area)
         
-        self.card_style = """
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(30, 41, 59, 0.8), stop:1 rgba(15, 23, 42, 0.9));
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 20px;
-            }
-            QLabel { background: transparent; }
-        """
-
         # SECTION 2 - EXECUTIVE ANALYTICS CARDS
         self.cards_container = QWidget()
         self.cards_grid = QGridLayout(self.cards_container)
@@ -119,12 +136,12 @@ class BroadsheetPage(QWidget):
         
         for i, (label, key) in enumerate(metrics):
             frame = QFrame()
-            frame.setStyleSheet(self.card_style)
+            frame.setObjectName("BroadsheetCard")
             flay = QVBoxLayout(frame)
             val_lbl = QLabel("-")
-            val_lbl.setStyleSheet("font-size: 24px; font-weight: bold; color: #3b82f6;")
+            val_lbl.setProperty("variant", "accent")
             lab_lbl = QLabel(label.upper())
-            lab_lbl.setStyleSheet("font-size: 10px; color: #94a3b8; font-weight: bold;")
+            lab_lbl.setProperty("variant", "muted")
             flay.addWidget(val_lbl, 0, Qt.AlignCenter)
             flay.addWidget(lab_lbl, 0, Qt.AlignCenter)
             self.card_widgets[key] = val_lbl
@@ -204,12 +221,17 @@ class BroadsheetPage(QWidget):
         # FOOTER SUMMARY
         # =========================
         self.footer = QLabel("Ready to preview...")
-        self.footer.setStyleSheet("background: #1f2937; color: #10b981; padding: 10px; font-weight: bold; border-radius: 4px;")
+        self.footer.setProperty("variant", "success")
         self.layout.addWidget(self.footer)
 
         # Initial Load
         self.load_years()
         EventBus.subscribe("LEVEL_CHANGED", self.refresh_all)
+        EventBus.subscribe("RESULTS_UPDATED", self.refresh_all)
+        EventBus.subscribe("STUDENTS_UPDATED", self.refresh_all)
+        EventBus.subscribe("SUBJECT_REQUIREMENTS_CHANGED", self.refresh_all)
+        EventBus.subscribe("GRADE_RULES_CHANGED", self.refresh_all)
+        EventBus.subscribe("DIVISION_RULES_CHANGED", self.refresh_all)
 
     def refresh_all(self):
         self.load_years()
@@ -226,31 +248,69 @@ class BroadsheetPage(QWidget):
     def load_exams(self):
         combo_loaders.load_exams(self.exam_box, self.term_box.currentData())
 
+    def set_history_context(self, exam_id, class_name):
+        row = fetch_one("""
+            SELECT e.term_id, t.academic_year_id, e.exam_name, t.term_name, y.year_name
+            FROM exams e
+            JOIN terms t ON t.id = e.term_id
+            JOIN academic_years y ON y.id = t.academic_year_id
+            WHERE e.id = ?
+        """, (exam_id,))
+        if not row:
+            return
+
+        term_id, year_id, exam_name, term_name, year_name = row
+        self.history_exam_id = exam_id
+        self.history_class_name = class_name
+        self.history_term_id = term_id
+        self.history_year_id = year_id
+        self.context_label.setText(
+            f"History context: {exam_name} - {term_name} - {year_name} - {class_name}"
+        )
+        self.class_box.setCurrentText(class_name)
+        self.preview_broadsheet()
+
+    def clear_history_context(self):
+        self.history_exam_id = None
+        self.history_class_name = None
+        self.history_term_id = None
+        self.history_year_id = None
+        self.context_label.setText("")
+
     def get_broadsheet_data(self):
         # This method is now responsible for gathering ALL data needed for UI and export
-        exam_id = self.exam_box.currentData()
-        class_name = self.class_box.currentText()
+        exam_id = self.history_exam_id or self.exam_box.currentData()
+        class_name = self.history_class_name or self.class_box.currentText()
         level = SystemState.get_level()
 
         if not (exam_id and class_name):
             return None # Return early if essential filters are missing
 
         # 1. Get Ranking Summary (Position, Points, Division)
-        ranking_summary = compute_student_scores(level, exam_id)
+        ranking_summary = compute_student_scores(level, exam_id, class_name)
         # Filter ranking by class in-memory (No N+1 queries)
         ranking_summary = [s for s in ranking_summary if s.get('class') == class_name]
         
         if not ranking_summary:
             return None # No students in this class for the selected exam
 
+        ranking_summary = _assign_class_positions(ranking_summary)
+
         # 2. Get all enrolled subjects for this class/term
-        year_row = fetch_one("""
-            SELECT academic_year_id FROM terms WHERE id = (SELECT term_id FROM exams WHERE id=?)
-        """, (exam_id,))
-        if not year_row:
+        if self.history_year_id is not None and self.history_term_id is not None:
+            year_id = self.history_year_id
+            term_id = self.history_term_id
+        else:
+            year_row = fetch_one("""
+                SELECT academic_year_id FROM terms WHERE id = (SELECT term_id FROM exams WHERE id=?)
+            """, (exam_id,))
+            if not year_row:
+                return None
+            year_id = year_row[0]
+            term_id = self.term_box.currentData()
+
+        if not year_id:
             return None
-        year_id = year_row[0]
-        term_id = self.term_box.currentData()
 
         subjects = [r[0] for r in fetch_all("""
             SELECT DISTINCT e.subject_name 
@@ -277,7 +337,7 @@ class BroadsheetPage(QWidget):
         for s in ranking_summary:
             # Ensure 'marks' is initialized for each student
             row_data = {
-                'Position': s['position'],
+                'Position': s.get('class_position', s['position']),
                 'Admission No': s['admission'],
                 'Student Name': s['name'],
                 'Gender': s.get('gender', '-'),

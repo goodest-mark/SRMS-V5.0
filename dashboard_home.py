@@ -1,19 +1,15 @@
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import (
     QWidget,
-    QApplication,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QFrame,
     QGridLayout,
-    QSizePolicy,
-    QLayout,
-    QScrollArea
+    QSizePolicy
 )
 
-from progress_dialog import ProgressDialog
 from PySide6.QtGui import QIcon, QFont
 from event_bus import EventBus
 from system_state import SystemState
@@ -29,58 +25,39 @@ class GlassCard(QFrame):
 
         self.setObjectName("GlassCard")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(104)
-        self.setMaximumHeight(112)
+        self.setMinimumHeight(128)
+        self.setMaximumHeight(138)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(0)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(8)
 
-        # Value Label - Large and prominent
-        self.value_lbl = QLabel(str(value))
-        self.value_lbl.setAlignment(Qt.AlignCenter)
-        value_font = QFont()
-        value_font.setPointSize(18)
-        value_font.setWeight(QFont.Weight.Black)
-        self.value_lbl.setFont(value_font)
-        self.value_lbl.setStyleSheet("""
-            color: #f1f5f9;
-            background: transparent;
-            border: none;
-        """)
-
-        # Title Label - Subtle
         self.title_lbl = QLabel(title)
         self.title_lbl.setAlignment(Qt.AlignCenter)
         self.title_lbl.setWordWrap(True)
+        self.title_lbl.setObjectName("MetricTitle")
         title_font = QFont()
         title_font.setPointSize(10)
+        title_font.setWeight(QFont.Weight.Bold)
         self.title_lbl.setFont(title_font)
-        self.title_lbl.setStyleSheet("""
-            color: #94a3b8;
-            background: transparent;
-            border: none;
-        """)
 
-        layout.addStretch(1)
-        layout.addWidget(self.value_lbl, alignment=Qt.AlignCenter)
+        self.value_lbl = QLabel(str(value))
+        self.value_lbl.setAlignment(Qt.AlignCenter)
+        self.value_lbl.setObjectName("MetricValue")
+        value_font = QFont()
+        value_font.setPointSize(24)
+        value_font.setWeight(QFont.Weight.Black)
+        self.value_lbl.setFont(value_font)
+
+        accent = QFrame()
+        accent.setObjectName("CardAccent")
+        accent.setFixedHeight(3)
+
+        layout.addWidget(self.title_lbl)
         layout.addSpacing(2)
-        layout.addWidget(self.title_lbl, alignment=Qt.AlignCenter)
+        layout.addWidget(self.value_lbl)
         layout.addStretch(1)
-
-        # Enhanced glass card styling with better contrast
-        self.setStyleSheet("""
-            QFrame#GlassCard {
-                background: rgba(51, 65, 85, 0.4);
-                border: 1px solid rgba(100, 116, 139, 0.35);
-                border-radius: 16px;
-            }
-            QFrame#GlassCard:hover {
-                background: rgba(51, 65, 85, 0.55);
-                border: 1px solid rgba(100, 116, 139, 0.55);
-            }
-        """)
-
+        layout.addWidget(accent)
 
     def set_value(self, value):
         self.value_lbl.setText(str(value))
@@ -106,24 +83,6 @@ class GlassButton(QPushButton):
         font.setPointSize(11)
         font.setWeight(QFont.Weight.DemiBold)
         self.setFont(font)
-        
-        self.setStyleSheet("""
-            QPushButton {
-                background: rgba(51, 65, 85, 0.4);
-                border: 1px solid rgba(100, 116, 139, 0.35);
-                border-radius: 13px;
-                color: #f1f5f9;
-                padding: 7px 6px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background: rgba(51, 65, 85, 0.65);
-                border: 1px solid rgba(100, 116, 139, 0.55);
-            }
-            QPushButton:pressed {
-                background: rgba(51, 65, 85, 0.55);
-            }
-        """)
 
 
 def _icon(name):
@@ -136,11 +95,15 @@ class DashboardHome(QWidget):
     """Modern dashboard home page with KPIs, quick actions, and school information."""
 
     open_students = Signal()
-    open_teachers = Signal()
     open_exams = Signal()
     open_results = Signal()
     open_school = Signal()
     open_reports = Signal()
+    open_ranking = Signal()
+    open_readiness = Signal()
+    open_history = Signal()
+    open_broadsheet = Signal()
+    open_report_book = Signal()
 
   
 
@@ -154,10 +117,9 @@ class DashboardHome(QWidget):
 
     # Refresh automatically when data changes
        EventBus.subscribe("STUDENTS_UPDATED", self.load_dashboard)
-       EventBus.subscribe("TEACHERS_UPDATED", self.load_dashboard)
        EventBus.subscribe("RESULTS_UPDATED", self.load_dashboard)
        EventBus.subscribe("EXAMS_UPDATED", self.load_dashboard)
-       EventBus.subscribe("LEVEL_CHANGED", self.load_dashboard)    
+       EventBus.subscribe("LEVEL_CHANGED", self.load_dashboard)
 
     def build_ui(self):
         """Build the complete dashboard UI with improved layout and styling."""
@@ -185,8 +147,7 @@ class DashboardHome(QWidget):
         right_panel = self._build_right_panel()
         content_layout.addWidget(right_panel, 2)
 
-        root.addLayout(content_layout, 0)
-        root.addStretch(1)
+        root.addLayout(content_layout, 1)
 
     def _build_header(self):
         """Build the compact, modern header section."""
@@ -195,18 +156,6 @@ class DashboardHome(QWidget):
         header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         header.setMinimumHeight(76)
         header.setMaximumHeight(76)
-
-        header.setStyleSheet("""
-            QFrame#HeaderFrame {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:1,
-                    stop:0 rgba(15, 23, 42, 0.95),
-                    stop:1 rgba(30, 41, 59, 0.9)
-                );
-                border: 1px solid rgba(100, 116, 139, 0.3);
-                border-radius: 16px;
-            }
-        """)
 
         layout = QVBoxLayout(header)
         layout.setContentsMargins(22, 10, 22, 10)
@@ -219,7 +168,7 @@ class DashboardHome(QWidget):
         font.setPointSize(17)
         font.setWeight(QFont.Weight.Bold)
         self.school_lbl.setFont(font)
-        self.school_lbl.setStyleSheet("color: #f1f5f9; background: transparent;")
+        self.school_lbl.setProperty("variant", "accent")
 
         # Subtitle
         subtitle = QLabel("School Results Management System")
@@ -227,7 +176,7 @@ class DashboardHome(QWidget):
         subtitle_font = QFont()
         subtitle_font.setPointSize(9)
         subtitle.setFont(subtitle_font)
-        subtitle.setStyleSheet("color: #cbd5e1; background: transparent;")
+        subtitle.setProperty("variant", "muted")
 
         # Active Exam
         self.exam_lbl = QLabel("Loading Exam...")
@@ -236,7 +185,7 @@ class DashboardHome(QWidget):
         exam_font.setPointSize(9)
         exam_font.setWeight(QFont.Weight.DemiBold)
         self.exam_lbl.setFont(exam_font)
-        self.exam_lbl.setStyleSheet("color: #10b981; background: transparent;")
+        self.exam_lbl.setProperty("variant", "success")
 
         layout.addWidget(self.school_lbl, alignment=Qt.AlignCenter)
         layout.addWidget(subtitle, alignment=Qt.AlignCenter)
@@ -248,12 +197,6 @@ class DashboardHome(QWidget):
         """Build the left panel with KPI cards."""
         container = QFrame()
         container.setObjectName("KPIContainer")
-        container.setStyleSheet("""
-            QFrame#KPIContainer {
-                background: transparent;
-                border: none;
-            }
-        """)
 
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -265,30 +208,23 @@ class DashboardHome(QWidget):
         title_font.setPointSize(13)
         title_font.setWeight(QFont.Weight.Bold)
         title.setFont(title_font)
-        title.setStyleSheet("color: #f1f5f9; background: transparent;")
+        title.setProperty("variant", "accent")
         layout.addWidget(title)
 
         # KPI Grid container with background
         grid_container = QFrame()
-        grid_container.setStyleSheet("""
-            QFrame {
-                background: rgba(30, 41, 59, 0.4);
-                border: 1px solid rgba(100, 116, 139, 0.25);
-                border-radius: 16px;
-            }
-        """)
         grid_layout_container = QVBoxLayout(grid_container)
-        grid_layout_container.setContentsMargins(12, 12, 12, 12)
+        grid_layout_container.setContentsMargins(14, 14, 14, 14)
         grid_layout_container.setSpacing(0)
 
         # KPI Grid (3 columns x 3 rows)
         kpi_grid = QGridLayout()
-        kpi_grid.setSpacing(8)
+        kpi_grid.setHorizontalSpacing(10)
+        kpi_grid.setVerticalSpacing(10)
         kpi_grid.setContentsMargins(0, 0, 0, 0)
 
         # Create KPI Cards
         self.students_card = GlassCard("Students")
-        self.teachers_card = GlassCard("Teachers")
         self.subjects_card = GlassCard("Subjects")
         self.classes_card = GlassCard("Classes")
         self.exams_card = GlassCard("Exams")
@@ -300,32 +236,30 @@ class DashboardHome(QWidget):
         # Layout cards in grid
         cards = [
             (self.students_card, 0, 0),
-            (self.teachers_card, 0, 1),
-            (self.subjects_card, 0, 2),
-            (self.classes_card, 1, 0),
-            (self.exams_card, 1, 1),
-            (self.results_card, 1, 2),
-            (self.male_card, 2, 0),
-            (self.female_card, 2, 1),
-            (self.open_exam_card, 2, 2),
+            (self.subjects_card, 0, 1),
+            (self.classes_card, 0, 2),
+            (self.exams_card, 0, 3),
+            (self.results_card, 1, 0),
+            (self.male_card, 1, 1),
+            (self.female_card, 1, 2),
+            (self.open_exam_card, 1, 3),
         ]
 
         for card, row, col in cards:
             card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             kpi_grid.addWidget(card, row, col)
 
-        for i in range(3):
+        for i in range(4):
             kpi_grid.setColumnStretch(i, 1)
 
         grid_layout_container.addLayout(kpi_grid)
-        layout.addWidget(grid_container, 0)
+        layout.addWidget(grid_container, 1)
 
         return container
 
     def _build_right_panel(self):
         """Build the right panel with quick actions and school info."""
         container = QFrame()
-        container.setStyleSheet("background: transparent; border: none;")
 
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -347,13 +281,6 @@ class DashboardHome(QWidget):
         panel = QFrame()
         panel.setObjectName("QuickActionsPanel")
         panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        panel.setStyleSheet("""
-            QFrame#QuickActionsPanel {
-                background: rgba(30, 41, 59, 0.4);
-                border: 1px solid rgba(100, 116, 139, 0.25);
-                border-radius: 16px;
-            }
-        """)
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(16, 12, 16, 12)
@@ -365,48 +292,21 @@ class DashboardHome(QWidget):
         title_font.setPointSize(13)
         title_font.setWeight(QFont.Weight.Bold)
         title.setFont(title_font)
-        title.setStyleSheet("color: #f1f5f9; background: transparent;")
+        title.setProperty("variant", "accent")
         layout.addWidget(title)
 
-        # Button Grid (3 columns x 2 rows)
-        button_grid = QGridLayout()
-        button_grid.setSpacing(8)
-        button_grid.setContentsMargins(0, 0, 0, 0)
+        # Single quick action only.
+        self.history_btn = GlassButton("History", _icon("dashboard.svg"))
+        self.history_btn.setMinimumHeight(64)
 
-        # Create buttons
-        self.student_btn = GlassButton("New Student", _icon("students.svg"))
-        self.teachers_btn = GlassButton("Teachers", _icon("teachers.svg"))
-        self.exams_btn = GlassButton("Exams", _icon("exams.svg"))
-        self.results_btn = GlassButton("Results", _icon("results.svg"))
-        self.school_btn = GlassButton("School", _icon("school.svg"))
-        self.reports_btn = GlassButton("Reports", _icon("dashboard.svg"))
+        history_row = QHBoxLayout()
+        history_row.setContentsMargins(0, 0, 0, 0)
+        history_row.addStretch(1)
+        history_row.addWidget(self.history_btn)
+        history_row.addStretch(1)
+        layout.addLayout(history_row)
 
-        # Layout buttons in 3-column grid
-        buttons = [
-            (self.student_btn, 0, 0),
-            (self.teachers_btn, 0, 1),
-            (self.exams_btn, 0, 2),
-            (self.results_btn, 1, 0),
-            (self.school_btn, 1, 1),
-            (self.reports_btn, 1, 2),
-        ]
-
-        for btn, row, col in buttons:
-            button_grid.addWidget(btn, row, col)
-
-        # Set equal column stretching
-        for i in range(3):
-            button_grid.setColumnStretch(i, 1)
-
-        layout.addLayout(button_grid)
-
-        # Connect button signals
-        self.student_btn.clicked.connect(self.open_students.emit)
-        self.teachers_btn.clicked.connect(self.open_teachers.emit)
-        self.exams_btn.clicked.connect(self.open_exams.emit)
-        self.results_btn.clicked.connect(self.open_results.emit)
-        self.school_btn.clicked.connect(self.open_school.emit)
-        self.reports_btn.clicked.connect(self.open_reports.emit)
+        self.history_btn.clicked.connect(self.open_history.emit)
 
         return panel
 
@@ -417,13 +317,6 @@ class DashboardHome(QWidget):
         panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         panel.setMinimumHeight(205)
         panel.setMaximumHeight(245)
-        panel.setStyleSheet("""
-            QFrame#SchoolInfoPanel {
-                background: rgba(30, 41, 59, 0.4);
-                border: 1px solid rgba(100, 116, 139, 0.25);
-                border-radius: 16px;
-            }
-        """)
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(16, 14, 16, 14)
@@ -435,7 +328,7 @@ class DashboardHome(QWidget):
         title_font.setPointSize(13)
         title_font.setWeight(QFont.Weight.Bold)
         title.setFont(title_font)
-        title.setStyleSheet("color: #f1f5f9; background: transparent;")
+        title.setProperty("variant", "accent")
         layout.addWidget(title)
 
         # Info Label - Centered when empty
@@ -445,12 +338,7 @@ class DashboardHome(QWidget):
         info_font = QFont()
         info_font.setPointSize(10)
         self.school_info_lbl.setFont(info_font)
-        self.school_info_lbl.setStyleSheet("""
-            color: #cbd5e1;
-            background: transparent;
-            border: none;
-            line-height: 1.5;
-        """)
+        self.school_info_lbl.setProperty("variant", "muted")
         layout.addWidget(self.school_info_lbl)
         layout.addStretch()
 
@@ -467,16 +355,13 @@ class DashboardHome(QWidget):
                 cur.execute("SELECT COUNT(*) FROM students")
                 students = cur.fetchone()[0]
 
-                cur.execute("SELECT COUNT(*) FROM teachers")
-                teachers = cur.fetchone()[0]
-
                 cur.execute("SELECT COUNT(*) FROM subjects")
                 subjects = cur.fetchone()[0]
 
                 cur.execute("SELECT COUNT(DISTINCT class) FROM students")
                 classes = cur.fetchone()[0]
 
-                cur.execute("SELECT COUNT(*) FROM exams")
+                cur.execute("SELECT COUNT(*) FROM exams WHERE status != 'COMPLETED'")
                 exams = cur.fetchone()[0]
 
                 cur.execute("SELECT COUNT(*) FROM results")
@@ -526,7 +411,6 @@ class DashboardHome(QWidget):
                     self.exam_lbl.setText(f"Active Exam: {exam[0]}")
 
             self.students_card.set_value(students)
-            self.teachers_card.set_value(teachers)
             self.subjects_card.set_value(subjects)
             self.classes_card.set_value(classes)
             self.exams_card.set_value(exams)
@@ -534,8 +418,6 @@ class DashboardHome(QWidget):
             self.male_card.set_value(males)
             self.female_card.set_value(females)
             self.open_exam_card.set_value(open_exams)
-            # self.open_exam_card.set_value(open_exams) # This card was removed from view
-
 
         except Exception as error:
             print(f"[ERROR] Dashboard failed to load: {error}")

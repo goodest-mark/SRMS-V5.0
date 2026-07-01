@@ -23,8 +23,9 @@ from progress_dialog import ProgressDialog
 from class_utils import get_classes
 from db_utils import fetch_all
 from event_bus import EventBus
+from grading_config import get_required_subjects
 from system_state import SystemState
-from theme import APP_STYLE
+from theme import apply_theme
 import combo_loaders
 
 
@@ -42,9 +43,7 @@ class ReadinessPage(QWidget):
 
         title = QLabel("RANKING READINESS")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet(
-            "font-size: 20px; font-weight: bold; color: white;"
-        )
+        title.setProperty("variant", "accent")
         layout.addWidget(title)
 
         filters = QHBoxLayout()
@@ -86,9 +85,6 @@ class ReadinessPage(QWidget):
 
         for label in summary_values:
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            label.setStyleSheet(
-                "font-size: 18px; font-weight: bold; color: white;"
-            )
 
         summary_layout.addWidget(QLabel("Students"), 0, 0)
         summary_layout.addWidget(QLabel("Ready"), 0, 1)
@@ -148,6 +144,9 @@ class ReadinessPage(QWidget):
         EventBus.subscribe("STUDENTS_UPDATED", self.load_readiness)
         EventBus.subscribe("SUBJECTS_UPDATED", self.load_readiness)
         EventBus.subscribe("EXAMS_UPDATED", self.refresh_all)
+        EventBus.subscribe("SUBJECT_REQUIREMENTS_CHANGED", self.refresh_all)
+        EventBus.subscribe("GRADE_RULES_CHANGED", self.load_readiness)
+        EventBus.subscribe("DIVISION_RULES_CHANGED", self.load_readiness)
 
         self.refresh_all()
 
@@ -178,7 +177,7 @@ class ReadinessPage(QWidget):
             self._set_summary(0, 0)
             return
 
-        required = 3 if level == "A_LEVEL" else 7
+        required = get_required_subjects(level)
         subject_type = (
             "PRINCIPAL"
             if level == "A_LEVEL"
@@ -272,7 +271,7 @@ class ReadinessPage(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyleSheet(APP_STYLE)
+    apply_theme(app, "Blue")
 
     window = ReadinessPage()
     window.show()

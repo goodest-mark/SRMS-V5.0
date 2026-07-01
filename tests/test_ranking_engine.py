@@ -88,6 +88,69 @@ def db_with_results(initialized_db):
 
 
 @pytest.fixture
+def db_with_average_ranking_case(initialized_db):
+    """Set up a pair of ready students where average and total marks disagree."""
+    conn = sqlite3.connect(initialized_db)
+    cur = conn.cursor()
+
+    cur.execute("SELECT id FROM exams WHERE level='O_LEVEL' AND status='OPEN' LIMIT 1")
+    exam_id = cur.fetchone()[0]
+
+    subjects = [
+        ("Mathematics", "MATH", "O_LEVEL", "COUNTED"),
+        ("English", "ENG", "O_LEVEL", "COUNTED"),
+        ("Biology", "BIO", "O_LEVEL", "COUNTED"),
+        ("Chemistry", "CHEM", "O_LEVEL", "COUNTED"),
+        ("Physics", "PHY", "O_LEVEL", "COUNTED"),
+        ("Geography", "GEO", "O_LEVEL", "COUNTED"),
+        ("History", "HIST", "O_LEVEL", "COUNTED"),
+        ("Life Skills", "LSK", "O_LEVEL", "NOT_COUNTED"),
+    ]
+    cur.executemany(
+        "INSERT OR IGNORE INTO subjects (subject_name, subject_short_name, level, subject_type) VALUES (?, ?, ?, ?)",
+        subjects,
+    )
+
+    cur.executemany(
+        "INSERT OR IGNORE INTO students (admission_no, full_name, gender, class, stream, level) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            ("ADM101", "High Average", "Female", "Form I", None, "O_LEVEL"),
+            ("ADM102", "High Total", "Male", "Form I", None, "O_LEVEL"),
+        ],
+    )
+
+    high_average_marks = [
+        ("ADM101", "Mathematics", 90, exam_id),
+        ("ADM101", "English", 90, exam_id),
+        ("ADM101", "Biology", 90, exam_id),
+        ("ADM101", "Chemistry", 90, exam_id),
+        ("ADM101", "Physics", 90, exam_id),
+        ("ADM101", "Geography", 90, exam_id),
+        ("ADM101", "History", 90, exam_id),
+    ]
+    high_total_marks = [
+        ("ADM102", "Mathematics", 80, exam_id),
+        ("ADM102", "English", 80, exam_id),
+        ("ADM102", "Biology", 80, exam_id),
+        ("ADM102", "Chemistry", 80, exam_id),
+        ("ADM102", "Physics", 80, exam_id),
+        ("ADM102", "Geography", 80, exam_id),
+        ("ADM102", "History", 80, exam_id),
+        ("ADM102", "Life Skills", 8, exam_id),
+    ]
+
+    cur.executemany(
+        "INSERT OR IGNORE INTO results (admission_no, subject_name, marks, exam_id) VALUES (?, ?, ?, ?)",
+        high_average_marks + high_total_marks,
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {"exam_id": exam_id, "db_path": initialized_db}
+
+
+@pytest.fixture
 def db_with_a_level_results(initialized_db):
     """Set up database with A-Level results."""
     conn = sqlite3.connect(initialized_db)
@@ -162,11 +225,20 @@ class TestComputeStudentScoresOLevel:
         bob = next(r for r in ranking if r["admission"] == "ADM002")
         assert alice["position"] < bob["position"]
 
-    def test_ready_students_sorted_by_total_marks_descending(self, db_with_results):
+    def test_ready_students_sorted_by_average_descending(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])
         ready = [r for r in ranking if r["status"] == "READY"]
-        totals = [r["total_marks"] for r in ready]
-        assert totals == sorted(totals, reverse=True)
+        averages = [r["average"] for r in ready]
+        assert averages == sorted(averages, reverse=True)
+
+    def test_average_beats_total_marks_for_ranking(self, db_with_average_ranking_case):
+        ranking = compute_student_scores("O_LEVEL", exam_id=db_with_average_ranking_case["exam_id"])
+        high_average = next(r for r in ranking if r["admission"] == "ADM101")
+        high_total = next(r for r in ranking if r["admission"] == "ADM102")
+
+        assert high_average["average"] > high_total["average"]
+        assert high_average["total_marks"] < high_total["total_marks"]
+        assert high_average["position"] < high_total["position"]
 
     def test_ready_students_come_before_incomplete(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])

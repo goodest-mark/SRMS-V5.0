@@ -1,22 +1,22 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,
-    QLabel, QGroupBox, QMessageBox, QFileDialog, QFrame
+    QLabel, QGroupBox, QFileDialog, QProgressBar
 )
-
-from progress_dialog import ProgressDialog
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QThread, Signal
 
 from system_state import SystemState
 from event_bus import EventBus
 from class_utils import get_classes
 from ranking_engine import compute_student_scores
 from ui_helpers import show_error, show_info
+from db_utils import fetch_one
 import combo_loaders
-import report_card_v5 as report_book_pdf
+import report_book_pdf
 
 
 class ReportBookWorker(QThread):
     finished = Signal(bool, str)
+    progress = Signal(int, str)
 
     def __init__(self, exam_id, class_name, save_path):
         super().__init__()
@@ -25,17 +25,27 @@ class ReportBookWorker(QThread):
         self.save_path = save_path
 
     def run(self):
-        success, message = report_book_pdf.generate_report_book(None, self.exam_id, self.class_name, self.save_path)
+        success, message = report_book_pdf.generate_report_book(
+            None,
+            self.exam_id,
+            self.class_name,
+            self.save_path,
+            progress_callback=lambda percent, message: self.progress.emit(percent, message),
+        )
         self.finished.emit(success, message)
 
 class ReportBookPage(QWidget):
     def __init__(self):
         super().__init__()
         self.layout = QVBoxLayout(self)
+        self.history_exam_id = None
+        self.history_class_name = None
         
         title = QLabel("STUDENT REPORT BOOK ENGINE")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
         self.layout.addWidget(title)
+
+        self.context_label = QLabel("")
+        self.layout.addWidget(self.context_label)
 
         # =========================
         # FILTERS
@@ -73,14 +83,18 @@ class ReportBookPage(QWidget):
         self.preview_layout = QVBoxLayout(self.preview_group)
         
         self.summary_label = QLabel("Select criteria and click Preview...")
-        self.summary_label.setStyleSheet("font-size: 14px; line-height: 25px; color: #10b981;")
         self.preview_layout.addWidget(self.summary_label)
         
         self.layout.addWidget(self.preview_group)
 
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("font-size: 13px; color: #6b7280; margin-bottom: 10px;")
         self.layout.addWidget(self.status_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setFormat("%p%")
+        self.progress_bar.setVisible(False)
+        self.layout.addWidget(self.progress_bar)
 
         # =========================
         # ACTIONS
@@ -90,12 +104,10 @@ class ReportBookPage(QWidget):
         self.preview_btn = QPushButton("PREVIEW SUMMARY")
         self.preview_btn.clicked.connect(self.update_summary)
         self.preview_btn.setFixedHeight(40)
-        self.preview_btn.setStyleSheet("background-color: #3b82f6; color: white; font-weight: bold;")
         
         self.generate_btn = QPushButton("GENERATE PDF BOOK")
         self.generate_btn.clicked.connect(self.generate_pdf)
         self.generate_btn.setFixedHeight(40)
-        self.generate_btn.setStyleSheet("background-color: #10b981; color: white; font-weight: bold;")
 
         actions_layout.addWidget(self.preview_btn)
         actions_layout.addWidget(self.generate_btn)
@@ -107,6 +119,11 @@ class ReportBookPage(QWidget):
         # Initial Load
         self.load_years()
         EventBus.subscribe("LEVEL_CHANGED", self.refresh_all)
+        EventBus.subscribe("RESULTS_UPDATED", self.refresh_all)
+        EventBus.subscribe("STUDENTS_UPDATED", self.refresh_all)
+        EventBus.subscribe("SUBJECT_REQUIREMENTS_CHANGED", self.refresh_all)
+        EventBus.subscribe("GRADE_RULES_CHANGED", self.refresh_all)
+        EventBus.subscribe("DIVISION_RULES_CHANGED", self.refresh_all)
 
     def refresh_all(self):
         self.load_years()
@@ -123,16 +140,41 @@ class ReportBookPage(QWidget):
     def load_exams(self):
         combo_loaders.load_exams(self.exam_box, self.term_box.currentData())
 
+    def set_history_context(self, exam_id, class_name):
+        row = fetch_one("""
+            SELECT e.term_id, t.academic_year_id, e.exam_name, t.term_name, y.year_name
+            FROM exams e
+            JOIN terms t ON t.id = e.term_id
+            JOIN academic_years y ON y.id = t.academic_year_id
+            WHERE e.id = ?
+        """, (exam_id,))
+        if not row:
+            return
+
+        term_id, year_id, exam_name, term_name, year_name = row
+        self.history_exam_id = exam_id
+        self.history_class_name = class_name
+        self.context_label.setText(
+            f"History context: {exam_name} - {term_name} - {year_name} - {class_name}"
+        )
+        self.class_box.setCurrentText(class_name)
+        self.update_summary()
+
+    def clear_history_context(self):
+        self.history_exam_id = None
+        self.history_class_name = None
+        self.context_label.setText("")
+
     def update_summary(self):
-        exam_id = self.exam_box.currentData()
-        class_name = self.class_box.currentText()
+        exam_id = self.history_exam_id or self.exam_box.currentData()
+        class_name = self.history_class_name or self.class_box.currentText()
         level = SystemState.get_level()
 
         if not (exam_id and class_name):
             show_error(self, "Please select all context filters.")
             return
 
-        ranking = compute_student_scores(level, exam_id)
+        ranking = compute_student_scores(level, exam_id, class_name)
         
         # Filter for class in-memory (No N+1 database queries)
         class_students = [s for s in ranking if s.get('class') == class_name]
@@ -151,8 +193,8 @@ class ReportBookPage(QWidget):
         self.summary_label.setText(summary_text)
 
     def generate_pdf(self):
-        exam_id = self.exam_box.currentData()
-        class_name = self.class_box.currentText()
+        exam_id = self.history_exam_id or self.exam_box.currentData()
+        class_name = self.history_class_name or self.class_box.currentText()
         
         if not (exam_id and class_name):
             show_error(self, "Please select all context filters.")
@@ -165,14 +207,23 @@ class ReportBookPage(QWidget):
         self.preview_btn.setEnabled(False)
         self.generate_btn.setEnabled(False)
         self.status_label.setText("Generating report book. Please wait...")
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
 
         self.worker = ReportBookWorker(exam_id, class_name, save_path)
+        self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self.on_report_generated)
         self.worker.start()
+
+    def _on_progress(self, percent, message):
+        self.progress_bar.setValue(percent)
+        self.status_label.setText(f"{message} ({percent}%)")
 
     def on_report_generated(self, success, message):
         self.preview_btn.setEnabled(True)
         self.generate_btn.setEnabled(True)
+        self.progress_bar.setValue(100 if success else self.progress_bar.value())
+        self.progress_bar.setVisible(False)
         self.status_label.setText("")
 
         if success:

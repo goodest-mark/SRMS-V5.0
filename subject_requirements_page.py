@@ -21,14 +21,11 @@ class SubjectRequirementsPage(QWidget):
         super().__init__()
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20,20,20,20)
+        layout.setSpacing(15)
 
         title = QLabel("SUBJECT REQUIREMENTS")
-        title.setStyleSheet("""
-            font-size:22px;
-            font-weight:bold;
-            color:#60a5fa;
-            padding:8px;
-        """)
+        title.setProperty("variant", "accent")
         layout.addWidget(title)
 
         form = QFormLayout()
@@ -57,14 +54,6 @@ class SubjectRequirementsPage(QWidget):
         self.save_btn = QPushButton("SAVE")
         self.reset_btn = QPushButton("RESTORE")
 
-        self.save_btn.setStyleSheet(
-            "background:#10b981;font-weight:bold;padding:8px;"
-        )
-
-        self.reset_btn.setStyleSheet(
-            "background:#ef4444;font-weight:bold;padding:8px;"
-        )
-
         buttons.addWidget(self.save_btn)
         buttons.addWidget(self.reset_btn)
 
@@ -86,6 +75,13 @@ class SubjectRequirementsPage(QWidget):
             FROM subject_requirements
         """)
 
+        if not rows:
+            self.o_required.setValue(7)
+            self.o_best.setValue(7)
+            self.a_required.setValue(3)
+            self.a_best.setValue(3)
+            return
+
         for level, req, best in rows:
 
             if level == "O_LEVEL":
@@ -99,12 +95,15 @@ class SubjectRequirementsPage(QWidget):
     def save_rules(self):
 
         execute_many("""
-            UPDATE subject_requirements
-            SET
-                required_subjects=?,
-                best_of=?
-            WHERE level=?
-        """,[
+            INSERT INTO subject_requirements (
+                required_subjects,
+                best_of,
+                level
+            ) VALUES (?, ?, ?)
+            ON CONFLICT(level) DO UPDATE SET
+                required_subjects=excluded.required_subjects,
+                best_of=excluded.best_of
+        """, [
             (
                 self.o_required.value(),
                 self.o_best.value(),
@@ -126,4 +125,3 @@ class SubjectRequirementsPage(QWidget):
             "Saved",
             "Subject requirements updated."
         )
-

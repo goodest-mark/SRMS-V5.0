@@ -1,30 +1,54 @@
 import openpyxl
 from openpyxl.utils import get_column_letter
-from progress_dialog import ProgressDialog
 from openpyxl.styles import Font, Alignment, PatternFill
-from progress_dialog import ProgressDialog
 from openpyxl.drawing.image import Image as ExcelImage
-from progress_dialog import ProgressDialog
-from PySide6.QtWidgets import QFileDialog, QMessageBox
-from progress_dialog import ProgressDialog
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QProgressDialog, QApplication
 from db_utils import fetch_one
-from progress_dialog import ProgressDialog
 import os
+
+
+def _make_progress(parent, title):
+    progress = QProgressDialog(title, None, 0, 100, parent)
+    progress.setWindowTitle(title)
+    progress.setWindowModality(Qt.WindowModal if parent else Qt.NonModal)
+    progress.setAutoClose(False)
+    progress.setAutoReset(False)
+    progress.setMinimumDuration(0)
+    progress.setValue(0)
+    progress.setLabelText(f"{title}\n\nProgress: 0%")
+    QApplication.processEvents()
+    return progress
+
+
+def _set_progress(progress, percent, message):
+    if progress is None:
+        return
+    progress.setValue(max(0, min(100, int(percent))))
+    progress.setLabelText(f"{message}\n\nProgress: {max(0, min(100, int(percent)))}%")
+    QApplication.processEvents()
 
 def download_template(parent, filename, title, headers, instructions=None, samples=None):
     path, _ = QFileDialog.getSaveFileName(parent, "Download Template", filename, "Excel Files (*.xlsx)")
     if not path: return
     
+    progress = _make_progress(parent, "Creating template...")
     try:
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Template"
+        _set_progress(progress, 10, "Preparing template")
 
         # 1. School Header
-        profile = fetch_one("SELECT school_name, school_address, school_phone, school_email FROM school_profile LIMIT 1")
+        profile = fetch_one("""
+            SELECT school_name, school_address, school_phone, school_email, school_logo
+            FROM school_profile
+            LIMIT 1
+        """)
 
         school_name = profile[0].upper() if profile and profile[0] else "SCHOOL MANAGEMENT SYSTEM"
         school_contact = f"{profile[1] if profile and profile[1] else '-'} | {profile[2] if profile and profile[2] else '-'} | {profile[3] if profile and profile[3] else '-'}"
+        school_logo = profile[4] if profile and len(profile) > 4 else None
 
         # Styling
         blue_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
@@ -45,16 +69,28 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
         ws.cell(row=3, column=1, value=title.upper()).font = Font(size=14, bold=True, color="2563EB")
         ws.cell(row=3, column=1).alignment = center_align
 
+        if school_logo and os.path.exists(school_logo):
+            try:
+                logo = ExcelImage(school_logo)
+                logo.width = 72
+                logo.height = 72
+                ws.add_image(logo, "A1")
+            except Exception:
+                pass
+        _set_progress(progress, 35, "Adding school header")
+
         # Row 5: Instructions
         ws.cell(row=5, column=1, value="INSTRUCTIONS:").font = bold_font
         if not instructions:
             instructions = [
                 "1. Do not modify the column headers in Row 10.",
                 "2. Start data entry from Row 12 (below the sample row).",
-                "3. Ensure the 'Admission No' exists in the system where required."
+                "3. Ensure the 'Admission No' exists in the system where required.",
+                "4. Keep the sample row as a formatting guide and replace it with real data."
             ]
         for i, text in enumerate(instructions):
             ws.cell(row=6 + i, column=1, value=text).font = Font(italic=True, size=9)
+        _set_progress(progress, 55, "Writing instructions")
 
         # Row 10: Headers
         for col_num, header in enumerate(headers, 1):
@@ -62,12 +98,14 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
             cell.fill = blue_fill
             cell.font = white_font
             cell.alignment = center_align
+        _set_progress(progress, 75, "Writing headers")
 
         # Row 11: Sample Row
         if samples:
             for col_num, val in enumerate(samples, 1):
                 cell = ws.cell(row=11, column=col_num, value=val)
                 cell.font = Font(italic=True, color="808080")
+        _set_progress(progress, 90, "Adding sample row")
 
         # Freeze Panes (Header stays visible)
         ws.freeze_panes = "A11"
@@ -83,24 +121,34 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
             ws.column_dimensions[column_letter].width = max_length + 4
 
         wb.save(path)
+        _set_progress(progress, 100, "Template saved")
         QMessageBox.information(parent, "Success", f"Template saved to {path}")
     except Exception as e:
         QMessageBox.critical(parent, "Error", "Failed to save template. Please check the file path and try again.")
+    finally:
+        progress.close()
 
 def export_to_excel(parent, filename, headers, data):
     path, _ = QFileDialog.getSaveFileName(parent, "Export Data", filename, "Excel Files (*.xlsx)")
     if not path: return
     
+    progress = _make_progress(parent, "Exporting data...")
     try:
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.append(headers)
-        for row in data:
+        total = max(len(data), 1)
+        for index, row in enumerate(data, start=1):
             ws.append(row)
+            if index == 1 or index == total or index % 10 == 0:
+                _set_progress(progress, int((index / total) * 90), "Writing rows")
         wb.save(path)
+        _set_progress(progress, 100, "Export complete")
         QMessageBox.information(parent, "Success", f"Data exported to {path}")
     except Exception as e:
         QMessageBox.critical(parent, "Error", "Failed to export data. Please check the file path and try again.")
+    finally:
+        progress.close()
 
 def get_import_file(parent):
     path, _ = QFileDialog.getOpenFileName(parent, "Select Excel File", "", "Excel Files (*.xlsx *.xls)")

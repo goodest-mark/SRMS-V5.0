@@ -15,10 +15,8 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
-    QFrame
 )
 
-from progress_dialog import ProgressDialog
 import openpyxl
 import excel_utils
 
@@ -34,6 +32,7 @@ class MarksDelegate(QStyledItemDelegate):
 
     def createEditor(self, parent, option, index):
         editor = QLineEdit(parent)
+        editor.setObjectName("MarksEditor")
         editor.setAlignment(Qt.AlignmentFlag.AlignCenter)
         editor.setPlaceholderText("0 - 100")
         editor.setFrame(True)
@@ -76,28 +75,9 @@ class MarksDelegate(QStyledItemDelegate):
         )
 
         if valid:
-            editor.setStyleSheet(
-                "QLineEdit {"
-                "background-color: #111827;"
-                "color: white;"
-                "border: 1px solid #334155;"
-                "border-radius: 4px;"
-                "padding: 4px;"
-                "}"
-                "QLineEdit:focus {"
-                "border: 2px solid #3b82f6;"
-                "}"
-            )
+            editor.setProperty("variant", "accent")
         else:
-            editor.setStyleSheet(
-                "QLineEdit {"
-                "background-color: #3f1d24;"
-                "color: #fecaca;"
-                "border: 2px solid #ef4444;"
-                "border-radius: 4px;"
-                "padding: 4px;"
-                "}"
-            )
+            editor.setProperty("variant", "danger")
 
 
 class ResultsPage(QWidget):
@@ -113,9 +93,6 @@ class ResultsPage(QWidget):
 
         title = QLabel("RESULTS ENTRY V4.1")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet(
-            "font-size: 20px; font-weight: bold; color: white;"
-        )
         layout.addWidget(title)
 
         # =====================================
@@ -136,16 +113,12 @@ class ResultsPage(QWidget):
         self.subject.setMinimumWidth(220)
         self.subject.setPlaceholderText("Select Subject")
 
-        self.refresh_top_btn = QPushButton("REFRESH")
-        self.refresh_top_btn.clicked.connect(self.refresh_all)
-
         filters_layout.addWidget(QLabel("Exam"))
         filters_layout.addWidget(self.exam)
         filters_layout.addWidget(QLabel("Class"))
         filters_layout.addWidget(self.class_box)
         filters_layout.addWidget(QLabel("Subject"))
         filters_layout.addWidget(self.subject)
-        filters_layout.addWidget(self.refresh_top_btn)
 
         layout.addWidget(filters_group)
 
@@ -169,9 +142,6 @@ class ResultsPage(QWidget):
 
         for label in summary_labels:
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            label.setStyleSheet(
-                "font-size: 18px; font-weight: bold; color: #3b82f6;"
-            )
 
         summary_layout.addWidget(QLabel("Expected Students"), 0, 0)
         summary_layout.addWidget(QLabel("Entered Marks"), 0, 1)
@@ -210,12 +180,6 @@ class ResultsPage(QWidget):
 
         self.lock_label = QLabel("")
         self.lock_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lock_label.setStyleSheet(
-            "font-size: 13px; font-weight: bold; color: #facc15;"
-            "background: rgba(250, 204, 21, 0.10);"
-            "border: 1px solid rgba(250, 204, 21, 0.30);"
-            "border-radius: 8px; padding: 8px;"
-        )
         self.lock_label.hide()
 
         header = self.table.horizontalHeader()
@@ -244,7 +208,6 @@ class ResultsPage(QWidget):
 
         self.save_btn = QPushButton("SAVE ALL RESULTS")
         self.save_btn.setFixedHeight(40)
-        self.save_btn.setStyleSheet("background-color: #10b981; color: white; font-weight: bold;")
         self.save_btn.clicked.connect(self.save_all)
 
         self.import_btn = QPushButton("IMPORT EXCEL")
@@ -472,7 +435,7 @@ class ResultsPage(QWidget):
         if self._is_selected_exam_completed():
             show_error(
                 self,
-                "This exam is completed and read-only. Reopen it from Exams if edits are required.",
+                "This exam is completed and read-only. Archived exams can still be viewed and exported.",
                 title="Completed Exam"
             )
             return
@@ -565,7 +528,7 @@ class ResultsPage(QWidget):
         if self._is_selected_exam_completed():
             show_error(
                 self,
-                "This exam is completed and read-only. Reopen it from Exams before importing marks.",
+                "This exam is completed and read-only. Archived exams cannot accept new imports.",
                 title="Completed Exam"
             )
             return
@@ -634,7 +597,7 @@ class ResultsPage(QWidget):
 
         if self.exam_read_only:
             self.lock_label.setText(
-                "COMPLETED EXAM - read-only results. Reopen from Exams to edit."
+                "COMPLETED EXAM - archived results are read-only."
             )
             self.lock_label.show()
             self.table.setEditTriggers(

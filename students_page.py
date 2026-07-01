@@ -1,3 +1,5 @@
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -13,8 +15,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from progress_dialog import ProgressDialog
-
 import sqlite3
 
 from class_utils import get_classes
@@ -23,8 +23,9 @@ from event_bus import EventBus
 from system_state import SystemState
 import openpyxl
 import excel_utils
-from student_profile import StudentProfile
+from report_card_v5 import generate_student_report_card
 from security_settings import authorize_action
+from progress_dialog import ProgressDialog
 
 
 class StudentsPage(QWidget):
@@ -63,9 +64,6 @@ class StudentsPage(QWidget):
         self.delete_btn.clicked.connect(self.delete_student)
         self.delete_btn.setEnabled(False)
 
-        self.clear_btn = QPushButton("CLEAR")
-        self.clear_btn.clicked.connect(self.clear_form)
-
         self.import_btn = QPushButton("IMPORT")
         self.import_btn.clicked.connect(self.import_excel)
         
@@ -75,11 +73,6 @@ class StudentsPage(QWidget):
         self.template_btn = QPushButton("TEMPLATE")
         self.template_btn.clicked.connect(self.download_template)
 
-        self.view_profile_btn = QPushButton("VIEW PROFILE")
-        self.view_profile_btn.clicked.connect(self.view_profile)
-        self.view_profile_btn.setEnabled(False)
-        self.view_profile_btn.setStyleSheet("background-color: #3498db; color: white; font-weight: bold;")
-
         form.addWidget(self.adm)
         form.addWidget(self.name)
         form.addWidget(self.gender)
@@ -87,8 +80,6 @@ class StudentsPage(QWidget):
         form.addWidget(self.stream)
         form.addWidget(self.save_btn)
         form.addWidget(self.delete_btn)
-        form.addWidget(self.view_profile_btn)
-        form.addWidget(self.clear_btn)
         form.addWidget(self.import_btn)
         form.addWidget(self.export_btn)
         form.addWidget(self.template_btn)
@@ -121,7 +112,7 @@ class StudentsPage(QWidget):
             QAbstractItemView.EditTrigger.NoEditTriggers
         )
         self.table.verticalHeader().setVisible(False)
-        self.table.doubleClicked.connect(self.load_selected)
+        self.table.doubleClicked.connect(self.open_selected_report_card)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(
@@ -260,18 +251,48 @@ class StudentsPage(QWidget):
 
         self.save_btn.setText("UPDATE")
         self.delete_btn.setEnabled(True)
-        self.view_profile_btn.setEnabled(True)
 
-    def view_profile(self):
+    def open_selected_report_card(self):
+        self.load_selected()
+        self.view_report_card()
+
+    def view_report_card(self):
         if self.selected_id is None:
             return
-            
+
         row = self.table.currentRow()
-        admission_no = self.table.item(row, 1).text()
+        if row < 0:
+            return
+
+        admission_item = self.table.item(row, 1)
+        if admission_item is None:
+            return
+
+        admission_no = admission_item.text().strip()
         level = SystemState.get_level()
-        
-        dlg = StudentProfile(admission_no, level)
-        dlg.exec()
+
+        self._report_progress = ProgressDialog("Generating Report Card")
+        self._report_progress.show()
+        success, result = generate_student_report_card(
+            self,
+            admission_no,
+            level,
+            progress_callback=lambda percent, message: self._report_progress.update_progress(percent, 100, message),
+        )
+        self._report_progress.finish("Done")
+        self._report_progress.close()
+        self._report_progress = None
+        if not success:
+            QMessageBox.information(self, "Report Card", result)
+            return
+
+        opened = QDesktopServices.openUrl(QUrl.fromLocalFile(result))
+        if not opened:
+            QMessageBox.warning(
+                self,
+                "Report Card",
+                f"Report generated at {result}, but the system viewer could not be opened.",
+            )
 
     def delete_student(self):
         if self.selected_id is None:
@@ -322,8 +343,6 @@ class StudentsPage(QWidget):
         self.table.clearSelection()
         self.save_btn.setText("SAVE")
         self.delete_btn.setEnabled(False)
-        self.view_profile_btn.setEnabled(False)
-
     # =========================
     # EXCEL FRAMEWORK
     # =========================
