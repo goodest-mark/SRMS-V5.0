@@ -3,8 +3,8 @@ import os
 from PySide6.QtGui import QIcon, QPainter, QColor, QPen
 from PySide6.QtCore import (
     QSize, Qt, QPropertyAnimation, QEasingCurve,
-    QTimer,
-    QParallelAnimationGroup, QRectF, Property, Signal
+    QParallelAnimationGroup, QRectF, Property, Signal,
+    QTimer, QDateTime
 )
 
 from progress_dialog import ProgressDialog
@@ -293,6 +293,27 @@ class MainWindow(QMainWindow):
         """)
 
         top_bar.addWidget(self.top_nav_widget, 1)
+
+        # Clock
+        self.clock_lbl = QLabel()
+        self.clock_lbl.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-size: 13px;
+                font-weight: 800;
+                padding: 6px 15px;
+                background: rgba(2, 6, 23, 0.88);
+                border: 1px solid rgba(59, 130, 246, 0.25);
+                border-radius: 17px;
+                margin-right: 5px;
+            }
+        """)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_clock)
+        self.timer.start(1000)
+        self.update_clock()
+        top_bar.addWidget(self.clock_lbl)
+
         top_bar.addWidget(self.level_switch)
 
         # =====================================
@@ -304,171 +325,134 @@ class MainWindow(QMainWindow):
         body.setSpacing(16)
 
         # =====================================
-        # STACK
+        # STACK & SCROLL AREA
         # =====================================
 
         self.stack = QStackedWidget()
 
         self.dashboard = DashboardHome()
-        self.students = StudentsPage()
-        self.academics = AcademicsPage()
-        self.exams = ExamsWindow()
-        self.results = ResultsCenter()
-        self.history = HistoricalResultsPage()
-        self.school = SchoolCenter()
-        self.settings = SettingsPage()
-        self._startup_warmup_pages = [
-            self.students,
-            self.academics,
-            self.exams,
-            self.results,
-            self.history,
-            self.school,
-            self.settings,
-        ]
-        self._startup_warmup_index = 0
+        self.students = None
+        self.academics = None
+        self.exams = None
+        self.results = None
+        self.history = None
+        self.school = None
+        self.settings = None
+        self._page_factories = {
+            "students": StudentsPage,
+            "academics": AcademicsPage,
+            "exams": ExamsWindow,
+            "results": ResultsCenter,
+            "history": HistoricalResultsPage,
+            "school": SchoolCenter,
+            "settings": SettingsPage,
+        }
+        self._page_attributes = {
+            "students": "students",
+            "academics": "academics",
+            "exams": "exams",
+            "results": "results",
+            "history": "history",
+            "school": "school",
+            "settings": "settings",
+        }
         self._page_last_refreshed = {}
 
         self.dashboard.open_students.connect(
-            lambda: self.switch_page(
-                self.students,
-                self.btn_students
-            )
+            lambda: self.switch_named_page("students", self.btn_students)
+        )
+
+        self.dashboard.open_academics.connect(
+            lambda: self.switch_named_page("academics", self.btn_academics)
         )
 
         self.dashboard.open_exams.connect(
-            lambda: self.switch_page(
-                self.exams,
-                self.btn_exams
-            )
+            lambda: self.switch_named_page("exams", self.btn_exams)
         )
 
         self.dashboard.open_results.connect(
-            lambda: self.switch_page(
-                self.results,
-                self.btn_results
-            )
+            lambda: self.switch_named_page("results", self.btn_results)
         )
 
         self.dashboard.open_school.connect(
-            lambda: self.switch_page(
-                self.school,
-                self.btn_school
-            )
+            lambda: self.switch_named_page("school", self.btn_school)
         )
 
         self.dashboard.open_ranking.connect(
             lambda: (
-                self.switch_page(self.history, self.btn_history),
-                self.history.show_list()
+                self.switch_named_page("history", self.btn_history),
+                self.history.show_list() if self.history else None,
             )
         )
 
         self.dashboard.open_readiness.connect(
             lambda: (
-                self.switch_page(
-                    self.results,
-                    self.btn_results
-                ),
-                self.results.open_readiness()
+                self.switch_named_page("results", self.btn_results),
+                self.results.open_readiness() if self.results else None,
             )
         )
 
         self.dashboard.open_history.connect(
-            lambda: self.switch_page(
-                self.history,
-                self.btn_history
-            )
+            lambda: self.switch_named_page("history", self.btn_history)
         )
 
         self.dashboard.open_broadsheet.connect(
             lambda: (
-                self.switch_page(self.history, self.btn_history),
-                self.history.show_list()
+                self.switch_named_page("history", self.btn_history),
+                self.history.show_list() if self.history else None,
             )
         )
 
         self.dashboard.open_report_book.connect(
             lambda: (
-                self.switch_page(self.history, self.btn_history),
-                self.history.show_list()
+                self.switch_named_page("history", self.btn_history),
+                self.history.show_list() if self.history else None,
             )
         )
 
         self.dashboard.open_reports.connect(
             lambda: (
-                self.switch_page(self.history, self.btn_history),
-                self.history.show_list()
+                self.switch_named_page("history", self.btn_history),
+                self.history.show_list() if self.history else None,
             )
         )
 
         self.stack.addWidget(self.dashboard)
-        self.stack.addWidget(self.students)
-        self.stack.addWidget(self.academics)
-        self.stack.addWidget(self.exams)
-        self.stack.addWidget(self.results)
-        self.stack.addWidget(self.history)
-        self.stack.addWidget(self.school)
-        self.stack.addWidget(self.settings)
 
         # =====================================
         # NAVIGATION
         # =====================================
 
         self.btn_dashboard.clicked.connect(
-            lambda: self.switch_page(
-                self.dashboard,
-                self.btn_dashboard
-            )
+            lambda: self.switch_page(self.dashboard, self.btn_dashboard)
         )
 
         self.btn_students.clicked.connect(
-            lambda: self.switch_page(
-                self.students,
-                self.btn_students
-            )
+            lambda: self.switch_named_page("students", self.btn_students)
         )
 
         self.btn_academics.clicked.connect(
-            lambda: self.switch_page(
-                self.academics,
-                self.btn_academics
-            )
+            lambda: self.switch_named_page("academics", self.btn_academics)
         )
 
         self.btn_exams.clicked.connect(
-            lambda: self.switch_page(
-                self.exams,
-                self.btn_exams
-            )
+            lambda: self.switch_named_page("exams", self.btn_exams)
         )
 
         self.btn_results.clicked.connect(
-            lambda: self.switch_page(
-                self.results,
-                self.btn_results
-            )
+            lambda: self.switch_named_page("results", self.btn_results)
         )
 
         self.btn_history.clicked.connect(
-            lambda: self.switch_page(
-                self.history,
-                self.btn_history
-            )
+            lambda: self.switch_named_page("history", self.btn_history)
         )
 
         self.btn_school.clicked.connect(
-            lambda: self.switch_page(
-                self.school,
-                self.btn_school
-            )
+            lambda: self.switch_named_page("school", self.btn_school)
         )
 
         self.btn_settings.clicked.connect(
-            lambda: self.switch_page(
-                self.settings,
-                self.btn_settings
-            )
+            lambda: self.switch_named_page("settings", self.btn_settings)
         )
 
         body.addWidget(self.stack)
@@ -499,8 +483,6 @@ class MainWindow(QMainWindow):
             self.btn_dashboard
         )
 
-        QTimer.singleShot(250, self._warmup_pages)
-
         # =====================================
         # WINDOW GEOMETRY
         # =====================================
@@ -521,11 +503,19 @@ class MainWindow(QMainWindow):
     # NAVIGATION
     # =====================================
 
+    def update_clock(self):
+        """Update the live clock display."""
+        now = QDateTime.currentDateTime()
+        # Format: Thursday, 02 July 2026 12:35:12 AM
+        self.clock_lbl.setText(now.toString("dddd, dd MMMM yyyy  hh:mm:ss AP"))
+
     def switch_page(
         self,
         page,
         button
     ):
+        if page is not None and self.stack.indexOf(page) == -1:
+            self.stack.addWidget(page)
         self.stack.setCurrentWidget(page)
         self.active_btn = button
         self.update_highlight(button)
@@ -533,6 +523,22 @@ class MainWindow(QMainWindow):
         if page not in self._page_last_refreshed:
             self._refresh_page(page)
             self._page_last_refreshed[page] = True
+
+    def switch_named_page(self, page_name, button):
+        page = self.ensure_page(page_name)
+        self.switch_page(page, button)
+
+    def ensure_page(self, page_name):
+        attr_name = self._page_attributes[page_name]
+        page = getattr(self, attr_name)
+        if page is None:
+            page = self._page_factories[page_name]()
+            setattr(self, attr_name, page)
+            if self.stack.indexOf(page) == -1:
+                self.stack.addWidget(page)
+            self._refresh_page(page)
+            self._page_last_refreshed[page] = True
+        return page
 
     def update_highlight(
         self,
@@ -586,7 +592,7 @@ class MainWindow(QMainWindow):
     ):
 
         self.switch_page(
-            self.results,
+            self.ensure_page("results"),
             self.btn_results
         )
 
@@ -606,16 +612,19 @@ class MainWindow(QMainWindow):
             )
 
     def open_history_ranking(self, exam_id, class_name):
-        self.switch_page(self.history, self.btn_history)
-        self.history.activate_ranking(exam_id, class_name)
+        history = self.ensure_page("history")
+        self.switch_page(history, self.btn_history)
+        history.activate_ranking(exam_id, class_name)
 
     def open_history_broadsheet(self, exam_id, class_name):
-        self.switch_page(self.history, self.btn_history)
-        self.history.activate_broadsheet(exam_id, class_name)
+        history = self.ensure_page("history")
+        self.switch_page(history, self.btn_history)
+        history.activate_broadsheet(exam_id, class_name)
 
     def open_history_reports(self, exam_id, class_name):
-        self.switch_page(self.history, self.btn_history)
-        self.history.activate_reports(exam_id, class_name)
+        history = self.ensure_page("history")
+        self.switch_page(history, self.btn_history)
+        history.activate_reports(exam_id, class_name)
 
     # =====================================
     # REFRESH
@@ -652,19 +661,6 @@ class MainWindow(QMainWindow):
                     print(f"[ERROR] Failed to refresh {type(page).__name__}.{method_name}: {error}")
 
                 break
-
-    def _warmup_pages(self):
-        if self._startup_warmup_index >= len(self._startup_warmup_pages):
-            return
-
-        page = self._startup_warmup_pages[self._startup_warmup_index]
-        self._startup_warmup_index += 1
-
-        try:
-            self._refresh_page(page)
-        finally:
-            self._page_last_refreshed[page] = True
-            QTimer.singleShot(250, self._warmup_pages)
 
     def _apply_theme(self, theme_name="Blue"):
         self.apply_theme(theme_name)

@@ -6,12 +6,6 @@ from PySide6.QtWidgets import (
     QStackedWidget
 )
 
-from results_page import ResultsPage
-from results_dashboard import ResultsDashboard
-from readiness_page import ReadinessPage
-from excel_results_import import ExcelResultsImport
-
-
 class ResultsCenter(QWidget):
 
     def __init__(self):
@@ -43,15 +37,10 @@ class ResultsCenter(QWidget):
 
         self.stack = QStackedWidget()
 
-        self.results_entry_page = ResultsPage()
-        self.dashboard_page = ResultsDashboard()
-        self.readiness_page = ReadinessPage()
-        self.import_page = ExcelResultsImport()
-
-        self.stack.addWidget(self.results_entry_page)
-        self.stack.addWidget(self.dashboard_page)
-        self.stack.addWidget(self.readiness_page)
-        self.stack.addWidget(self.import_page)
+        self.results_entry_page = None
+        self.dashboard_page = None
+        self.readiness_page = None
+        self.import_page = None
 
         root.addWidget(self.stack)
 
@@ -60,32 +49,54 @@ class ResultsCenter(QWidget):
         # =====================================
 
         self.btn_entry.clicked.connect(
-            lambda: self.stack.setCurrentWidget(
-                self.results_entry_page
-            )
+            lambda: self._switch_page("results_entry")
         )
 
         self.btn_dashboard.clicked.connect(
-            lambda: self.stack.setCurrentWidget(
-                self.dashboard_page
-            )
+            lambda: self._switch_page("dashboard")
         )
 
         self.btn_readiness.clicked.connect(
-            lambda: self.stack.setCurrentWidget(
-                self.readiness_page
-            )
+            lambda: self._switch_page("readiness")
         )
 
         self.btn_import.clicked.connect(
-            lambda: self.stack.setCurrentWidget(
-                self.import_page
-            )
+            lambda: self._switch_page("import")
         )
 
-        self.stack.setCurrentWidget(
-            self.dashboard_page
-        )
+        self._switch_page("dashboard")
+
+    def _ensure_page(self, name):
+        if name == "results_entry":
+            if self.results_entry_page is None:
+                from results_page import ResultsPage
+                self.results_entry_page = ResultsPage()
+                self.stack.addWidget(self.results_entry_page)
+            return self.results_entry_page
+        if name == "dashboard":
+            if self.dashboard_page is None:
+                from results_dashboard import ResultsDashboard
+                self.dashboard_page = ResultsDashboard()
+                self.stack.addWidget(self.dashboard_page)
+            return self.dashboard_page
+        if name == "readiness":
+            if self.readiness_page is None:
+                from readiness_page import ReadinessPage
+                self.readiness_page = ReadinessPage()
+                self.stack.addWidget(self.readiness_page)
+            return self.readiness_page
+        if name == "import":
+            if self.import_page is None:
+                from excel_results_import import ExcelResultsImport
+                self.import_page = ExcelResultsImport()
+                self.stack.addWidget(self.import_page)
+            return self.import_page
+        return None
+
+    def _switch_page(self, name):
+        page = self._ensure_page(name)
+        if page is not None:
+            self.stack.setCurrentWidget(page)
 
     def load(self):
         page = self.stack.currentWidget()
@@ -102,10 +113,10 @@ class ResultsCenter(QWidget):
                 break
 
     def open_readiness(self):
-        self.stack.setCurrentWidget(self.readiness_page)
+        self._switch_page("readiness")
 
     def open_import(self):
-        self.stack.setCurrentWidget(self.import_page)
+        self._switch_page("import")
 
 
     # =====================================
@@ -119,9 +130,7 @@ class ResultsCenter(QWidget):
         subject_name
     ):
 
-        self.stack.setCurrentWidget(
-            self.results_entry_page
-        )
+        self._switch_page("results_entry")
 
         try:
             self.results_entry_page.open_from_dashboard(

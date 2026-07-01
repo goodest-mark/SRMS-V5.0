@@ -3,10 +3,9 @@ import re
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
-    QPushButton, QMessageBox, QLabel, QGroupBox, QCheckBox, QComboBox, QScrollArea, QSizePolicy, QTabWidget, QFrame, QGridLayout
+    QPushButton, QMessageBox, QLabel, QGroupBox, QCheckBox, QComboBox, QScrollArea, QSizePolicy, QTabWidget, QFrame, QGridLayout, QSpinBox
 )
 
-from progress_dialog import ProgressDialog
 from db_utils import fetch_all, execute, execute_many
 from event_bus import EventBus
 from security_settings import authorize_action
@@ -61,8 +60,10 @@ class SettingsPage(QWidget):
         acc_group = QGroupBox("ACADEMIC SETTINGS")
         acc_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         acc_form = QFormLayout(acc_group)
-        self.o_level_counted = QLineEdit()
-        self.a_level_principal = QLineEdit()
+        self.o_level_counted = QSpinBox()
+        self.o_level_counted.setRange(1, 20)
+        self.a_level_principal = QSpinBox()
+        self.a_level_principal.setRange(1, 10)
         acc_form.addRow("O-Level Counted Subjects:", self.o_level_counted)
         acc_form.addRow("A-Level Principal Subjects:", self.a_level_principal)
         card_grid.addWidget(acc_group, 0, 0)
@@ -142,8 +143,8 @@ class SettingsPage(QWidget):
     def load_settings(self):
         settings = dict(fetch_all("SELECT setting_key, setting_value FROM system_settings"))
 
-        self.o_level_counted.setText(settings.get('o_level_counted', '7'))
-        self.a_level_principal.setText(settings.get('a_level_principal', '3'))
+        self.o_level_counted.setValue(self._safe_int(settings.get('o_level_counted', '7'), 7))
+        self.a_level_principal.setValue(self._safe_int(settings.get('a_level_principal', '3'), 3))
         self.show_logo.setChecked(settings.get('show_logo') == '1')
         self.show_watermark.setChecked(settings.get('show_watermark') == '1')
         self.show_gender_summary.setChecked(settings.get('show_gender_summary') == '1')
@@ -156,20 +157,19 @@ class SettingsPage(QWidget):
         self.theme_combo.setCurrentText(normalize_theme_name(settings.get('theme', 'Blue')))
         self.backup_folder.setText(settings.get('backup_folder', './backups'))
 
+    @staticmethod
+    def _safe_int(value, default):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
     def save_settings(self):
         if not authorize_action(self, "System Settings Changes"):
             return
 
-        # Validate numeric inputs
-        o_counted = self.o_level_counted.text().strip()
-        a_principal = self.a_level_principal.text().strip()
-
-        if not o_counted.isdigit() or not (1 <= int(o_counted) <= 20):
-            QMessageBox.warning(self, "Validation Error", "O-Level Counted Subjects must be a number between 1 and 20.")
-            return
-        if not a_principal.isdigit() or not (1 <= int(a_principal) <= 10):
-            QMessageBox.warning(self, "Validation Error", "A-Level Principal Subjects must be a number between 1 and 10.")
-            return
+        o_counted = str(self.o_level_counted.value())
+        a_principal = str(self.a_level_principal.value())
 
         backup_path = self.backup_folder.text().strip()
         if backup_path:

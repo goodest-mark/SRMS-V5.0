@@ -1,4 +1,5 @@
 import sys
+import os
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -26,6 +27,7 @@ from event_bus import EventBus
 from system_state import SystemState
 from theme import apply_theme
 import combo_loaders
+from ui.cards import PremiumStatCard
 
 
 class ResultsDashboard(QWidget):
@@ -78,34 +80,49 @@ class ResultsDashboard(QWidget):
         # =====================================
         # OVERALL SUMMARY
         # =====================================
-        summary_group = QGroupBox("Overall Progress")
-        summary_layout = QGridLayout(summary_group)
+        summary_cards_group = QGroupBox("Overall Progress")
+        summary_cards_layout = QGridLayout(summary_cards_group)
+        summary_cards_layout.setContentsMargins(12, 12, 12, 12)
+        summary_cards_layout.setHorizontalSpacing(12)
+        summary_cards_layout.setVerticalSpacing(12)
 
-        self.expected_results_value = QLabel("0")
-        self.entered_results_value = QLabel("0")
-        self.missing_results_value = QLabel("0")
-        self.overall_completion_value = QLabel("0.00%")
-
-        summary_values = (
-            self.expected_results_value,
-            self.entered_results_value,
-            self.missing_results_value,
-            self.overall_completion_value,
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.expected_results_card = PremiumStatCard(
+            "Expected Results",
+            "Subjects expected for the exam",
+            os.path.join(base_dir, "assets", "icons", "results.svg"),
+            "primary"
+        )
+        self.entered_results_card = PremiumStatCard(
+            "Entered Results",
+            "Marks already recorded",
+            os.path.join(base_dir, "assets", "icons", "results.svg"),
+            "success"
+        )
+        self.missing_results_card = PremiumStatCard(
+            "Missing Results",
+            "Subjects still pending",
+            os.path.join(base_dir, "assets", "icons", "results.svg"),
+            "warning"
+        )
+        self.overall_completion_card = PremiumStatCard(
+            "Completion %",
+            "Overall completion ratio",
+            os.path.join(base_dir, "assets", "icons", "dashboard.svg"),
+            "secondary"
         )
 
-        for label in summary_values:
-            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.expected_results_value = self.expected_results_card.value_lbl
+        self.entered_results_value = self.entered_results_card.value_lbl
+        self.missing_results_value = self.missing_results_card.value_lbl
+        self.overall_completion_value = self.overall_completion_card.value_lbl
 
-        summary_layout.addWidget(QLabel("Expected Results"), 0, 0)
-        summary_layout.addWidget(QLabel("Entered Results"), 0, 1)
-        summary_layout.addWidget(QLabel("Missing Results"), 0, 2)
-        summary_layout.addWidget(QLabel("Overall Completion %"), 0, 3)
-        summary_layout.addWidget(self.expected_results_value, 1, 0)
-        summary_layout.addWidget(self.entered_results_value, 1, 1)
-        summary_layout.addWidget(self.missing_results_value, 1, 2)
-        summary_layout.addWidget(self.overall_completion_value, 1, 3)
+        summary_cards_layout.addWidget(self.expected_results_card, 0, 0)
+        summary_cards_layout.addWidget(self.entered_results_card, 0, 1)
+        summary_cards_layout.addWidget(self.missing_results_card, 0, 2)
+        summary_cards_layout.addWidget(self.overall_completion_card, 0, 3)
 
-        layout.addWidget(summary_group)
+        layout.addWidget(summary_cards_group)
 
         # =====================================
         # SUBJECT TABLE

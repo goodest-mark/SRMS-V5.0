@@ -14,53 +14,8 @@ from PySide6.QtGui import QIcon, QFont
 from event_bus import EventBus
 from system_state import SystemState
 from db_utils import get_cursor
+from ui.cards import PremiumStatCard
 import os
-
-
-class GlassCard(QFrame):
-    """Modern glassmorphic card for displaying key performance indicators."""
-
-    def __init__(self, title, value="0"):
-        super().__init__()
-
-        self.setObjectName("GlassCard")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(128)
-        self.setMaximumHeight(138)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(8)
-
-        self.title_lbl = QLabel(title)
-        self.title_lbl.setAlignment(Qt.AlignCenter)
-        self.title_lbl.setWordWrap(True)
-        self.title_lbl.setObjectName("MetricTitle")
-        title_font = QFont()
-        title_font.setPointSize(10)
-        title_font.setWeight(QFont.Weight.Bold)
-        self.title_lbl.setFont(title_font)
-
-        self.value_lbl = QLabel(str(value))
-        self.value_lbl.setAlignment(Qt.AlignCenter)
-        self.value_lbl.setObjectName("MetricValue")
-        value_font = QFont()
-        value_font.setPointSize(24)
-        value_font.setWeight(QFont.Weight.Black)
-        self.value_lbl.setFont(value_font)
-
-        accent = QFrame()
-        accent.setObjectName("CardAccent")
-        accent.setFixedHeight(3)
-
-        layout.addWidget(self.title_lbl)
-        layout.addSpacing(2)
-        layout.addWidget(self.value_lbl)
-        layout.addStretch(1)
-        layout.addWidget(accent)
-
-    def set_value(self, value):
-        self.value_lbl.setText(str(value))
 
 
 class GlassButton(QPushButton):
@@ -74,14 +29,14 @@ class GlassButton(QPushButton):
 
         self.setCursor(Qt.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(58)
-        self.setMaximumHeight(64)
-        self.setIconSize(QSize(28, 28))
+        self.setMinimumHeight(64)
+        self.setMaximumHeight(72)
+        self.setIconSize(QSize(30, 30))
         
         # Set font
         font = QFont()
-        font.setPointSize(11)
-        font.setWeight(QFont.Weight.DemiBold)
+        font.setPointSize(12)
+        font.setWeight(QFont.Weight.Bold)
         self.setFont(font)
 
 
@@ -95,6 +50,7 @@ class DashboardHome(QWidget):
     """Modern dashboard home page with KPIs, quick actions, and school information."""
 
     open_students = Signal()
+    open_academics = Signal()
     open_exams = Signal()
     open_results = Signal()
     open_school = Signal()
@@ -224,14 +180,54 @@ class DashboardHome(QWidget):
         kpi_grid.setContentsMargins(0, 0, 0, 0)
 
         # Create KPI Cards
-        self.students_card = GlassCard("Students")
-        self.subjects_card = GlassCard("Subjects")
-        self.classes_card = GlassCard("Classes")
-        self.exams_card = GlassCard("Exams")
-        self.results_card = GlassCard("Results")
-        self.male_card = GlassCard("Male Students")
-        self.female_card = GlassCard("Female Students")
-        self.open_exam_card = GlassCard("Open Exams")
+        self.students_card = PremiumStatCard(
+            "Students",
+            "Registered learners",
+            _icon("students.svg"),
+            "primary"
+        )
+        self.subjects_card = PremiumStatCard(
+            "Subjects",
+            "Configured subjects",
+            _icon("academics.svg"),
+            "secondary"
+        )
+        self.classes_card = PremiumStatCard(
+            "Classes",
+            "Active class groups",
+            _icon("school.svg"),
+            "success"
+        )
+        self.exams_card = PremiumStatCard(
+            "Exams",
+            "Tracked assessments",
+            _icon("exams.svg"),
+            "warning"
+        )
+        self.results_card = PremiumStatCard(
+            "Results",
+            "Stored result entries",
+            _icon("results.svg"),
+            "success"
+        )
+        self.male_card = PremiumStatCard(
+            "Male Students",
+            "Learners marked male",
+            _icon("students.svg"),
+            "primary"
+        )
+        self.female_card = PremiumStatCard(
+            "Female Students",
+            "Learners marked female",
+            _icon("students.svg"),
+            "danger"
+        )
+        self.completed_exam_card = PremiumStatCard(
+            "Completed Exams",
+            "Archived exam records",
+            _icon("exams.svg"),
+            "secondary"
+        )
 
         # Layout cards in grid
         cards = [
@@ -242,7 +238,7 @@ class DashboardHome(QWidget):
             (self.results_card, 1, 0),
             (self.male_card, 1, 1),
             (self.female_card, 1, 2),
-            (self.open_exam_card, 1, 3),
+            (self.completed_exam_card, 1, 3),
         ]
 
         for card, row, col in cards:
@@ -295,17 +291,32 @@ class DashboardHome(QWidget):
         title.setProperty("variant", "accent")
         layout.addWidget(title)
 
-        # Single quick action only.
+        self.add_student_btn = GlassButton("Add Student", _icon("students.svg"))
+        self.add_exam_btn = GlassButton("Add Exam", _icon("exams.svg"))
+        self.school_btn = GlassButton("School", _icon("school.svg"))
+        self.subjects_btn = GlassButton("Subjects", _icon("academics.svg"))
         self.history_btn = GlassButton("History", _icon("dashboard.svg"))
-        self.history_btn.setMinimumHeight(64)
 
-        history_row = QHBoxLayout()
-        history_row.setContentsMargins(0, 0, 0, 0)
-        history_row.addStretch(1)
-        history_row.addWidget(self.history_btn)
-        history_row.addStretch(1)
-        layout.addLayout(history_row)
+        button_grid = QGridLayout()
+        button_grid.setContentsMargins(0, 0, 0, 0)
+        button_grid.setHorizontalSpacing(8)
+        button_grid.setVerticalSpacing(8)
 
+        button_grid.addWidget(self.add_student_btn, 0, 0)
+        button_grid.addWidget(self.add_exam_btn, 0, 1)
+        button_grid.addWidget(self.school_btn, 0, 2)
+        button_grid.addWidget(self.subjects_btn, 1, 0)
+        button_grid.addWidget(self.history_btn, 1, 1)
+
+        for i in range(3):
+            button_grid.setColumnStretch(i, 1)
+
+        layout.addLayout(button_grid)
+
+        self.add_student_btn.clicked.connect(self.open_students.emit)
+        self.add_exam_btn.clicked.connect(self.open_exams.emit)
+        self.school_btn.clicked.connect(self.open_school.emit)
+        self.subjects_btn.clicked.connect(self.open_academics.emit)
         self.history_btn.clicked.connect(self.open_history.emit)
 
         return panel
@@ -364,7 +375,11 @@ class DashboardHome(QWidget):
                 cur.execute("SELECT COUNT(*) FROM exams WHERE status != 'COMPLETED'")
                 exams = cur.fetchone()[0]
 
-                cur.execute("SELECT COUNT(*) FROM results")
+                cur.execute("""
+                    SELECT COUNT(*) FROM results r
+                    JOIN exams e ON r.exam_id = e.id
+                    WHERE e.status != 'COMPLETED'
+                """)
                 results = cur.fetchone()[0]
 
                 cur.execute("SELECT COUNT(*) FROM students WHERE gender='Male'")
@@ -373,8 +388,8 @@ class DashboardHome(QWidget):
                 cur.execute("SELECT COUNT(*) FROM students WHERE gender='Female'")
                 females = cur.fetchone()[0]
 
-                cur.execute("SELECT COUNT(*) FROM exams WHERE status='OPEN'")
-                open_exams = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM exams WHERE status='COMPLETED'")
+                completed_exams = cur.fetchone()[0]
 
                 cur.execute("""
                     SELECT school_name, head_teacher, academic_master, school_phone, school_email
@@ -409,6 +424,8 @@ class DashboardHome(QWidget):
                 exam = cur.fetchone()
                 if exam:
                     self.exam_lbl.setText(f"Active Exam: {exam[0]}")
+                else:
+                    self.exam_lbl.setText("No Active Exam")
 
             self.students_card.set_value(students)
             self.subjects_card.set_value(subjects)
@@ -417,7 +434,7 @@ class DashboardHome(QWidget):
             self.results_card.set_value(results)
             self.male_card.set_value(males)
             self.female_card.set_value(females)
-            self.open_exam_card.set_value(open_exams)
+            self.completed_exam_card.set_value(completed_exams)
 
         except Exception as error:
             print(f"[ERROR] Dashboard failed to load: {error}")

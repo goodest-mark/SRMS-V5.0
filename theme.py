@@ -14,6 +14,7 @@ def _theme(
     primary,
     primary_2,
     success,
+    warning,
     danger,
     tooltip_bg,
     font_size=15,
@@ -39,6 +40,7 @@ def _theme(
         "primary": primary,
         "primary_2": primary_2,
         "success": success,
+        "warning": warning,
         "danger": danger,
         "tooltip_bg": tooltip_bg,
         "font_size": font_size,
@@ -67,6 +69,7 @@ _THEME_TOKENS = {
         primary="#2563eb",
         primary_2="#3b82f6",
         success="#10b981",
+        warning="#f59e0b",
         danger="#ef4444",
         tooltip_bg="#111827",
     ),
@@ -85,6 +88,7 @@ _THEME_TOKENS = {
         primary="#1d4ed8",
         primary_2="#60a5fa",
         success="#10b981",
+        warning="#f59e0b",
         danger="#ef4444",
         tooltip_bg="#020617",
     ),
@@ -103,6 +107,7 @@ _THEME_TOKENS = {
         primary="#2563eb",
         primary_2="#60a5fa",
         success="#0ea56f",
+        warning="#d97706",
         danger="#dc2626",
         tooltip_bg="#020617",
     ),
@@ -121,6 +126,7 @@ _THEME_TOKENS = {
         primary="#0f5bd8",
         primary_2="#38bdf8",
         success="#16a34a",
+        warning="#f59e0b",
         danger="#dc2626",
         tooltip_bg="#020617",
         font_size=16,
@@ -146,6 +152,7 @@ _THEME_TOKENS = {
         primary="#2563eb",
         primary_2="#93c5fd",
         success="#22c55e",
+        warning="#f59e0b",
         danger="#f87171",
         tooltip_bg="#000000",
         font_size=16,
@@ -171,6 +178,7 @@ _THEME_TOKENS = {
         primary="#2563eb",
         primary_2="#60a5fa",
         success="#22c55e",
+        warning="#f59e0b",
         danger="#f87171",
         tooltip_bg="#000000",
         font_size=16,
@@ -342,19 +350,92 @@ QGroupBox, QFrame#GlassCard, QFrame#HeaderFrame, QFrame#QuickActionsPanel, QFram
     color:{tokens['text_soft']};
 }}
 
-QFrame#GlassCard QLabel#MetricTitle{{
+QFrame#GlassCard QLabel#MetricTitle,
+QFrame#PremiumStatCard QLabel#MetricTitle{{
     color:{tokens['muted']};
     font-weight:900;
 }}
 
-QFrame#GlassCard QLabel#MetricValue{{
+QFrame#GlassCard QLabel#MetricSubtitle,
+QFrame#PremiumStatCard QLabel#MetricSubtitle{{
+    color:{tokens['muted']};
+}}
+
+QFrame#GlassCard QLabel#MetricValue,
+QFrame#PremiumStatCard QLabel#MetricValue{{
     color:{tokens['text_soft']};
     font-weight:900;
 }}
 
-QFrame#CardAccent{{
-    background:{tokens['primary_2']};
+QFrame#PremiumStatCard{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 {tokens['surface']},
+        stop:1 {tokens['surface_alt']}
+    );
+    border:1px solid rgba(148,163,184,0.22);
+    border-radius:{tokens['group_radius']}px;
+    color:{tokens['text_soft']};
+}}
+
+QFrame#PremiumStatCard:hover{{
+    border:1px solid rgba(96,165,250,0.48);
+}}
+
+QFrame#PremiumStatCard QFrame#PremiumStatIcon{{
+    background:rgba(148,163,184,0.14);
+    border:1px solid rgba(148,163,184,0.24);
+    border-radius:12px;
+}}
+
+QFrame#PremiumStatCard QFrame#CardAccent{{
+    background:{tokens['primary']};
     border-radius:2px;
+}}
+
+QFrame#PremiumStatCard[tone="primary"] QFrame#PremiumStatIcon,
+QFrame#PremiumStatCard[tone="primary"] QFrame#CardAccent{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['primary_2']},
+        stop:1 {tokens['primary']}
+    );
+}}
+
+QFrame#PremiumStatCard[tone="secondary"] QFrame#PremiumStatIcon,
+QFrame#PremiumStatCard[tone="secondary"] QFrame#CardAccent{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['primary_2']},
+        stop:1 {tokens['primary']}
+    );
+}}
+
+QFrame#PremiumStatCard[tone="success"] QFrame#PremiumStatIcon,
+QFrame#PremiumStatCard[tone="success"] QFrame#CardAccent{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['success']},
+        stop:1 {tokens['primary_2']}
+    );
+}}
+
+QFrame#PremiumStatCard[tone="warning"] QFrame#PremiumStatIcon,
+QFrame#PremiumStatCard[tone="warning"] QFrame#CardAccent{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['warning']},
+        stop:1 {tokens['primary_2']}
+    );
+}}
+
+QFrame#PremiumStatCard[tone="danger"] QFrame#PremiumStatIcon,
+QFrame#PremiumStatCard[tone="danger"] QFrame#CardAccent{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['danger']},
+        stop:1 {tokens['warning']}
+    );
 }}
 
 QFrame#BroadsheetCard{{

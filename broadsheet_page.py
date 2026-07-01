@@ -1,3 +1,5 @@
+import os
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, 
     QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QGridLayout,
@@ -22,6 +24,7 @@ from class_utils import get_classes
 from ranking_engine import compute_student_scores
 import broadsheet_export
 from datetime import datetime
+from ui.cards import PremiumStatCard
 
 
 def _assign_class_positions(students):
@@ -128,24 +131,25 @@ class BroadsheetPage(QWidget):
         
         self.card_widgets = {}
         metrics = [
-            ("Total Students", "total_students"), ("Class Average", "class_avg"), 
-            ("Pass Rate", "pass_rate"), ("Fail Rate", "fail_rate"),
-            ("Highest Average", "high_avg"), ("Lowest Average", "low_avg"),
-            ("Best Subject", "best_sub"), ("Worst Subject", "worst_sub")
+            ("Total Students", "Registered learners", "total_students", "students.svg", "primary"),
+            ("Class Average", "Average performance", "class_avg", "results.svg", "success"),
+            ("Pass Rate", "Students above pass line", "pass_rate", "results.svg", "secondary"),
+            ("Fail Rate", "Students below pass line", "fail_rate", "results.svg", "danger"),
+            ("Highest Average", "Top scored learner", "high_avg", "academics.svg", "secondary"),
+            ("Lowest Average", "Lowest scored learner", "low_avg", "school.svg", "warning"),
+            ("Best Subject", "Strongest subject", "best_sub", "academics.svg", "success"),
+            ("Worst Subject", "Weakest subject", "worst_sub", "results.svg", "warning")
         ]
         
-        for i, (label, key) in enumerate(metrics):
-            frame = QFrame()
-            frame.setObjectName("BroadsheetCard")
-            flay = QVBoxLayout(frame)
-            val_lbl = QLabel("-")
-            val_lbl.setProperty("variant", "accent")
-            lab_lbl = QLabel(label.upper())
-            lab_lbl.setProperty("variant", "muted")
-            flay.addWidget(val_lbl, 0, Qt.AlignCenter)
-            flay.addWidget(lab_lbl, 0, Qt.AlignCenter)
-            self.card_widgets[key] = val_lbl
-            self.cards_grid.addWidget(frame, i // 4, i % 4)
+        for i, (label, subtitle, key, icon_name, accent) in enumerate(metrics):
+            card = PremiumStatCard(
+                label,
+                subtitle,
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons", icon_name),
+                accent
+            )
+            self.card_widgets[key] = card.value_lbl
+            self.cards_grid.addWidget(card, i // 4, i % 4)
             
         self.scroll_layout.addWidget(self.cards_container)
 
@@ -463,7 +467,7 @@ class BroadsheetPage(QWidget):
                 'class': class_name,
                 'level': level,
                 'school_profile': get_school_profile_from_db(), # Fetch school profile
-                'generated_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S") # Actual generated date
+                'generated_date': datetime.now().strftime("%A, %d %B %Y %I:%M %p") # Actual generated date
             },
             'class_performance': class_performance,
             'gender_summary': gender_summary,

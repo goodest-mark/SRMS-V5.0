@@ -9,7 +9,7 @@ from progress_dialog import ProgressDialog
 from PySide6.QtCore import Qt
 
 from database import connect
-from db_utils import fetch_all, get_cursor, get_exam_context
+from db_utils import fetch_all, fetch_one, get_cursor, get_exam_context
 from system_state import SystemState
 from event_bus import EventBus
 from class_utils import get_classes
@@ -29,7 +29,7 @@ class ExcelResultsImport(QWidget):
         # HEADER
         # =========================
         title = QLabel("EXCEL RESULTS IMPORT")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
+        title.setProperty("variant", "accent")
         self.layout.addWidget(title)
 
         # =========================
@@ -65,7 +65,7 @@ class ExcelResultsImport(QWidget):
         file_layout = QHBoxLayout()
         
         self.file_path_label = QLabel("No file selected...")
-        self.file_path_label.setStyleSheet("background: #f0f0f0; padding: 5px; border: 1px solid #ccc; color: #333;")
+        self.file_path_label.setProperty("variant", "muted")
         
         self.browse_btn = QPushButton("BROWSE EXCEL")
         self.browse_btn.clicked.connect(self.browse_file)
@@ -95,7 +95,7 @@ class ExcelResultsImport(QWidget):
 
         self.import_btn = QPushButton("PROCESS & SAVE IMPORT")
         self.import_btn.setFixedHeight(45)
-        self.import_btn.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold;")
+        self.import_btn.setProperty("variant", "success")
         self.import_btn.clicked.connect(self.process_import)
         self.layout.addWidget(self.import_btn)
 
@@ -162,6 +162,14 @@ class ExcelResultsImport(QWidget):
             return
 
         if not confirm_action(self, "Confirm", "Start importing results? This will overwrite existing marks."):
+            return
+
+        if self._is_selected_exam_completed():
+            show_error(
+                self,
+                "This exam is completed and read-only. Archived exams cannot accept new imports.",
+                title="Completed Exam"
+            )
             return
 
         self.log_table.setRowCount(0)
@@ -262,3 +270,11 @@ class ExcelResultsImport(QWidget):
                 conn.close()
             self.import_btn.setEnabled(True)
             self.progress.setVisible(False)
+
+    def _is_selected_exam_completed(self):
+        exam_id = self.exam_box.currentData()
+        if exam_id is None:
+            return False
+
+        row = fetch_one("SELECT status FROM exams WHERE id=?", (exam_id,))
+        return bool(row and row[0] == "COMPLETED")

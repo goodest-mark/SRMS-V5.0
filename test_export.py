@@ -44,7 +44,7 @@ meta = {
         'school_logo': '',
         'watermark_text': 'CONFIDENTIAL'
     },
-    'generated_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    'generated_date': datetime.now().strftime("%A, %d %B %Y %I:%M %p")
 }
 
 class_perf = {'total_students': len(rows), 'class_average': round(sum(r['Average'] for r in rows)/len(rows),2),

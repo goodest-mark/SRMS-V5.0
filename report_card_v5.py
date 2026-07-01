@@ -6,7 +6,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
-    PageBreak, Image
+    PageBreak, Image, KeepInFrame
 )
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
@@ -32,7 +32,16 @@ T_MARGIN = 20
 B_MARGIN = 20
 PAGE_W = PAGE_SIZE[0] - L_MARGIN - R_MARGIN
 
+STUDENT_PAGE_SIZE = A4
+STUDENT_L_MARGIN = 16
+STUDENT_R_MARGIN = 16
+STUDENT_T_MARGIN = 14
+STUDENT_B_MARGIN = 14
+STUDENT_PAGE_W = STUDENT_PAGE_SIZE[0] - STUDENT_L_MARGIN - STUDENT_R_MARGIN
+STUDENT_PAGE_H = STUDENT_PAGE_SIZE[1] - STUDENT_T_MARGIN - STUDENT_B_MARGIN
+
 _styles_cache = {}
+_student_styles_cache = {}
 
 
 def _get_styles():
@@ -104,14 +113,76 @@ def _get_styles():
     return _styles_cache
 
 
-def generate_report_book(parent, exam_id, class_name, save_path):
+def _get_student_styles():
+    if _student_styles_cache:
+        return _student_styles_cache
+
+    _student_styles_cache['title'] = ParagraphStyle(
+        'student_title', fontName='Helvetica-Bold', fontSize=20,
+        alignment=TA_CENTER, leading=22, textColor=NAVY)
+    _student_styles_cache['motto'] = ParagraphStyle(
+        'student_motto', fontName='Helvetica-BoldOblique', fontSize=9,
+        alignment=TA_CENTER, leading=10, textColor=NAVY)
+    _student_styles_cache['contact'] = ParagraphStyle(
+        'student_contact', fontName='Helvetica', fontSize=8,
+        alignment=TA_CENTER, leading=10)
+    _student_styles_cache['section_hdr'] = ParagraphStyle(
+        'student_section_hdr', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_LEFT, leading=10, textColor=WHITE)
+    _student_styles_cache['label'] = ParagraphStyle(
+        'student_label', fontName='Helvetica-Bold', fontSize=7.2,
+        alignment=TA_LEFT, leading=8.5, textColor=NAVY)
+    _student_styles_cache['value'] = ParagraphStyle(
+        'student_value', fontName='Helvetica', fontSize=7.2,
+        alignment=TA_LEFT, leading=8.5)
+    _student_styles_cache['tiny'] = ParagraphStyle(
+        'student_tiny', fontName='Helvetica', fontSize=6.5,
+        alignment=TA_CENTER, leading=8)
+    _student_styles_cache['tiny_left'] = ParagraphStyle(
+        'student_tiny_left', fontName='Helvetica', fontSize=6.5,
+        alignment=TA_LEFT, leading=8)
+    _student_styles_cache['tiny_b'] = ParagraphStyle(
+        'student_tiny_b', fontName='Helvetica-Bold', fontSize=6.5,
+        alignment=TA_CENTER, leading=8)
+    _student_styles_cache['summary_label'] = ParagraphStyle(
+        'student_summary_label', fontName='Helvetica-Bold', fontSize=7,
+        alignment=TA_CENTER, leading=8, textColor=NAVY)
+    _student_styles_cache['summary_value'] = ParagraphStyle(
+        'student_summary_value', fontName='Helvetica-Bold', fontSize=12,
+        alignment=TA_CENTER, leading=13)
+    _student_styles_cache['summary_small'] = ParagraphStyle(
+        'student_summary_small', fontName='Helvetica', fontSize=7,
+        alignment=TA_CENTER, leading=8)
+    _student_styles_cache['table_head'] = ParagraphStyle(
+        'student_table_head', fontName='Helvetica-Bold', fontSize=7.2,
+        alignment=TA_CENTER, leading=8.5)
+    _student_styles_cache['table_body'] = ParagraphStyle(
+        'student_table_body', fontName='Helvetica', fontSize=6.5,
+        alignment=TA_CENTER, leading=7.2)
+    _student_styles_cache['table_body_left'] = ParagraphStyle(
+        'student_table_body_left', fontName='Helvetica', fontSize=6.5,
+        alignment=TA_LEFT, leading=7.2)
+    _student_styles_cache['note'] = ParagraphStyle(
+        'student_note', fontName='Helvetica-Oblique', fontSize=6.8,
+        alignment=TA_CENTER, leading=8, textColor=NAVY)
+    _student_styles_cache['comment'] = ParagraphStyle(
+        'student_comment', fontName='Helvetica', fontSize=7,
+        alignment=TA_LEFT, leading=8.5)
+    return _student_styles_cache
+
+
+def generate_report_book(parent, exam_id, class_name, save_path, progress_callback=None):
     """
-    Generates professional report cards matching the SRMS V5 layout.
-    One landscape A4 page per student in a single PDF.
+    Generates one portrait A4 page per student using the same layout
+    as the single-student report card.
     """
     conn = connect()
     cur = conn.cursor()
-    ST = _get_styles()
+    ST = _get_student_styles()
+
+    def report_progress(percent, message):
+        if progress_callback is not None:
+            progress_callback(int(percent), message)
 
     # ── Fetch school profile ──
     cur.execute("""
@@ -155,6 +226,7 @@ def generate_report_book(parent, exam_id, class_name, save_path):
         return False, "Selected exam does not exist."
 
     term_name, year_name, exam_name, level, term_id, year_id = context
+    report_progress(5, "Loading exam context")
 
     # ── Requirements ──
     cur.execute("""
@@ -172,40 +244,13 @@ def generate_report_book(parent, exam_id, class_name, save_path):
     if not class_students:
         conn.close()
         return False, "No students found in this class with results."
-
-    class_students = sorted(
-        class_students,
-        key=lambda x: (
-            -float(x.get('average', 0) or 0),
-            -float(x.get('total_marks', 0) or 0),
-            x.get('admission', '')
-        )
-    )
-    for pos, student in enumerate(class_students, start=1):
-        student['class_position'] = pos
-
-    ready_students = [s for s in class_students if s['status'] == 'READY']
-    total_in_class = len(ready_students)
-
-    # Gender position computation
-    gender_pos_tracker = {}
-    gender_counts = {}
-    gender_positions = {}
-    for s in class_students:
-        g = s.get('gender', '')
-        if g not in gender_counts:
-            gender_counts[g] = 0
-        if s['status'] == 'READY':
-            gender_counts[g] += 1
-            gender_pos_tracker.setdefault(g, 0)
-            gender_pos_tracker[g] += 1
-            gender_positions[s['admission']] = gender_pos_tracker[g]
+    report_progress(15, "Preparing student pages")
 
     # ── Settings ──
     use_watermark = get_setting('show_watermark', '1') == '1'
     use_req = get_setting('show_requirements', '1') == '1'
     use_logo = get_setting('show_logo', '1') == '1'
-    generated_date = datetime.now().strftime("%d %B %Y")
+    generated_date = datetime.now().strftime("%A, %d %B %Y %I:%M %p")
 
     # ── Page callback (border + watermark) ──
     def on_page(canvas, doc):
@@ -222,40 +267,36 @@ def generate_report_book(parent, exam_id, class_name, save_path):
         canvas.restoreState()
 
     doc = SimpleDocTemplate(
-        save_path, pagesize=PAGE_SIZE,
-        rightMargin=R_MARGIN, leftMargin=L_MARGIN,
-        topMargin=T_MARGIN, bottomMargin=B_MARGIN
+        save_path, pagesize=STUDENT_PAGE_SIZE,
+        rightMargin=STUDENT_R_MARGIN, leftMargin=STUDENT_L_MARGIN,
+        topMargin=STUDENT_T_MARGIN, bottomMargin=STUDENT_B_MARGIN
     )
     elements = []
 
-    for student in class_students:
-        adm = student['admission']
+    class_students = sorted(
+        class_students,
+        key=lambda x: (
+            -float(x.get('average', 0) or 0),
+            -float(x.get('total_marks', 0) or 0),
+            x.get('admission', '')
+        )
+    )
+    for pos, student in enumerate(class_students, start=1):
+        student['class_position'] = pos
 
+    total_students = len([s for s in class_students if s['status'] == 'READY'])
+
+    for index, student in enumerate(class_students):
+        adm = student['admission']
         cur.execute(
             "SELECT full_name, gender, stream FROM students WHERE admission_no=?",
-            (adm,))
+            (adm,)
+        )
         s_row = cur.fetchone()
         student_name = s_row[0] if s_row else student.get('name', '')
         student_gender = s_row[1] if s_row else student.get('gender', '')
         student_stream = (s_row[2] if s_row and s_row[2] else '-')
 
-        # ── HEADER ──
-        elements.append(_build_header(
-            ST, school_name, school_motto, school_addr, school_phone,
-            school_email, school_website, school_logo, use_logo,
-            year_name, term_name, exam_name, level, class_name,
-            student_stream, generated_date
-        ))
-        elements.append(Spacer(1, 6))
-
-        # ── STUDENT INFORMATION ──
-        report_id = f"SRMS-{year_name}-{adm.replace('/', '')}"
-        elements.append(_build_student_info(
-            ST, student_name, adm, student_gender, report_id,
-            student['status']))
-        elements.append(Spacer(1, 6))
-
-        # ── RESULTS + ACADEMIC SUMMARY ──
         cur.execute("""
             SELECT r.subject_name,
                    COALESCE(s.subject_short_name, r.subject_name),
@@ -279,39 +320,52 @@ def generate_report_book(parent, exam_id, class_name, save_path):
         total_marks = sum(marks_vals) if marks_vals else 0
         num_subj = len(marks_vals)
         average = round(total_marks / num_subj, 2) if num_subj else 0
+        overall_grade = get_grade(average, level=level) if marks_vals else '-'
 
-        gender_pos = gender_positions.get(adm, '-')
-        gender_total = gender_counts.get(student_gender, '-')
-
-        class_position = student.get('class_position', student.get('position', '-'))
-        elements.append(_build_results_and_summary(
-            ST, short_names, full_names, marks_vals, grades_vals,
-            total_marks, average, class_position, total_in_class,
-            gender_pos, gender_total, student['division'],
-            student['points']))
-        elements.append(Spacer(1, 6))
-
-        # ── COMMENTS / BEST-WORST / REQUIREMENTS ──
-        elements.append(_build_lower_section(
-            ST, marks_vals, full_names, grades_vals,
-            requirements_data, use_req))
-        elements.append(Spacer(1, 6))
-
-        # ── SIGNATURES ──
-        elements.append(_build_signatures(
-            ST, head_teacher, academic_master, school_stamp))
-        elements.append(Spacer(1, 4))
-
-        # ── FOOTER NOTE ──
-        elements.append(Paragraph(
-            '<b>Note:</b> <i>This report is computer generated and does '
-            'not require a signature except the above.</i>',
-            ST['note']))
-
-        elements.append(PageBreak())
+        elements.extend(_build_student_report_content(
+            ST=ST,
+            school_name=school_name,
+            school_motto=school_motto,
+            school_addr=school_addr,
+            school_phone=school_phone,
+            school_email=school_email,
+            school_website=school_website,
+            school_logo=school_logo,
+            use_logo=use_logo,
+            year_name=year_name,
+            term_name=term_name,
+            exam_name=exam_name,
+            level=level,
+            class_name=class_name,
+            generated_date=generated_date,
+            student_name=student_name,
+            student_adm=adm,
+            student_gender=student_gender,
+            student_stream=student_stream or "-",
+            student_status=student['status'],
+            class_position=student.get('class_position', student.get('position', '-')),
+            total_students=total_students,
+            division=student['division'],
+            points=student['points'],
+            overall_grade=overall_grade,
+            full_names=full_names,
+            short_names=short_names,
+            marks_vals=marks_vals,
+            grades_vals=grades_vals,
+            total_marks=total_marks,
+            average=average,
+            requirements_data=requirements_data,
+            use_req=use_req,
+            head_teacher=head_teacher,
+            academic_master=academic_master,
+            include_page_break=index < len(class_students) - 1
+        ))
+        report_progress(20 + int(((index + 1) / max(len(class_students), 1)) * 75), f"Rendered {index + 1}/{len(class_students)} students")
 
     try:
+        report_progress(95, "Rendering PDF")
         doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+        report_progress(100, "Report cards generated")
         return True, 'Report cards generated successfully.'
     except Exception as e:
         return False, str(e)
@@ -326,7 +380,7 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
     """
     conn = connect()
     cur = conn.cursor()
-    ST = _get_styles()
+    ST = _get_student_styles()
 
     def report_progress(percent, message):
         if progress_callback is not None:
@@ -483,7 +537,7 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
     use_watermark = get_setting('show_watermark', '1') == '1'
     use_req = get_setting('show_requirements', '1') == '1'
     use_logo = get_setting('show_logo', '1') == '1'
-    generated_date = datetime.now().strftime("%d %B %Y")
+    generated_date = datetime.now().strftime("%A, %d %B %Y %I:%M %p")
 
     def on_page(canvas, doc):
         if use_watermark:
@@ -499,52 +553,64 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
         canvas.restoreState()
 
     doc = SimpleDocTemplate(
-        save_path, pagesize=PAGE_SIZE,
-        rightMargin=R_MARGIN, leftMargin=L_MARGIN,
-        topMargin=T_MARGIN, bottomMargin=B_MARGIN
+        save_path, pagesize=STUDENT_PAGE_SIZE,
+        rightMargin=STUDENT_R_MARGIN, leftMargin=STUDENT_L_MARGIN,
+        topMargin=STUDENT_T_MARGIN, bottomMargin=STUDENT_B_MARGIN
     )
 
     class_position = target_student.get('class_position', target_student.get('position', '-'))
+    overall_grade = get_grade(average, level=level) if marks_vals else '-'
+    content = _build_student_report_content(
+        ST=ST,
+        school_name=school_name,
+        school_motto=school_motto,
+        school_addr=school_addr,
+        school_phone=school_phone,
+        school_email=school_email,
+        school_website=school_website,
+        school_logo=school_logo,
+        use_logo=use_logo,
+        year_name=year_name,
+        term_name=term_name,
+        exam_name=exam_name,
+        level=level,
+        class_name=class_name,
+        generated_date=generated_date,
+        student_name=student_name,
+        student_adm=student_adm,
+        student_gender=student_gender,
+        student_stream=student_stream or "-",
+        student_status=target_student['status'],
+        class_position=class_position,
+        total_students=total_in_class,
+        division=target_student['division'],
+        points=target_student['points'],
+        overall_grade=overall_grade,
+        full_names=full_names,
+        short_names=short_names,
+        marks_vals=marks_vals,
+        grades_vals=grades_vals,
+        total_marks=total_marks,
+        average=average,
+        requirements_data=requirements_data,
+        use_req=use_req,
+        head_teacher=head_teacher,
+        academic_master=academic_master,
+        include_page_break=False,
+    )
 
-    elements = [
-        _build_header(
-            ST, school_name, school_motto, school_addr, school_phone,
-            school_email, school_website, school_logo, use_logo,
-            year_name, term_name, exam_name, level, class_name,
-            student_stream or "-", generated_date
-        ),
-        Spacer(1, 6),
-        _build_student_info(
-            ST, student_name, student_adm, student_gender, f"SRMS-{year_name}-{student_adm.replace('/', '')}",
-            target_student['status']
-        ),
-        Spacer(1, 6),
-        _build_results_and_summary(
-            ST, short_names, full_names, marks_vals, grades_vals,
-            total_marks, average, class_position,
-            total_in_class, gender_positions.get(student_adm, '-'),
-            gender_counts.get(student_gender, '-'), target_student['division'],
-            target_student['points']
-        ),
-        Spacer(1, 6),
-        _build_lower_section(
-            ST, marks_vals, full_names, grades_vals,
-            requirements_data, use_req
-        ),
-        Spacer(1, 6),
-        _build_signatures(
-            ST, head_teacher, academic_master, school_stamp
-        ),
-        Spacer(1, 4),
-        Paragraph(
-            '<b>Note:</b> <i>This report is computer generated and does not require a signature except the above.</i>',
-            ST['note']
-        ),
-    ]
+    keeper = KeepInFrame(
+        doc.width,
+        doc.height,
+        content,
+        mode='shrink',
+        hAlign='CENTER',
+        vAlign='TOP'
+    )
 
     try:
         report_progress(90, "Rendering PDF")
-        doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+        doc.build([keeper], onFirstPage=on_page, onLaterPages=on_page)
         report_progress(100, "Report card generated")
         return True, save_path
     except Exception as e:
@@ -621,6 +687,443 @@ def _build_header(ST, school_name, motto, addr, phone, email, website,
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]))
     return header
+
+
+def _build_student_page_header(ST, school_name, motto, addr, phone, email, website,
+                               logo_path, use_logo, year, term, exam, level, cls,
+                               stream, gen_date):
+    left = Table([[
+        Paragraph('<b>SCHOOL</b>', ST['tiny_b'])
+    ]], colWidths=[0.92 * inch])
+    left.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.5, GRID_COLOR),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+
+    if use_logo and logo_path:
+        try:
+            logo = Image(logo_path, width=0.8 * inch, height=0.8 * inch)
+            left = Table([[logo]], colWidths=[0.92 * inch])
+            left.setStyle(TableStyle([
+                ('BOX', (0, 0), (-1, -1), 0.5, GRID_COLOR),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 2),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ]))
+        except Exception as e:
+            print(f"[WARNING] Could not load logo '{logo_path}': {e}")
+
+    center_lines = [Paragraph(f'<b>{school_name.upper()}</b>', ST['title'])]
+    if motto:
+        center_lines.append(Paragraph(f'{motto}', ST['motto']))
+    center_lines.append(Paragraph(
+        ' | '.join([p for p in [addr, phone, email, website] if p]),
+        ST['contact']
+    ))
+    center = Table([[flow] for flow in center_lines], colWidths=[STUDENT_PAGE_W * 0.64])
+    center.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+
+    right = Table([[
+        Paragraph('<b>REPORT CARD</b>', ST['tiny_b'])
+    ]], colWidths=[1.0 * inch])
+    right.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.5, GRID_COLOR),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+
+    header = Table([[left, center, right]],
+                   colWidths=[0.98 * inch, STUDENT_PAGE_W - (0.98 * inch + 1.0 * inch), 1.0 * inch])
+    header.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.0, NAVY),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return header
+
+
+def _build_student_page_identity(ST, student_name, admission_no, gender,
+                                 class_name, stream, level, report_id, status,
+                                 year_name, term_name, exam_name, gen_date):
+    return Table([[
+        _student_info_block(
+            ST,
+            "STUDENT INFORMATION",
+            [
+                ("Student Name", student_name),
+                ("Admission No", admission_no),
+                ("Gender", gender or "-"),
+                ("Level", level),
+                ("Report ID", report_id),
+            ],
+        ),
+        _student_info_block(
+            ST,
+            "ACADEMIC CONTEXT",
+            [
+                ("Academic Year", year_name),
+                ("Term", term_name),
+                ("Examination", exam_name),
+                ("Class", class_name),
+                ("Stream", stream),
+                ("Status", status),
+            ],
+        ),
+    ]], colWidths=[STUDENT_PAGE_W / 2, STUDENT_PAGE_W / 2])
+
+
+def _student_info_block(ST, title, rows):
+    body_rows = []
+    for label, value in rows:
+        body_rows.append([
+            Paragraph(label, ST['label']),
+            Paragraph(':', ST['value']),
+            Paragraph(_safe_text(value), ST['value'])
+        ])
+    body = Table(body_rows, colWidths=[1.52 * inch, 0.14 * inch, 1.88 * inch])
+    body.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.6, NAVY),
+        ('INNERGRID', (0, 0), (-1, -1), 0.35, GRID_COLOR),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+
+    title_tbl = Table([[Paragraph(title, ST['section_hdr'])]], colWidths=[STUDENT_PAGE_W / 2])
+    title_tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), NAVY),
+        ('TEXTCOLOR', (0, 0), (-1, -1), WHITE),
+        ('BOX', (0, 0), (-1, -1), 0.6, NAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    return Table([[title_tbl], [body]], colWidths=[STUDENT_PAGE_W / 2])
+
+
+def _build_student_page_summary(ST, position, total_students, status):
+    rows = [[
+        Paragraph('POSITION ON CLASS', ST['summary_label']),
+        Paragraph('TOTAL STUDENTS', ST['summary_label']),
+        Paragraph('RESULT STATUS', ST['summary_label']),
+    ], [
+        Paragraph(_safe_text(position), ST['summary_value']),
+        Paragraph(_safe_text(total_students), ST['summary_value']),
+        Paragraph(_safe_text(status), ST['summary_value']),
+    ]]
+    tbl = Table(rows, colWidths=[STUDENT_PAGE_W / 3.0] * 3)
+    tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), NAVY_LIGHT),
+        ('TEXTCOLOR', (0, 0), (-1, 0), NAVY),
+        ('BOX', (0, 0), (-1, -1), 0.6, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.45, GRID_COLOR),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    return tbl
+
+
+def _get_remark(grade):
+    remarks = {
+        'A': 'Excellent',
+        'B': 'Very Good',
+        'C': 'Good',
+        'D': 'Satisfactory',
+        'E': 'Fair',
+        'S': 'Pass',
+        'F': 'Fail'
+    }
+    return remarks.get(grade, '-')
+
+
+def _build_student_page_results(ST, full_names, marks, grades, level):
+    rows = [[
+        Paragraph('SUBJECT', ST['table_head']),
+        Paragraph('MARKS', ST['table_head']),
+        Paragraph('GRADE', ST['table_head']),
+        Paragraph('POINTS', ST['table_head']),
+        Paragraph('REMARKS', ST['table_head']),
+    ]]
+
+    from grade_utils import get_points
+
+    for i in range(len(full_names)):
+        g = grades[i]
+        p = get_points(g, level)
+        r = _get_remark(g)
+        rows.append([
+            Paragraph(full_names[i], ST['table_body_left']),
+            Paragraph(str(marks[i]), ST['table_body']),
+            Paragraph(g, ST['table_body']),
+            Paragraph(str(p), ST['table_body']),
+            Paragraph(r, ST['table_body']),
+        ])
+
+    # If no subjects, add a placeholder
+    if len(full_names) == 0:
+        rows.append([Paragraph('-', ST['table_body'])] * 5)
+
+    col_widths = [
+        STUDENT_PAGE_W * 0.40,
+        STUDENT_PAGE_W * 0.12,
+        STUDENT_PAGE_W * 0.12,
+        STUDENT_PAGE_W * 0.12,
+        STUDENT_PAGE_W * 0.24
+    ]
+
+    table = Table(rows, colWidths=col_widths)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+        ('BOX', (0, 0), (-1, -1), 0.6, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.4, GRID_COLOR),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return table
+
+
+def _build_student_page_totals(ST, total_marks, average, overall_grade, division, points):
+    rows = [[
+        Paragraph('TOTAL MARKS', ST['summary_label']),
+        Paragraph('AVERAGE', ST['summary_label']),
+        Paragraph('OVERALL GRADE', ST['summary_label']),
+        Paragraph('DIVISION', ST['summary_label']),
+        Paragraph('POINTS', ST['summary_label']),
+    ], [
+        Paragraph(_safe_text(total_marks), ST['summary_value']),
+        Paragraph(f"{average:.2f}%", ST['summary_value']),
+        Paragraph(_safe_text(overall_grade), ST['summary_value']),
+        Paragraph(_safe_text(division), ST['summary_value']),
+        Paragraph(_safe_text(points), ST['summary_value']),
+    ]]
+    table = Table(rows, colWidths=[STUDENT_PAGE_W / 5.0] * 5)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), LIGHT_BG),
+        ('BOX', (0, 0), (-1, -1), 0.55, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.4, GRID_COLOR),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    return table
+
+
+def _build_student_page_requirements(ST, requirements_data, use_req):
+    title = Table([[Paragraph('SCHOOL REQUIREMENTS', ST['section_hdr'])]],
+                  colWidths=[STUDENT_PAGE_W])
+    title.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), NAVY),
+        ('TEXTCOLOR', (0, 0), (-1, -1), WHITE),
+        ('BOX', (0, 0), (-1, -1), 0.6, NAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    rows = [[
+        Paragraph('NO.', ST['table_head']),
+        Paragraph('ITEM', ST['table_head']),
+        Paragraph('QTY', ST['table_head']),
+    ]]
+    if use_req and requirements_data:
+        for idx, (item, qty) in enumerate(requirements_data, start=1):
+            rows.append([
+                Paragraph(str(idx), ST['table_body']),
+                Paragraph(_safe_text(item), ST['tiny_left']),
+                Paragraph(_safe_text(qty), ST['table_body']),
+            ])
+    else:
+        rows.append([
+            Paragraph('-', ST['table_body']),
+            Paragraph('No requirements available for this class/term.', ST['tiny_left']),
+            Paragraph('-', ST['table_body']),
+        ])
+
+    body = Table(rows, colWidths=[0.35 * inch, STUDENT_PAGE_W - 0.35 * inch - 0.55 * inch, 0.55 * inch])
+    body.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.55, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.35, GRID_COLOR),
+        ('BACKGROUND', (0, 0), (-1, 0), NAVY_LIGHT),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return Table([[title], [body]], colWidths=[STUDENT_PAGE_W])
+
+
+def _build_student_page_comments(ST, head_teacher, academic_master):
+    title = Table([[Paragraph('COMMENTS / SIGNATURES', ST['section_hdr'])]],
+                  colWidths=[STUDENT_PAGE_W])
+    title.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), NAVY),
+        ('TEXTCOLOR', (0, 0), (-1, -1), WHITE),
+        ('BOX', (0, 0), (-1, -1), 0.6, NAVY),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+    rows = [
+        [
+            Paragraph(f"HEAD TEACHER<br/><font size='6'>{_safe_text(head_teacher)}</font>", ST['label']),
+            Paragraph('<font color="#9AA4B2">______________________________________________</font>', ST['comment']),
+            Paragraph('Signature: ____________________<br/>Date: ____________________', ST['tiny_left']),
+        ],
+        [
+            Paragraph(f"ACADEMIC MASTER<br/><font size='6'>{_safe_text(academic_master)}</font>", ST['label']),
+            Paragraph('<font color="#9AA4B2">______________________________________________</font>', ST['comment']),
+            Paragraph('Signature: ____________________<br/>Date: ____________________', ST['tiny_left']),
+        ],
+        [
+            Paragraph("CLASS TEACHER", ST['label']),
+            Paragraph('<font color="#9AA4B2">______________________________________________</font>', ST['comment']),
+            Paragraph('Signature: ____________________<br/>Date: ____________________', ST['tiny_left']),
+        ],
+    ]
+    body = Table(
+        rows,
+        colWidths=[1.15 * inch, STUDENT_PAGE_W - 1.15 * inch - 2.0 * inch, 2.0 * inch],
+        rowHeights=[0.52 * inch, 0.52 * inch, 0.52 * inch]
+    )
+    body.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.55, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.35, GRID_COLOR),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    return Table([[title], [body]], colWidths=[STUDENT_PAGE_W])
+
+
+def _build_student_page_footer(ST):
+    footer = Table([[
+        Paragraph(
+            '<b><i>Education is the most powerful weapon which you can use to change the world.</i></b>',
+            ST['note']
+        )
+    ]], colWidths=[STUDENT_PAGE_W])
+    footer.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.45, GRID_COLOR),
+        ('BACKGROUND', (0, 0), (-1, -1), NAVY_LIGHT),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    return footer
+
+
+def _normalize_gender_label(gender):
+    gender_text = (gender or '').strip().lower()
+    if gender_text.startswith('m'):
+        return 'boys'
+    if gender_text.startswith('f'):
+        return 'girls'
+    return 'students'
+
+
+def _safe_text(value):
+    if value is None:
+        return '-'
+    text = str(value).strip()
+    return text if text else '-'
+
+
+def _build_student_page_dates(ST):
+    rows = [[
+        Paragraph("<b>Closing Date:</b> .................................", ST['label']),
+        Paragraph("<b>Opening Date:</b> .................................", ST['label']),
+    ]]
+    tbl = Table(rows, colWidths=[STUDENT_PAGE_W / 2, STUDENT_PAGE_W / 2])
+    tbl.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    return tbl
+
+
+def _build_student_report_content(
+    ST, school_name, school_motto, school_addr, school_phone,
+    school_email, school_website, school_logo, use_logo,
+    year_name, term_name, exam_name, level, class_name, generated_date,
+    student_name, student_adm, student_gender, student_stream, student_status,
+    class_position, total_students, division, points, overall_grade,
+    full_names, short_names, marks_vals, grades_vals, total_marks, average,
+    requirements_data, use_req, head_teacher, academic_master,
+    include_page_break=False
+):
+    content = [
+        _build_student_page_header(
+            ST, school_name, school_motto, school_addr, school_phone,
+            school_email, school_website, school_logo, use_logo,
+            year_name, term_name, exam_name, level, class_name,
+            student_stream, generated_date
+        ),
+        Spacer(1, 6),
+        _build_student_page_identity(
+            ST, student_name, student_adm, student_gender,
+            class_name, student_stream, level,
+            f"SRMS-{year_name}-{student_adm.replace('/', '')}",
+            student_status, year_name, term_name, exam_name, generated_date
+        ),
+        Spacer(1, 6),
+        _build_student_page_summary(
+            ST, class_position, total_students, student_status
+        ),
+        Spacer(1, 6),
+        _build_student_page_results(ST, full_names, marks_vals, grades_vals, level),
+        Spacer(1, 6),
+        _build_student_page_totals(
+            ST, total_marks, average, overall_grade, division, points
+        ),
+        Spacer(1, 6),
+        _build_student_page_requirements(ST, requirements_data, use_req),
+        Spacer(1, 6),
+        _build_student_page_comments(ST, head_teacher, academic_master),
+        Spacer(1, 4),
+        _build_student_page_dates(ST),
+        Spacer(1, 4),
+        _build_student_page_footer(ST),
+        Spacer(1, 3),
+        Paragraph(
+            '<b>Note:</b> This report is computer generated and does not require a signature except the fields above.',
+            ST['note']
+        ),
+    ]
+    if include_page_break:
+        content.append(PageBreak())
+    return content
 
 
 def _build_student_info(ST, name, adm, gender, report_id, status):

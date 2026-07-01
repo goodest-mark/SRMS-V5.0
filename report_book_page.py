@@ -11,7 +11,7 @@ from ranking_engine import compute_student_scores
 from ui_helpers import show_error, show_info
 from db_utils import fetch_one
 import combo_loaders
-import report_book_pdf
+import report_card_v5 as report_book_pdf
 
 
 class ReportBookWorker(QThread):
