@@ -84,9 +84,15 @@ Current Version: V5
 
 Development Status:
 
-* Core modules implemented
-* UI/UX redesign ongoing
-* Community contributions welcome
+* Core modules implemented with active student, exam, grading, and report generation workflows
+* Manual backup export/import supported; pre-operation backups available
+* Auto backup setting exists in Settings, but scheduled daily/weekly backup execution is not yet implemented
+* Report book and broadsheet summary preview controls are available
+* Ranking engine restricts output to enrolled subjects and enforces NECTA-style eligibility rules
+* Advanced features remaining: audit trail, smart comments, checklist-style requirements, full school export package
+* UI/UX polish ongoing
+
+Current Completion Estimate: ~75%
 
 ## Contributing
 

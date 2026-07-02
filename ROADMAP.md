@@ -2,7 +2,7 @@
 
 ## Current Progress
 
-Estimated Completion: 78%
+Estimated Completion: 75%
 
 ---
 
@@ -22,9 +22,13 @@ Harden PDF Generation Engine
 
 Validate NECTA Ranking Rules
 
+* Implemented in the ranking engine with eligibility rules and division mapping.
+
 ### SRMS-004
 
 Restrict Results to Enrolled Subjects
+
+* Implemented by filtering results against official enrollments for the selected exam and year.
 
 ### SRMS-005
 
@@ -49,6 +53,8 @@ Deliver a stable and reliable report generation system.
 * Percentage indicator
 * Background generation
 
+*Status: Progress tracking is implemented for report book generation and backup export workflows.*
+
 Goal:
 Improve responsiveness and user experience.
 
@@ -60,17 +66,23 @@ Improve responsiveness and user experience.
 
 Preview reports before PDF export.
 
+*Status: Summary preview functionality exists for report book and broadsheet modules.*
+
 ### Smart Comment System
 
 * Automatic comments
 * Manual comments
 * Comment templates
 
+*Status: Report cards include comment placeholders, but automated comments/templates are not implemented.*
+
 ### Requirements Management
 
 * Template imports
 * Student-specific requirements
 * Checklist support
+
+*Status: Template import/export and class-specific requirement entry are implemented. Checklist-style UI is pending.*
 
 Goal:
 Improve academic workflow.
@@ -95,6 +107,8 @@ Track:
 * Weekly backups
 * Pre-operation backups
 
+*Status: Manual export/import and pre-operation backups are available. Scheduled daily/weekly backups remain pending.*
+
 ### School Export Package
 
 Export:
@@ -104,6 +118,8 @@ Export:
 * Stamp
 * Settings
 * Requirements
+
+*Status: No dedicated school export package workflow is currently implemented.*
 
 Goal:
 Improve data protection and portability.
