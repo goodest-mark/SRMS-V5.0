@@ -1,66 +1,70 @@
-"""Unit tests for grading_config module."""
-from grading_config import GRADING_SYSTEM
+"""Unit tests for database-backed grading configuration."""
+
+from grading_config import get_grading_system, get_points_map
+from grade_utils import get_grade, get_points
 
 
 class TestGradingSystem:
-    def test_has_o_level(self):
-        assert "O_LEVEL" in GRADING_SYSTEM
+    def test_o_level_default_rules_loaded_from_database(self, initialized_db):
+        o_level = get_grading_system("O_LEVEL")
 
-    def test_has_a_level(self):
-        assert "A_LEVEL" in GRADING_SYSTEM
+        assert o_level == {
+            "A": (75, 100),
+            "B": (65, 74),
+            "C": (45, 64),
+            "D": (30, 44),
+            "F": (0, 29),
+        }
 
-    def test_o_level_grades(self):
-        o_level = GRADING_SYSTEM["O_LEVEL"]
-        assert "A" in o_level
-        assert "B" in o_level
-        assert "C" in o_level
-        assert "D" in o_level
-        assert "F" in o_level
+    def test_a_level_default_rules_loaded_from_database(self, initialized_db):
+        a_level = get_grading_system("A_LEVEL")
 
-    def test_a_level_grades(self):
-        a_level = GRADING_SYSTEM["A_LEVEL"]
-        assert "A" in a_level
-        assert "B" in a_level
-        assert "C" in a_level
-        assert "D" in a_level
-        assert "E" in a_level
-        assert "S" in a_level
-        assert "F" in a_level
+        assert a_level == {
+            "A": (80, 100),
+            "B": (70, 79),
+            "C": (60, 69),
+            "D": (50, 59),
+            "E": (40, 49),
+            "S": (35, 39),
+            "F": (0, 34),
+        }
 
-    def test_o_level_ranges_are_tuples(self):
-        for grade, (low, high) in GRADING_SYSTEM["O_LEVEL"].items():
-            assert isinstance(low, int)
-            assert isinstance(high, int)
-            assert low <= high
+    def test_ranges_cover_full_mark_range(self, initialized_db):
+        for level in ("O_LEVEL", "A_LEVEL"):
+            grading = get_grading_system(level)
+            for mark in range(0, 101):
+                matches = [
+                    grade
+                    for grade, (minimum, maximum) in grading.items()
+                    if minimum <= mark <= maximum
+                ]
+                assert len(matches) == 1, f"{level} mark {mark} matched {matches}"
 
-    def test_a_level_ranges_are_tuples(self):
-        for grade, (low, high) in GRADING_SYSTEM["A_LEVEL"].items():
-            assert isinstance(low, int)
-            assert isinstance(high, int)
-            assert low <= high
+    def test_points_map_loaded_from_database(self, initialized_db):
+        assert get_points_map("O_LEVEL")["A"] == 1
+        assert get_points_map("O_LEVEL")["F"] == 5
+        assert get_points_map("A_LEVEL")["S"] == 6
+        assert get_points_map("A_LEVEL")["F"] == 7
 
-    def test_o_level_covers_full_range(self):
-        """All marks 0-100 should map to exactly one O-Level grade."""
-        o_level = GRADING_SYSTEM["O_LEVEL"]
-        for mark in range(0, 101):
-            matches = [g for g, (lo, hi) in o_level.items() if lo <= mark <= hi]
-            assert len(matches) == 1, f"Mark {mark} matched {matches}"
+    def test_editable_rules_are_source_of_truth(self, initialized_db):
+        from db_utils import execute
 
-    def test_a_level_covers_full_range(self):
-        """All marks 0-100 should map to exactly one A-Level grade."""
-        a_level = GRADING_SYSTEM["A_LEVEL"]
-        for mark in range(0, 101):
-            matches = [g for g, (lo, hi) in a_level.items() if lo <= mark <= hi]
-            assert len(matches) == 1, f"Mark {mark} matched {matches}"
+        execute(
+            """
+            UPDATE grade_rules
+            SET min_mark=90, max_mark=100
+            WHERE level='O_LEVEL' AND grade='A'
+            """
+        )
+        execute(
+            """
+            UPDATE grade_rules
+            SET min_mark=75, max_mark=89
+            WHERE level='O_LEVEL' AND grade='B'
+            """
+        )
 
-    def test_o_level_a_grade_range(self):
-        assert GRADING_SYSTEM["O_LEVEL"]["A"] == (80, 100)
-
-    def test_o_level_f_grade_range(self):
-        assert GRADING_SYSTEM["O_LEVEL"]["F"] == (0, 49)
-
-    def test_a_level_a_grade_range(self):
-        assert GRADING_SYSTEM["A_LEVEL"]["A"] == (80, 100)
-
-    def test_a_level_f_grade_range(self):
-        assert GRADING_SYSTEM["A_LEVEL"]["F"] == (0, 34)
+        assert get_grading_system("O_LEVEL")["A"] == (90, 100)
+        assert get_grade(89, level="O_LEVEL") == "B"
+        assert get_grade(90, level="O_LEVEL") == "A"
+        assert get_points("A", level="O_LEVEL") == 1

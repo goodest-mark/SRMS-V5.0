@@ -13,6 +13,7 @@ from system_state import SystemState
 from event_bus import EventBus
 from class_utils import get_classes
 from security_settings import authorize_action
+from ui_helpers import show_error, show_info
 import combo_loaders
 import excel_utils
 
@@ -236,8 +237,6 @@ class RequirementsPage(QWidget):
         except Exception as e:
             print(f"[ERROR] Failed to save requirement: {e}")
             QMessageBox.critical(self, "Error", "An unexpected error occurred while saving the requirement.")
-        finally:
-            conn.close()
 
     def load_selected(self):
         row = self.table.currentRow()
@@ -261,11 +260,20 @@ class RequirementsPage(QWidget):
         if not authorize_action(self, "Delete Requirement"):
             return
 
-        conn = connect()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM requirements WHERE id=?", (self.selected_id,))
-        conn.commit()
-        conn.close()
+        try:
+            with get_cursor(commit=True) as cur:
+                cur.execute(
+                    "DELETE FROM requirements WHERE id=?",
+                    (self.selected_id,),
+                )
+        except Exception as e:
+            print(f"[ERROR] Failed to delete requirement: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                "An unexpected error occurred while deleting the requirement.",
+            )
+            return
         
         self.clear_form()
         self.load_data()

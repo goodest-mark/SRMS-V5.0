@@ -136,7 +136,7 @@ def db_with_average_ranking_case(initialized_db):
         ("ADM102", "Physics", 80, exam_id),
         ("ADM102", "Geography", 80, exam_id),
         ("ADM102", "History", 80, exam_id),
-        ("ADM102", "Life Skills", 8, exam_id),
+        ("ADM102", "Life Skills", 100, exam_id),
     ]
 
     cur.executemany(
@@ -217,7 +217,7 @@ class TestComputeStudentScoresOLevel:
         carol = next((r for r in ranking if r["admission"] == "ADM003"), None)
         assert carol is not None
         assert carol["status"] == "INCOMPLETE"
-        assert carol["subjects"] == 5
+        assert carol["subjects"] == "5/7"
 
     def test_alice_ranked_above_bob(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])

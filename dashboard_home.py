@@ -29,13 +29,13 @@ class GlassButton(QPushButton):
 
         self.setCursor(Qt.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(64)
-        self.setMaximumHeight(72)
-        self.setIconSize(QSize(30, 30))
+        self.setMinimumHeight(48)
+        self.setMaximumHeight(58)
+        self.setIconSize(QSize(22, 22))
         
         # Set font
         font = QFont()
-        font.setPointSize(12)
+        font.setPointSize(10)
         font.setWeight(QFont.Weight.Bold)
         self.setFont(font)
 
@@ -110,11 +110,10 @@ class DashboardHome(QWidget):
         header = QFrame()
         header.setObjectName("HeaderFrame")
         header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        header.setMinimumHeight(76)
-        header.setMaximumHeight(76)
+        header.setMinimumHeight(78)
 
         layout = QVBoxLayout(header)
-        layout.setContentsMargins(22, 10, 22, 10)
+        layout.setContentsMargins(22, 10, 22, 8)
         layout.setSpacing(3)
 
         # School Name
@@ -161,7 +160,7 @@ class DashboardHome(QWidget):
         # Section Title - Bold and prominent
         title = QLabel("Key Performance Indicators")
         title_font = QFont()
-        title_font.setPointSize(13)
+        title_font.setPointSize(12)
         title_font.setWeight(QFont.Weight.Bold)
         title.setFont(title_font)
         title.setProperty("variant", "accent")
@@ -170,13 +169,13 @@ class DashboardHome(QWidget):
         # KPI Grid container with background
         grid_container = QFrame()
         grid_layout_container = QVBoxLayout(grid_container)
-        grid_layout_container.setContentsMargins(14, 14, 14, 14)
+        grid_layout_container.setContentsMargins(10, 10, 10, 10)
         grid_layout_container.setSpacing(0)
 
         # KPI Grid (3 columns x 3 rows)
         kpi_grid = QGridLayout()
-        kpi_grid.setHorizontalSpacing(10)
-        kpi_grid.setVerticalSpacing(10)
+        kpi_grid.setHorizontalSpacing(8)
+        kpi_grid.setVerticalSpacing(8)
         kpi_grid.setContentsMargins(0, 0, 0, 0)
 
         # Create KPI Cards
@@ -242,7 +241,7 @@ class DashboardHome(QWidget):
         ]
 
         for card, row, col in cards:
-            card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             kpi_grid.addWidget(card, row, col)
 
         for i in range(4):

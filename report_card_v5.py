@@ -44,6 +44,69 @@ _styles_cache = {}
 _student_styles_cache = {}
 
 
+def _numeric_or_zero(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def list_student_report_exams(admission_no, level):
+    """Return exams that have report data for a student, regardless of status."""
+    conn = connect()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT
+                e.id,
+                e.exam_name,
+                t.term_name,
+                y.year_name,
+                e.status,
+                COUNT(r.id) AS subject_count,
+                ROUND(AVG(r.marks), 2) AS average_mark
+            FROM results r
+            JOIN exams e ON e.id = r.exam_id
+            JOIN terms t ON t.id = e.term_id
+            JOIN academic_years y ON y.id = t.academic_year_id
+            WHERE r.admission_no = ?
+              AND e.level = ?
+            GROUP BY e.id, e.exam_name, t.term_name, y.year_name, e.status
+            ORDER BY
+              y.year_name DESC,
+              t.id DESC,
+              CASE e.status
+                WHEN 'OPEN' THEN 0
+                WHEN 'CLOSED' THEN 1
+                WHEN 'COMPLETED' THEN 2
+                ELSE 3
+              END,
+              e.id DESC
+        """, (admission_no, level))
+        return [
+            {
+                "exam_id": exam_id,
+                "exam_name": exam_name,
+                "term_name": term_name,
+                "year_name": year_name,
+                "status": status,
+                "subject_count": subject_count,
+                "average": average_mark,
+            }
+            for (
+                exam_id,
+                exam_name,
+                term_name,
+                year_name,
+                status,
+                subject_count,
+                average_mark,
+            ) in cur.fetchall()
+        ]
+    finally:
+        conn.close()
+
+
 def _get_styles():
     if _styles_cache:
         return _styles_cache
@@ -276,8 +339,8 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
     class_students = sorted(
         class_students,
         key=lambda x: (
-            -float(x.get('average', 0) or 0),
-            -float(x.get('total_marks', 0) or 0),
+            -_numeric_or_zero(x.get('average')),
+            -_numeric_or_zero(x.get('total_marks')),
             x.get('admission', '')
         )
     )
@@ -373,10 +436,12 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
         conn.close()
 
 
-def generate_student_report_card(parent, admission_no, level, save_path=None, progress_callback=None):
+def generate_student_report_card(parent, admission_no, level, save_path=None, progress_callback=None, exam_id=None):
     """
     Generate a single-student PDF report card using the existing report-book layout.
-    The latest completed exam for the student's class is used as the report context.
+    Prefer the latest completed exam, but fall back to the latest open/closed
+    exam with marks so student report viewing does not return blank while an
+    exam is still active.
     """
     conn = connect()
     cur = conn.cursor()
@@ -425,30 +490,46 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
 
     student_adm, student_name, student_gender, class_name, student_stream, _student_level = student_row
 
-    cur.execute("""
+    context_query = """
         SELECT e.id, t.term_name, y.year_name, e.exam_name, e.level,
-               t.id, t.academic_year_id
+               t.id, t.academic_year_id, e.status
         FROM exams e
         JOIN terms t ON e.term_id = t.id
         JOIN academic_years y ON t.academic_year_id = y.id
         WHERE e.level = ?
-          AND e.status = 'COMPLETED'
+    """
+    context_params = [level]
+
+    if exam_id is not None:
+        context_query += " AND e.id = ?"
+        context_params.append(exam_id)
+
+    context_query += """
           AND EXISTS (
               SELECT 1
               FROM results r
               WHERE r.exam_id = e.id
                 AND r.admission_no = ?
           )
-        ORDER BY e.id DESC
+        ORDER BY
+          CASE e.status
+            WHEN 'COMPLETED' THEN 0
+            WHEN 'OPEN' THEN 1
+            WHEN 'CLOSED' THEN 2
+            ELSE 3
+          END,
+          e.id DESC
         LIMIT 1
-    """, (level, student_adm))
+    """
+    context_params.append(student_adm)
+    cur.execute(context_query, tuple(context_params))
     context = cur.fetchone()
     if not context:
         conn.close()
-        return False, "No completed exam report is available for this student yet."
+        return False, "No exam report is available for this student and exam yet."
     report_progress(25, "Loading exam context")
 
-    exam_id, term_name, year_name, exam_name, _, term_id, year_id = context
+    exam_id, term_name, year_name, exam_name, _, term_id, year_id, _exam_status = context
 
     cur.execute("""
         SELECT item_name, quantity
@@ -462,13 +543,13 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
     class_students = [s for s in ranking_data if s.get('class') == class_name]
     if not class_students:
         conn.close()
-        return False, "No completed class results are available for this student."
+        return False, "No class results are available for this student."
 
     class_students = sorted(
         class_students,
         key=lambda x: (
-            -float(x.get('average', 0) or 0),
-            -float(x.get('total_marks', 0) or 0),
+            -_numeric_or_zero(x.get('average')),
+            -_numeric_or_zero(x.get('total_marks')),
             x.get('admission', '')
         )
     )
@@ -497,7 +578,7 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
     )
     if not target_student:
         conn.close()
-        return False, "The selected student does not have a completed report yet."
+        return False, "The selected student does not have report data yet."
     report_progress(50, "Preparing report data")
 
     cur.execute("""

@@ -51,9 +51,8 @@ class PremiumStatCard(QFrame):
 
         self.setObjectName("PremiumStatCard")
         self.setProperty("tone", tone)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(178)
-        self.setMaximumHeight(178)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setMinimumHeight(132)
         self.setMouseTracking(True)
         self.setAttribute(Qt.WA_Hover, True)
         self.setAttribute(Qt.WA_StyledBackground, True)
@@ -66,8 +65,8 @@ class PremiumStatCard(QFrame):
         self._shadow = shadow
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 20, 22, 18)
-        layout.setSpacing(10)
+        layout.setContentsMargins(16, 14, 16, 12)
+        layout.setSpacing(6)
 
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
@@ -76,24 +75,24 @@ class PremiumStatCard(QFrame):
         icon_box = QFrame()
         icon_box.setObjectName("PremiumStatIcon")
         icon_box.setProperty("tone", tone)
-        icon_box.setFixedSize(38, 38)
+        icon_box.setFixedSize(34, 34)
 
         icon_layout = QVBoxLayout(icon_box)
         icon_layout.setContentsMargins(0, 0, 0, 0)
         icon_label = QLabel()
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setPixmap(QIcon(icon_path).pixmap(20, 20))
+        icon_label.setPixmap(QIcon(icon_path).pixmap(18, 18))
         icon_layout.addWidget(icon_label)
 
         title_stack = QVBoxLayout()
         title_stack.setContentsMargins(0, 0, 0, 0)
-        title_stack.setSpacing(2)
+        title_stack.setSpacing(1)
 
         self.title_lbl = QLabel(title)
         self.title_lbl.setObjectName("MetricTitle")
         self.title_lbl.setWordWrap(True)
         title_font = QFont()
-        title_font.setPointSize(11)
+        title_font.setPointSize(10)
         title_font.setWeight(QFont.Weight.Bold)
         self.title_lbl.setFont(title_font)
 
@@ -115,7 +114,7 @@ class PremiumStatCard(QFrame):
         self.value_lbl.setAlignment(Qt.AlignCenter)
         self.value_lbl.setObjectName("MetricValue")
         value_font = QFont()
-        value_font.setPointSize(30)
+        value_font.setPointSize(24)
         value_font.setWeight(QFont.Weight.Black)
         self.value_lbl.setFont(value_font)
 
@@ -125,9 +124,7 @@ class PremiumStatCard(QFrame):
         accent.setFixedHeight(4)
 
         layout.addLayout(top_row)
-        layout.addStretch(1)
         layout.addWidget(self.value_lbl)
-        layout.addStretch(1)
         layout.addWidget(accent)
 
     def set_value(self, value):

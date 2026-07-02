@@ -232,14 +232,14 @@ class MainWindow(QMainWindow):
         self.nav_button_style = """
             QPushButton{
                 text-align:center;
-                padding:9px 14px;
-                border-radius:15px;
+                padding:7px 9px;
+                border-radius:12px;
                 font-weight:900;
                 color:#D7E4F5;
-                font-size:13px;
+                font-size:12px;
                 background:transparent;
                 border:1px solid transparent;
-                min-width: 112px;
+                min-width: 76px;
             }
             QPushButton:hover{
                 color:#FFFFFF;
@@ -250,17 +250,13 @@ class MainWindow(QMainWindow):
 
         self.nav_button_active_style = """
             QPushButton{
-                background:qlineargradient(
-                    x1:0,y1:0,x2:1,y2:0,
-                    stop:0 #2563EB,
-                    stop:1 #60A5FA
-                );
+                background:#2563EB;
                 color:#FFFFFF;
                 font-weight:900;
                 border:1px solid rgba(191,219,254,0.35);
-                border-radius:16px;
-                padding:10px 16px;
-                min-width: 112px;
+                border-radius:12px;
+                padding:7px 9px;
+                min-width: 76px;
             }
         """
 
@@ -268,14 +264,16 @@ class MainWindow(QMainWindow):
         self._nav_labels = {}
 
         self.top_nav = QHBoxLayout()
-        self.top_nav.setSpacing(3)
-        self.top_nav.setContentsMargins(8, 6, 8, 6)
+        self.top_nav.setSpacing(2)
+        self.top_nav.setContentsMargins(6, 5, 6, 5)
 
         for btn in self.nav_buttons:
             self._nav_labels[btn] = btn.text()
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setIconSize(QSize(20,20))
-            btn.setMinimumHeight(40)
+            btn.setIconSize(QSize(18,18))
+            btn.setMinimumHeight(34)
+            btn.setMaximumHeight(38)
+            btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
             btn.setStyleSheet(self.nav_button_style)
             btn.setToolTip(btn.text())
             self.top_nav.addWidget(btn)
@@ -299,15 +297,17 @@ class MainWindow(QMainWindow):
         self.clock_lbl.setStyleSheet("""
             QLabel {
                 color: #FFFFFF;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 800;
-                padding: 6px 15px;
+                padding: 6px 10px;
                 background: rgba(2, 6, 23, 0.88);
                 border: 1px solid rgba(59, 130, 246, 0.25);
-                border-radius: 17px;
-                margin-right: 5px;
+                border-radius: 14px;
+                margin-right: 2px;
             }
         """)
+        self.clock_lbl.setMinimumWidth(150)
+        self.clock_lbl.setMaximumWidth(190)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_clock)
         self.timer.start(1000)
@@ -506,8 +506,7 @@ class MainWindow(QMainWindow):
     def update_clock(self):
         """Update the live clock display."""
         now = QDateTime.currentDateTime()
-        # Format: Thursday, 02 July 2026 12:35:12 AM
-        self.clock_lbl.setText(now.toString("dddd, dd MMMM yyyy  hh:mm:ss AP"))
+        self.clock_lbl.setText(now.toString("dd MMM yyyy  hh:mm AP"))
 
     def switch_page(
         self,

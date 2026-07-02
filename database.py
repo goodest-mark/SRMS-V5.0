@@ -512,6 +512,7 @@ def _init_db_inner(conn, cur):
     cur.execute("""
     CREATE TABLE IF NOT EXISTS system_security (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_passcode TEXT,
         security_question_1 TEXT,
         security_answer_1 TEXT,
         security_question_2 TEXT,
@@ -522,11 +523,21 @@ def _init_db_inner(conn, cur):
 
     cur.execute("PRAGMA table_info(system_security)")
     security_columns = [row[1] for row in cur.fetchall()]
-    for col in ("security_question_1", "security_answer_1", "security_question_2", "security_answer_2"):
+    for col in ("admin_passcode", "security_question_1", "security_answer_1", "security_question_2", "security_answer_2"):
         if col not in security_columns:
             _validate_identifier(col)
             print(f"[MIGRATION] Adding missing security column: {col}")
             cur.execute(f"ALTER TABLE system_security ADD COLUMN {col} TEXT")
+
+    def _hash_secret(value):
+        salt = secrets.token_hex(16)
+        dk = hashlib.pbkdf2_hmac(
+            "sha256",
+            value.encode("utf-8"),
+            salt.encode("utf-8"),
+            iterations=260000,
+        )
+        return f"{salt}${dk.hex()}"
 
     cur.execute("SELECT COUNT(*) FROM system_security")
     if cur.fetchone()[0] == 0:
@@ -535,25 +546,22 @@ def _init_db_inner(conn, cur):
         school_name = (profile[0] or "SRMS V5").strip()
         head_teacher = (profile[1] or "ADMIN").strip()
 
-        def _hash_answer(value):
-            salt = secrets.token_hex(16)
-            dk = hashlib.pbkdf2_hmac("sha256", value.encode("utf-8"), salt.encode("utf-8"), iterations=260000)
-            return f"{salt}${dk.hex()}"
-
         cur.execute(
             """
             INSERT INTO system_security (
+                admin_passcode,
                 security_question_1,
                 security_answer_1,
                 security_question_2,
                 security_answer_2
-            ) VALUES (?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?)
             """,
             (
+                _hash_secret("000000"),
                 "What is the school name?",
-                _hash_answer(school_name),
+                _hash_secret(school_name),
                 "What is the head teacher's name?",
-                _hash_answer(head_teacher),
+                _hash_secret(head_teacher),
             )
         )
     else:
@@ -566,32 +574,38 @@ def _init_db_inner(conn, cur):
         """)
 
         cur.execute("""
-            SELECT id, security_answer_1, security_answer_2
+            SELECT id, admin_passcode, security_answer_1, security_answer_2
             FROM system_security
             ORDER BY id DESC
             LIMIT 1
         """)
         sec_row = cur.fetchone()
         if sec_row:
-            sec_id, answer1, answer2 = sec_row
-            if not answer1 or not answer2:
+            sec_id, admin_passcode, answer1, answer2 = sec_row
+            needs_passcode = not admin_passcode
+            needs_answers = not answer1 or not answer2
+
+            if needs_passcode or needs_answers:
                 cur.execute("SELECT school_name, head_teacher FROM school_profile LIMIT 1")
                 profile = cur.fetchone() or ("SRMS V5", "ADMIN")
                 school_name = (profile[0] or "SRMS V5").strip()
                 head_teacher = (profile[1] or "ADMIN").strip()
 
-                def _hash_answer(value):
-                    salt = secrets.token_hex(16)
-                    dk = hashlib.pbkdf2_hmac("sha256", value.encode("utf-8"), salt.encode("utf-8"), iterations=260000)
-                    return f"{salt}${dk.hex()}"
-
                 cur.execute(
                     """
                     UPDATE system_security
-                    SET security_answer_1=?, security_answer_2=?
+                    SET
+                        admin_passcode=COALESCE(NULLIF(admin_passcode, ''), ?),
+                        security_answer_1=COALESCE(NULLIF(security_answer_1, ''), ?),
+                        security_answer_2=COALESCE(NULLIF(security_answer_2, ''), ?)
                     WHERE id=?
                     """,
-                    (_hash_answer(school_name), _hash_answer(head_teacher), sec_id)
+                    (
+                        _hash_secret("000000"),
+                        _hash_secret(school_name),
+                        _hash_secret(head_teacher),
+                        sec_id,
+                    )
                 )
 
     # Default Settings

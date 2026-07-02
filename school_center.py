@@ -11,6 +11,7 @@ from progress_dialog import ProgressDialog
 from school_profile import SchoolProfilePage
 from requirements_page import RequirementsPage
 from academic_configuration_page import AcademicConfigurationPage
+from promotion_page import PromotionPage
 
 
 class SchoolCenter(QWidget):
@@ -38,6 +39,10 @@ class SchoolCenter(QWidget):
             "Academic Config"
         )
 
+        self.btn_promotion = QPushButton(
+            "Promotion"
+        )
+
         nav.addWidget(
             self.btn_profile
         )
@@ -47,6 +52,9 @@ class SchoolCenter(QWidget):
         )
         nav.addWidget(
             self.btn_academic_config
+        )
+        nav.addWidget(
+            self.btn_promotion
         )
 
         root.addLayout(nav)
@@ -69,6 +77,10 @@ class SchoolCenter(QWidget):
             AcademicConfigurationPage()
         )
 
+        self.promotion_page = (
+            PromotionPage()
+        )
+
         self.stack.addWidget(
             self.profile_page
         )
@@ -79,6 +91,10 @@ class SchoolCenter(QWidget):
 
         self.stack.addWidget(
             self.academic_config_page
+        )
+
+        self.stack.addWidget(
+            self.promotion_page
         )
 
         root.addWidget(
@@ -104,6 +120,12 @@ class SchoolCenter(QWidget):
         self.btn_academic_config.clicked.connect(
             lambda: self.stack.setCurrentWidget(
                 self.academic_config_page
+            )
+        )
+
+        self.btn_promotion.clicked.connect(
+            lambda: self.stack.setCurrentWidget(
+                self.promotion_page
             )
         )
 
@@ -141,3 +163,6 @@ class SchoolCenter(QWidget):
             self.academic_config_page.tabs.setCurrentIndex(tab_index)
         except Exception:
             pass
+
+    def open_promotion(self):
+        self.stack.setCurrentWidget(self.promotion_page)

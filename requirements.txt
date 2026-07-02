@@ -6,3 +6,4 @@ pandas>=2.2.0
 openpyxl
 reportlab
 gunicorn
+pytest

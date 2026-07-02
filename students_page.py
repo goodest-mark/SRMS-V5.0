@@ -3,6 +3,8 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QFileDialog,
+    QGroupBox,
     QHeaderView,
     QHBoxLayout,
     QLabel,
@@ -23,7 +25,7 @@ from event_bus import EventBus
 from system_state import SystemState
 import openpyxl
 import excel_utils
-from report_card_v5 import generate_student_report_card
+from report_card_v5 import generate_student_report_card, list_student_report_exams
 from security_settings import authorize_action
 from progress_dialog import ProgressDialog
 
@@ -34,6 +36,7 @@ class StudentsPage(QWidget):
         super().__init__()
 
         self.selected_id = None
+        self.selected_admission_no = None
 
         layout = QVBoxLayout(self)
 
@@ -112,7 +115,8 @@ class StudentsPage(QWidget):
             QAbstractItemView.EditTrigger.NoEditTriggers
         )
         self.table.verticalHeader().setVisible(False)
-        self.table.doubleClicked.connect(self.open_selected_report_card)
+        self.table.itemSelectionChanged.connect(self.on_student_selection_changed)
+        self.table.doubleClicked.connect(self.on_student_double_clicked)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(
@@ -120,7 +124,63 @@ class StudentsPage(QWidget):
         )
         header.setStretchLastSection(True)
 
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1)
+
+        reports_group = QGroupBox("Student Reports")
+        reports_layout = QVBoxLayout(reports_group)
+
+        report_actions = QHBoxLayout()
+        self.reports_title = QLabel("Select a student to view available exam reports.")
+        self.reports_title.setProperty("variant", "muted")
+        self.view_report_btn = QPushButton("VIEW REPORT")
+        self.download_report_btn = QPushButton("DOWNLOAD REPORT")
+        self.view_report_btn.clicked.connect(self.view_selected_exam_report)
+        self.download_report_btn.clicked.connect(self.download_selected_exam_report)
+        self.view_report_btn.setEnabled(False)
+        self.download_report_btn.setEnabled(False)
+
+        report_actions.addWidget(self.reports_title, 1)
+        report_actions.addWidget(self.view_report_btn)
+        report_actions.addWidget(self.download_report_btn)
+        reports_layout.addLayout(report_actions)
+
+        self.reports_table = QTableWidget()
+        self.reports_table.setColumnCount(7)
+        self.reports_table.setHorizontalHeaderLabels([
+            "Exam ID",
+            "Exam",
+            "Term",
+            "Year",
+            "Status",
+            "Subjects",
+            "Average",
+        ])
+        self.reports_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.reports_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        self.reports_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.reports_table.setMaximumHeight(170)
+        self.reports_table.verticalHeader().setVisible(False)
+        self.reports_table.itemSelectionChanged.connect(
+            self.update_report_actions
+        )
+        self.reports_table.doubleClicked.connect(
+            self.view_selected_exam_report
+        )
+        self.reports_table.setColumnHidden(0, True)
+        reports_header = self.reports_table.horizontalHeader()
+        reports_header.setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+        reports_header.setStretchLastSection(True)
+        reports_layout.addWidget(self.reports_table)
+
+        layout.addWidget(reports_group)
 
         EventBus.subscribe("STUDENTS_UPDATED", self.load)
         EventBus.subscribe("LEVEL_CHANGED", self.on_level_changed)
@@ -181,6 +241,9 @@ class StudentsPage(QWidget):
                 item.setToolTip(text)
                 self.table.setItem(row_index, column, item)
 
+        if self.selected_admission_no:
+            self.load_student_reports(self.selected_admission_no)
+
     def save_student(self):
         admission_no = self.adm.text().strip()
         full_name = self.name.text().strip()
@@ -234,7 +297,8 @@ class StudentsPage(QWidget):
             return
 
         self.selected_id = int(self.table.item(row, 0).text())
-        self.adm.setText(self.table.item(row, 1).text())
+        self.selected_admission_no = self.table.item(row, 1).text()
+        self.adm.setText(self.selected_admission_no)
         self.name.setText(self.table.item(row, 2).text())
 
         gender = self.table.item(row, 3).text()
@@ -251,10 +315,160 @@ class StudentsPage(QWidget):
 
         self.save_btn.setText("UPDATE")
         self.delete_btn.setEnabled(True)
+        self.load_student_reports(self.selected_admission_no)
+
+    def on_student_selection_changed(self):
+        if self.table.currentRow() < 0 or not self.table.selectedItems():
+            return
+        self.load_selected()
+
+    def on_student_double_clicked(self):
+        self.load_selected()
+        self.load_student_reports(self.selected_admission_no)
 
     def open_selected_report_card(self):
         self.load_selected()
-        self.view_report_card()
+        self.view_selected_exam_report()
+
+    def load_student_reports(self, admission_no=None):
+        admission_no = admission_no or self.selected_admission_no
+        level = SystemState.get_level()
+        self.reports_table.setRowCount(0)
+        self.update_report_actions()
+
+        if not admission_no:
+            self.reports_title.setText("Select a student to view available exam reports.")
+            return
+
+        rows = list_student_report_exams(admission_no, level)
+
+        self.reports_table.setRowCount(len(rows))
+        for row_index, report in enumerate(rows):
+            values = (
+                report["exam_id"],
+                report["exam_name"],
+                report["term_name"],
+                report["year_name"],
+                report["status"],
+                report["subject_count"],
+                report["average"],
+            )
+            for column, value in enumerate(values):
+                text = "" if value is None else str(value)
+                item = QTableWidgetItem(text)
+                item.setToolTip(text)
+                self.reports_table.setItem(row_index, column, item)
+
+        if rows:
+            self.reports_table.selectRow(0)
+            self.reports_title.setText(
+                f"{len(rows)} exam report(s) available for {admission_no}."
+            )
+        else:
+            self.reports_title.setText(
+                f"No exam reports found for {admission_no}."
+            )
+
+        self.update_report_actions()
+
+    def update_report_actions(self):
+        has_report = self.current_report_exam_id() is not None
+        self.view_report_btn.setEnabled(has_report)
+        self.download_report_btn.setEnabled(has_report)
+
+    def current_report_exam_id(self):
+        row = self.reports_table.currentRow()
+        if row < 0:
+            return None
+        item = self.reports_table.item(row, 0)
+        if item is None:
+            return None
+        try:
+            return int(item.text())
+        except ValueError:
+            return None
+
+    def current_report_label(self):
+        row = self.reports_table.currentRow()
+        if row < 0:
+            return "report"
+        parts = []
+        for column in (1, 2, 3):
+            item = self.reports_table.item(row, column)
+            if item and item.text().strip():
+                parts.append(item.text().strip())
+        label = "_".join(parts) or "report"
+        return "".join(
+            ch if ch.isalnum() or ch in ("_", "-") else "_"
+            for ch in label
+        )
+
+    def view_selected_exam_report(self):
+        exam_id = self.current_report_exam_id()
+        if exam_id is None:
+            return
+        self.generate_report_for_exam(exam_id, open_after=True)
+
+    def download_selected_exam_report(self):
+        exam_id = self.current_report_exam_id()
+        if exam_id is None or not self.selected_admission_no:
+            return
+
+        safe_adm = "".join(
+            ch if ch.isalnum() or ch in ("_", "-") else "_"
+            for ch in self.selected_admission_no
+        )
+        default_name = f"{safe_adm}_{self.current_report_label()}.pdf"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Student Report",
+            default_name,
+            "PDF Files (*.pdf)",
+        )
+        if not save_path:
+            return
+        if not save_path.lower().endswith(".pdf"):
+            save_path += ".pdf"
+        self.generate_report_for_exam(exam_id, save_path=save_path, open_after=False)
+
+    def generate_report_for_exam(self, exam_id, save_path=None, open_after=False):
+        if not self.selected_admission_no:
+            return
+
+        level = SystemState.get_level()
+
+        self._report_progress = ProgressDialog("Generating Report Card")
+        self._report_progress.show()
+        success, result = generate_student_report_card(
+            self,
+            self.selected_admission_no,
+            level,
+            save_path=save_path,
+            exam_id=exam_id,
+            progress_callback=lambda percent, message: self._report_progress.update_progress(percent, 100, message),
+        )
+        self._report_progress.finish("Done")
+        self._report_progress.close()
+        self._report_progress = None
+
+        if not success:
+            QMessageBox.information(self, "Report Card", result)
+            return
+
+        if open_after:
+            opened = QDesktopServices.openUrl(QUrl.fromLocalFile(result))
+            if not opened:
+                QMessageBox.warning(
+                    self,
+                    "Report Card",
+                    f"Report generated at {result}, but the system viewer could not be opened.",
+                )
+        else:
+            QMessageBox.information(
+                self,
+                "Report Card",
+                f"Report saved to {result}",
+            )
 
     def view_report_card(self):
         if self.selected_id is None:
@@ -271,28 +485,13 @@ class StudentsPage(QWidget):
         admission_no = admission_item.text().strip()
         level = SystemState.get_level()
 
-        self._report_progress = ProgressDialog("Generating Report Card")
-        self._report_progress.show()
-        success, result = generate_student_report_card(
-            self,
-            admission_no,
-            level,
-            progress_callback=lambda percent, message: self._report_progress.update_progress(percent, 100, message),
-        )
-        self._report_progress.finish("Done")
-        self._report_progress.close()
-        self._report_progress = None
-        if not success:
-            QMessageBox.information(self, "Report Card", result)
-            return
-
-        opened = QDesktopServices.openUrl(QUrl.fromLocalFile(result))
-        if not opened:
-            QMessageBox.warning(
-                self,
-                "Report Card",
-                f"Report generated at {result}, but the system viewer could not be opened.",
-            )
+        self.selected_admission_no = admission_no
+        exam_id = self.current_report_exam_id()
+        if exam_id is None:
+            self.load_student_reports(admission_no)
+            exam_id = self.current_report_exam_id()
+        if exam_id is not None:
+            self.generate_report_for_exam(exam_id, open_after=True)
 
     def delete_student(self):
         if self.selected_id is None:
@@ -331,6 +530,7 @@ class StudentsPage(QWidget):
 
     def clear_form(self):
         self.selected_id = None
+        self.selected_admission_no = None
 
         self.adm.clear()
         self.name.clear()
@@ -341,6 +541,9 @@ class StudentsPage(QWidget):
             self.class_box.setCurrentIndex(0)
 
         self.table.clearSelection()
+        self.reports_table.setRowCount(0)
+        self.reports_title.setText("Select a student to view available exam reports.")
+        self.update_report_actions()
         self.save_btn.setText("SAVE")
         self.delete_btn.setEnabled(False)
     # =========================

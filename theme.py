@@ -348,6 +348,8 @@ QGroupBox, QFrame#GlassCard, QFrame#HeaderFrame, QFrame#QuickActionsPanel, QFram
     border:1px solid rgba(148,163,184,0.28);
     border-radius:{tokens['group_radius']}px;
     color:{tokens['text_soft']};
+    margin-top:14px;
+    padding-top:12px;
 }}
 
 QFrame#GlassCard QLabel#MetricTitle,
@@ -376,6 +378,7 @@ QFrame#PremiumStatCard{{
     border:1px solid rgba(148,163,184,0.22);
     border-radius:{tokens['group_radius']}px;
     color:{tokens['text_soft']};
+    margin:2px;
 }}
 
 QFrame#PremiumStatCard:hover{{
@@ -493,8 +496,10 @@ QGroupBox::title{{
     color:{tokens['primary_2']};
     font-weight:900;
     subcontrol-origin:margin;
+    subcontrol-position:top left;
     left:14px;
-    padding:0 6px;
+    padding:0 8px;
+    background:{tokens['app_bg']};
 }}
 
 QTabWidget::pane{{
