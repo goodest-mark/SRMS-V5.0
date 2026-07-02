@@ -40,33 +40,40 @@ class HistoricalResultsPage(QWidget):
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.tabs.setUsesScrollButtons(False)
-        self.tabs.currentChanged.connect(self._on_tab_changed)
         self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         root.addWidget(self.tabs, 1)
 
         self._history_reload_timer = QTimer(self)
         self._history_reload_timer.setSingleShot(True)
+        self._history_reload_timer.setInterval(40)
         self._history_reload_timer.timeout.connect(self._load_history_now)
         self._history_cache = {}
+
+        self._pages = {}
+        self._page_factories = {
+            "Ranking": lambda: self._create_ranking_page(),
+            "Broadsheet": lambda: self._create_broadsheet_page(),
+            "Remarks": lambda: self._create_remarks_page(),
+            "Reports": lambda: self._create_reports_page(),
+        }
 
         self.list_tab = QWidget()
         self.tabs.addTab(self.list_tab, "List")
         self._build_list_tab(self.list_tab)
 
-        self.ranking_tab = self._create_archive_tab("Select a completed exam to view ranking.")
-        self.tabs.addTab(self.ranking_tab, "Ranking")
+        # Placeholders
+        for name in ["Ranking", "Broadsheet", "Remarks", "Reports"]:
+            self.tabs.addTab(QWidget(), name)
 
-        self.broadsheet_tab = self._create_archive_tab("Select a completed exam to view broadsheet.")
-        self.tabs.addTab(self.broadsheet_tab, "Broadsheet")
-
-        self.reports_tab = self._create_archive_tab("Select a completed exam to view report books.")
-        self.tabs.addTab(self.reports_tab, "Reports")
+        self.tabs.currentChanged.connect(self._on_tab_changed)
 
         self._ranking_page = None
         self._broadsheet_page = None
         self._report_book_page = None
         self._active_history_exam_id = None
         self._active_history_class_name = None
+        self._active_history_level = None
+        self._history_level = SystemState.get_level()
 
         EventBus.subscribe("LEVEL_CHANGED", self.refresh_all)
         EventBus.subscribe("RESULTS_UPDATED", self._on_history_data_changed)
@@ -74,25 +81,61 @@ class HistoricalResultsPage(QWidget):
         EventBus.subscribe("EXAMS_UPDATED", self.refresh_all)
 
     def _on_tab_changed(self, index):
-        if index == 1 and self._ranking_page is None:
+        if index < 0: return
+        name = self.tabs.tabText(index)
+        
+        if name in self._page_factories and name not in self._pages:
+            self.tabs.blockSignals(True)
+            page = self._page_factories[name]()
+            self._pages[name] = page
+            
+            # Replace placeholder
+            old_widget = self.tabs.widget(index)
+            self.tabs.removeTab(index)
+            self.tabs.insertTab(index, page, name)
+            self.tabs.setCurrentIndex(index)
+            self.tabs.blockSignals(False)
+            
+            if old_widget:
+                old_widget.deleteLater()
+            
+            # If we have an active context, set it immediately
             context = self._selected_or_active_context()
             if context:
-                self.activate_ranking(*context)
-        elif index == 2 and self._broadsheet_page is None:
+                page.set_history_context(*context)
+        
+        elif name in self._pages:
+            # Already loaded, just ensure context is synced if needed
             context = self._selected_or_active_context()
             if context:
-                self.activate_broadsheet(*context)
-        elif index == 3 and self._report_book_page is None:
-            context = self._selected_or_active_context()
-            if context:
-                self.activate_reports(*context)
+                self._pages[name].set_history_context(*context)
+
+    def _create_ranking_page(self):
+        from ranking import RankingPage
+        return RankingPage()
+
+    def _create_broadsheet_page(self):
+        from broadsheet_page import BroadsheetPage
+        return BroadsheetPage()
+
+    def _create_reports_page(self):
+        from report_book_page import ReportBookPage
+        return ReportBookPage()
+
+    def _create_remarks_page(self):
+        from remarks_page import RemarksPage
+        return RemarksPage()
 
     def _selected_or_active_context(self):
         context = self._selected_history_context()
         if context:
             return context
         if self._active_history_exam_id is not None and self._active_history_class_name:
-            return self._active_history_exam_id, self._active_history_class_name
+            return (
+                self._active_history_exam_id,
+                self._active_history_class_name,
+                self._active_history_level or self._history_level,
+            )
         return None
 
     def _build_list_tab(self, parent):
@@ -191,6 +234,10 @@ class HistoricalResultsPage(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.verticalHeader().setVisible(False)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -218,6 +265,10 @@ class HistoricalResultsPage(QWidget):
         return tab
 
     def refresh_all(self):
+        if not self.isVisible():
+            self._needs_refresh = True
+            return
+        self._history_level = SystemState.get_level()
         self._invalidate_history_cache()
         blockers = [QSignalBlocker(widget) for widget in (self.year_box, self.term_box, self.exam_box, self.class_box)]
         try:
@@ -226,6 +277,7 @@ class HistoricalResultsPage(QWidget):
             combo_loaders.load_completed_exams(
                 self.exam_box,
                 self.term_box.currentData(),
+                level=self._history_level,
                 search_text=self.search_bar.text().strip(),
             )
             combo_loaders.load_classes(self.class_box)
@@ -247,6 +299,7 @@ class HistoricalResultsPage(QWidget):
             combo_loaders.load_completed_exams(
                 self.exam_box,
                 self.term_box.currentData(),
+                level=self._history_level or SystemState.get_level(),
                 search_text=self.search_bar.text().strip(),
             )
         finally:
@@ -258,59 +311,42 @@ class HistoricalResultsPage(QWidget):
         class_name = self.class_box.currentText().strip()
         if exam_id is None or not class_name:
             return None
-        return exam_id, class_name
+        return exam_id, class_name, self._history_level or SystemState.get_level()
 
     def show_list(self):
         self.tabs.setCurrentIndex(0)
         self._schedule_history_reload()
 
-    def _ensure_archive_page(self, page_attr, widget_attr, factory, tab_index, exam_id, class_name, context_message):
-        page = getattr(self, page_attr)
-        if page is None:
-            page = factory()
-            setattr(self, page_attr, page)
-            container = getattr(self, widget_attr)
-            container.layout().addWidget(page)
-        page.set_history_context(exam_id, class_name)
-        self.detail_hint.setText(context_message)
-        self.tabs.setCurrentIndex(tab_index)
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, "_needs_refresh", False):
+            self._needs_refresh = False
+            self.refresh_all()
+
+
+    def activate_ranking(self, exam_id, class_name, level=None):
+        self.tabs.setCurrentIndex(1)
+        page = self._pages.get("Ranking")
+        if page:
+            page.set_history_context(exam_id, class_name, level=level)
+            self.detail_hint.setText(f"Showing ranking for exam #{exam_id} in {class_name}.")
         return page
 
-    def activate_ranking(self, exam_id, class_name):
-        from ranking import RankingPage
-        return self._ensure_archive_page(
-            "_ranking_page",
-            "ranking_tab",
-            RankingPage,
-            1,
-            exam_id,
-            class_name,
-            f"Showing ranking for exam #{exam_id} in {class_name}.",
-        )
+    def activate_broadsheet(self, exam_id, class_name, level=None):
+        self.tabs.setCurrentIndex(2)
+        page = self._pages.get("Broadsheet")
+        if page:
+            page.set_history_context(exam_id, class_name, level=level)
+            self.detail_hint.setText(f"Showing broadsheet for exam #{exam_id} in {class_name}.")
+        return page
 
-    def activate_broadsheet(self, exam_id, class_name):
-        from broadsheet_page import BroadsheetPage
-        return self._ensure_archive_page(
-            "_broadsheet_page",
-            "broadsheet_tab",
-            BroadsheetPage,
-            2,
-            exam_id,
-            class_name,
-            f"Showing broadsheet for exam #{exam_id} in {class_name}.",
-        )
-
-    def activate_reports(self, exam_id, class_name):
-        from report_book_page import ReportBookPage
-        return self._ensure_archive_page(
-            "_report_book_page",
-            "reports_tab",
-            ReportBookPage,
-            3,
-            exam_id,
-            class_name,
-            f"Showing report books for exam #{exam_id} in {class_name}.",
-        )
+    def activate_reports(self, exam_id, class_name, level=None):
+        self.tabs.setCurrentIndex(3)
+        page = self._pages.get("Reports")
+        if page:
+            page.set_history_context(exam_id, class_name, level=level)
+            self.detail_hint.setText(f"Showing report books for exam #{exam_id} in {class_name}.")
+        return page
 
     def open_ranking(self):
         context = self._selected_history_context()
@@ -321,10 +357,11 @@ class HistoricalResultsPage(QWidget):
                 "Select a completed exam and class first.",
             )
             return
-        exam_id, class_name = context
+        exam_id, class_name, level = context
         self._active_history_exam_id = exam_id
         self._active_history_class_name = class_name
-        self.activate_ranking(exam_id, class_name)
+        self._active_history_level = level
+        self.activate_ranking(exam_id, class_name, level=level)
 
     def open_broadsheet(self):
         context = self._selected_history_context()
@@ -335,10 +372,11 @@ class HistoricalResultsPage(QWidget):
                 "Select a completed exam and class first.",
             )
             return
-        exam_id, class_name = context
+        exam_id, class_name, level = context
         self._active_history_exam_id = exam_id
         self._active_history_class_name = class_name
-        self.activate_broadsheet(exam_id, class_name)
+        self._active_history_level = level
+        self.activate_broadsheet(exam_id, class_name, level=level)
 
     def open_reports(self):
         context = self._selected_history_context()
@@ -349,10 +387,11 @@ class HistoricalResultsPage(QWidget):
                 "Select a completed exam and class first.",
             )
             return
-        exam_id, class_name = context
+        exam_id, class_name, level = context
         self._active_history_exam_id = exam_id
         self._active_history_class_name = class_name
-        self.activate_reports(exam_id, class_name)
+        self._active_history_level = level
+        self.activate_reports(exam_id, class_name, level=level)
 
     def load_history(self):
         self._schedule_history_reload()
@@ -362,15 +401,22 @@ class HistoricalResultsPage(QWidget):
 
     def _on_history_data_changed(self):
         self._invalidate_history_cache()
-        self._schedule_history_reload()
+        if self.isVisible():
+            self._schedule_history_reload()
+        else:
+            self._needs_refresh = True
 
     def _invalidate_history_cache(self):
         self._history_cache.clear()
 
     def _load_history_now(self):
+        if not self.isVisible():
+            self._needs_refresh = True
+            return
+
         exam_id = self.exam_box.currentData()
         class_name = self.class_box.currentText().strip()
-        level = SystemState.get_level()
+        level = self._history_level or SystemState.get_level()
 
         if exam_id is None or not class_name:
             self.table.setRowCount(0)
@@ -431,6 +477,14 @@ class HistoricalResultsPage(QWidget):
                     self.table.setItem(row, column, item)
         finally:
             self.table.setUpdatesEnabled(True)
+            self.table.resizeRowsToContents()
+        table_height = (
+            self.table.horizontalHeader().height()
+            + self.table.verticalHeader().length()
+            + self.table.frameWidth() * 2
+            + 4
+        )
+        self.table.setFixedHeight(table_height)
 
         self._set_summary(len(class_students), len(ready_students), len(incomplete_students), class_avg)
         self.detail_hint.setText(

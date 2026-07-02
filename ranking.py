@@ -96,6 +96,7 @@ class RankingPage(QWidget):
 
         self.history_exam_id = None
         self.history_class_name = None
+        self.history_level = None
 
         self.load()
 
@@ -107,9 +108,10 @@ class RankingPage(QWidget):
             self.class_box.setCurrentIndex(index)
         self.load()
 
-    def set_history_context(self, exam_id, class_name):
+    def set_history_context(self, exam_id, class_name, level=None):
         self.history_exam_id = exam_id
         self.history_class_name = class_name
+        self.history_level = level or SystemState.get_level()
 
         row = fetch_one("""
             SELECT e.exam_name, t.term_name, y.year_name
@@ -135,51 +137,67 @@ class RankingPage(QWidget):
     def clear_history_context(self):
         self.history_exam_id = None
         self.history_class_name = None
+        self.history_level = None
         self.context_label.setText("")
         self.load()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, "_needs_refresh", False):
+            self._needs_refresh = False
+            self.load()
+
     def load(self):
-        level = SystemState.get_level()
+        if not self.isVisible():
+            self._needs_refresh = True
+            return
+
+        level = self.history_level or SystemState.get_level()
         class_name = self.history_class_name or self.class_box.currentText().strip()
         exam_id = self.history_exam_id
         ranking = compute_student_scores(level, exam_id=exam_id, class_name=class_name)
 
-        self.table.setRowCount(len(ranking))
+        self.table.setUpdatesEnabled(False)
+        try:
+            self.table.setRowCount(len(ranking))
 
-        for row, item in enumerate(ranking):
-            values = [
-                item.get("position", "-"),
-                item.get("admission", ""),
-                item.get("name", ""),
-                item.get("subjects", 0),
-                item.get("total_marks", "-"),
-                item.get("average", "-"),
-                item.get("points", "-"),
-                item.get("division", "-"),
-                item.get("status", "UNKNOWN")
-            ]
+            for row, item in enumerate(ranking):
+                values = [
+                    item.get("position", "-"),
+                    item.get("admission", ""),
+                    item.get("name", ""),
+                    item.get("subjects", 0),
+                    item.get("total_marks", "-"),
+                    item.get("average", "-"),
+                    item.get("points", "-"),
+                    item.get("division", "-"),
+                    item.get("status", "UNKNOWN")
+                ]
 
-            for col, value in enumerate(values):
-                table_item = QTableWidgetItem(str(value))
-                
-                # Ensure items are read-only but still allow selection and copying
-                table_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-                
-                # Center align metrics
-                if col in [0, 3, 4, 5, 6, 7, 8]:
-                    table_item.setTextAlignment(Qt.AlignCenter)
+                for col, value in enumerate(values):
+                    table_item = QTableWidgetItem(str(value))
+                    
+                    # Ensure items are read-only but still allow selection and copying
+                    table_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                    
+                    # Center align metrics
+                    if col in [0, 3, 4, 5, 6, 7, 8]:
+                        table_item.setTextAlignment(Qt.AlignCenter)
 
-                # Styling based on status
-                if item.get("status") == "INCOMPLETE":
-                    table_item.setForeground(Qt.gray)
-                elif item.get("status") == "READY":
-                    if col == 8: # Status column
-                        table_item.setForeground(Qt.darkGreen)
-                        font = table_item.font()
-                        font.setBold(True)
-                        table_item.setFont(font)
-                
-                self.table.setItem(row, col, table_item)
+                    # Styling based on status
+                    if item.get("status") == "INCOMPLETE":
+                        table_item.setForeground(Qt.gray)
+                    elif item.get("status") == "READY":
+                        if col == 8: # Status column
+                            table_item.setForeground(Qt.darkGreen)
+                            font = table_item.font()
+                            font.setBold(True)
+                            table_item.setFont(font)
+                    
+                    self.table.setItem(row, col, table_item)
+
+        finally:
+            self.table.setUpdatesEnabled(True)
 
         self.table.resizeColumnsToContents()
         self.table.resizeRowsToContents()

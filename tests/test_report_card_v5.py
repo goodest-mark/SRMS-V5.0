@@ -92,3 +92,13 @@ class TestStudentReportCards:
         assert result == str(save_path)
         assert os.path.exists(save_path)
         assert os.path.getsize(save_path) > 0
+
+    def test_student_comments_column_is_available(self, initialized_db):
+        import sqlite3
+        conn = sqlite3.connect(initialized_db)
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(students)")
+        columns = [row[1] for row in cur.fetchall()]
+        conn.close()
+
+        assert "comments" in columns

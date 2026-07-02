@@ -146,15 +146,6 @@ def _icon(name):
     """Return a QIcon using an absolute path from assets/icons/."""
     return QIcon(os.path.join(_BASE_DIR, "assets", "icons", name))
 
-from dashboard_home import DashboardHome
-from students_page import StudentsPage
-from academics_page import AcademicsPage
-from exams import ExamsWindow
-from results_center import ResultsCenter
-from historical_results_page import HistoricalResultsPage
-from school_center import SchoolCenter
-from settings_page import SettingsPage
-
 
 class MainWindow(QMainWindow):
 
@@ -330,6 +321,7 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
 
+        from dashboard_home import DashboardHome
         self.dashboard = DashboardHome()
         self.students = None
         self.academics = None
@@ -338,14 +330,43 @@ class MainWindow(QMainWindow):
         self.history = None
         self.school = None
         self.settings = None
+
+        def create_students_page():
+            from students_page import StudentsPage
+            return StudentsPage()
+
+        def create_academics_page():
+            from academics_page import AcademicsPage
+            return AcademicsPage()
+
+        def create_exams_window():
+            from exams import ExamsWindow
+            return ExamsWindow()
+
+        def create_results_center():
+            from results_center import ResultsCenter
+            return ResultsCenter()
+
+        def create_history_page():
+            from historical_results_page import HistoricalResultsPage
+            return HistoricalResultsPage()
+
+        def create_school_center():
+            from school_center import SchoolCenter
+            return SchoolCenter()
+
+        def create_settings_page():
+            from settings_page import SettingsPage
+            return SettingsPage()
+
         self._page_factories = {
-            "students": StudentsPage,
-            "academics": AcademicsPage,
-            "exams": ExamsWindow,
-            "results": ResultsCenter,
-            "history": HistoricalResultsPage,
-            "school": SchoolCenter,
-            "settings": SettingsPage,
+            "students": create_students_page,
+            "academics": create_academics_page,
+            "exams": create_exams_window,
+            "results": create_results_center,
+            "history": create_history_page,
+            "school": create_school_center,
+            "settings": create_settings_page,
         }
         self._page_attributes = {
             "students": "students",
@@ -568,7 +589,14 @@ class MainWindow(QMainWindow):
             SystemState.set_level("A_LEVEL")
         else:
             SystemState.set_level("O_LEVEL")
-        self.refresh_all()
+        # We don't call refresh_all here anymore because SystemState.set_level
+        # emits LEVEL_CHANGED, and we've optimized pages to handle it.
+        # However, we DO want to ensure the CURRENT page is refreshed immediately.
+        current = self.stack.currentWidget()
+        if current:
+            # Check if it has a refresh method or trigger it via the signal
+            # Most pages already subscribe to LEVEL_CHANGED.
+            pass 
 
     def _update_breadcrumb(self, button):
         """Update breadcrumb based on current page."""

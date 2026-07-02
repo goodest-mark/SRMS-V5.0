@@ -40,6 +40,7 @@ class ReportBookPage(QWidget):
         self.layout = QVBoxLayout(self)
         self.history_exam_id = None
         self.history_class_name = None
+        self.history_level = None
         
         title = QLabel("STUDENT REPORT BOOK ENGINE")
         self.layout.addWidget(title)
@@ -125,7 +126,16 @@ class ReportBookPage(QWidget):
         EventBus.subscribe("GRADE_RULES_CHANGED", self.refresh_all)
         EventBus.subscribe("DIVISION_RULES_CHANGED", self.refresh_all)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, "_needs_refresh", False):
+            self._needs_refresh = False
+            self.refresh_all()
+
     def refresh_all(self):
+        if not self.isVisible():
+            self._needs_refresh = True
+            return
         self.load_years()
         combo_loaders.load_classes(self.class_box)
 
@@ -140,7 +150,7 @@ class ReportBookPage(QWidget):
     def load_exams(self):
         combo_loaders.load_exams(self.exam_box, self.term_box.currentData())
 
-    def set_history_context(self, exam_id, class_name):
+    def set_history_context(self, exam_id, class_name, level=None):
         row = fetch_one("""
             SELECT e.term_id, t.academic_year_id, e.exam_name, t.term_name, y.year_name
             FROM exams e
@@ -154,6 +164,7 @@ class ReportBookPage(QWidget):
         term_id, year_id, exam_name, term_name, year_name = row
         self.history_exam_id = exam_id
         self.history_class_name = class_name
+        self.history_level = level or SystemState.get_level()
         self.context_label.setText(
             f"History context: {exam_name} - {term_name} - {year_name} - {class_name}"
         )
@@ -163,12 +174,13 @@ class ReportBookPage(QWidget):
     def clear_history_context(self):
         self.history_exam_id = None
         self.history_class_name = None
+        self.history_level = None
         self.context_label.setText("")
 
     def update_summary(self):
         exam_id = self.history_exam_id or self.exam_box.currentData()
         class_name = self.history_class_name or self.class_box.currentText()
-        level = SystemState.get_level()
+        level = self.history_level or SystemState.get_level()
 
         if not (exam_id and class_name):
             show_error(self, "Please select all context filters.")

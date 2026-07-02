@@ -7,7 +7,12 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QComboBox,
     QMessageBox,
+    QScrollArea,
+    QFrame,
+    QSizePolicy,
 )
+
+from PySide6.QtCore import Qt
 
 from progress_dialog import ProgressDialog
 import openpyxl
@@ -28,8 +33,21 @@ class SubjectsPage(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        root.addWidget(self.scroll_area)
+
+        self.content_widget = QWidget()
+        self.scroll_area.setWidget(self.content_widget)
+
+        self.layout = QVBoxLayout(self.content_widget)
+        self.layout.setContentsMargins(20, 20, 20, 20)
+        self.layout.setSpacing(12)
 
         # =====================
         # FORM
@@ -104,6 +122,10 @@ class SubjectsPage(QWidget):
         self.table = QTableWidget()
         setup_table(self.table, ["ID", "Subject", "Level", "Type"])
         self.table.doubleClicked.connect(self.edit_subject)
+        
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.layout.addWidget(
             self.table
@@ -163,6 +185,17 @@ class SubjectsPage(QWidget):
             """, (level,))
 
         populate_table(self.table, rows)
+        self._update_table_height()
+
+    def _update_table_height(self):
+        self.table.resizeRowsToContents()
+        height = (
+            self.table.horizontalHeader().height()
+            + self.table.verticalHeader().length()
+            + self.table.frameWidth() * 2
+            + 4
+        )
+        self.table.setFixedHeight(height)
 
     # =====================
     # ADD SUBJECT

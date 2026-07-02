@@ -58,7 +58,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
             }
             has_enrollments = bool(enrolled_pairs)
 
-        cur.execute("""
+        query = """
             SELECT
                 s.admission_no,
                 s.full_name,
@@ -76,7 +76,13 @@ def compute_student_scores(level, exam_id=None, class_name=None):
             WHERE r.exam_id = ?
               AND ex.level = ?
               AND r.marks IS NOT NULL
-        """, (exam_id, level))
+        """
+        params = [exam_id, level]
+        if class_name:
+            query += " AND s.class = ?"
+            params.append(class_name)
+
+        cur.execute(query, params)
         rows = cur.fetchall()
 
         cur.execute("""

@@ -289,9 +289,9 @@ def to_pdf(parent, data):
             canvas.saveState()
             header_frame = Frame(
                 doc.leftMargin,
-                doc.height + doc.topMargin - 1.05 * inch,
+                doc.height + doc.topMargin - 1.15 * inch,
                 doc.width,
-                1.05 * inch,
+                1.15 * inch,
                 leftPadding=0,
                 bottomPadding=0,
                 rightPadding=0,
@@ -306,11 +306,12 @@ def to_pdf(parent, data):
             address = school_profile.get('school_address') or '-'
             phone = school_profile.get('school_phone') or '-'
             email = school_profile.get('school_email') or '-'
+            website = school_profile.get('school_website') or ''
 
             center_parts = []
             if settings['show_logo'] and school_profile.get('school_logo') and os.path.exists(school_profile['school_logo']):
                 try:
-                    logo = Image(school_profile['school_logo'], width=0.55 * inch, height=0.55 * inch)
+                    logo = Image(school_profile['school_logo'], width=0.65 * inch, height=0.65 * inch)
                     center_parts.append([logo])
                 except Exception as e:
                     print(f"[WARNING] Could not load PDF logo '{school_profile['school_logo']}': {e}")
@@ -318,52 +319,51 @@ def to_pdf(parent, data):
             center_parts.append([Paragraph(school_name, styles['ReportTitle'])])
             if motto:
                 center_parts.append([Paragraph(motto, styles['ReportMotto'])])
+            
+            contact_info = " | ".join([p for p in [address, phone, email, website] if p])
+            center_parts.append([Paragraph(contact_info, styles['SubtitleStyle'])])
 
-            center_table = Table(center_parts, colWidths=[doc.width * 0.42])
+            center_table = Table(center_parts, colWidths=[doc.width * 0.5])
             center_table.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                ('TOPPADDING', (0, 0), (-1, -1), 0),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
             ]))
 
-            left = Table([
-                [Paragraph('<b>CONTACT</b>', styles['ReportSmallLeft'])],
-                [Paragraph(address, styles['ReportSmallLeft'])],
-                [Paragraph(f'Tel: {phone}', styles['ReportSmallLeft'])],
-                [Paragraph(f'Email: {email}', styles['ReportSmallLeft'])],
-            ], colWidths=[doc.width * 0.29])
+            left_info = [
+                [Paragraph('<b>REPORT TYPE</b>', styles['ReportSmallLeft'])],
+                [Paragraph('CLASS BROADSHEET', styles['HeaderStyle'])],
+                [Paragraph('Academic Summary', styles['ReportSmallLeft'])],
+            ]
+            left = Table(left_info, colWidths=[doc.width * 0.25])
 
-            right = Table([
-                [Paragraph('<b>ACADEMIC REPORT</b>', styles['ReportSmallRight'])],
+            right_info = [
+                [Paragraph('<b>ACADEMIC CONTEXT</b>', styles['ReportSmallRight'])],
                 [Paragraph(f"Class: {meta['class']} ({meta['level']})", styles['ReportSmallRight'])],
-                [Paragraph(f"Exam: {meta['exam']}", styles['ReportSmallRight'])],
-                [Paragraph(f"{meta['term']} - {meta['year']}", styles['ReportSmallRight'])],
-            ], colWidths=[doc.width * 0.29])
+                [Paragraph(f"{meta['exam']} | {meta['term']} - {meta['year']}", styles['ReportSmallRight'])],
+            ]
+            right = Table(right_info, colWidths=[doc.width * 0.25])
 
             for panel in (left, right):
                 panel.setStyle(TableStyle([
                     ('TEXTCOLOR', (0, 0), (-1, -1), colors.white),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-                    ('TOPPADDING', (0, 0), (-1, -1), 1),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ]))
 
             header = Table(
                 [[left, center_table, right]],
-                colWidths=[doc.width * 0.29, doc.width * 0.42, doc.width * 0.29],
+                colWidths=[doc.width * 0.25, doc.width * 0.5, doc.width * 0.25],
             )
             header.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, -1), accent_dark),
-                ('BOX', (0, 0), (-1, -1), 1.2, accent),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.white),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                ('TOPPADDING', (0, 0), (-1, -1), 5),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('LINEBELOW', (0, 0), (-1, -1), 2, accent),
             ]))
 
             header_frame.addFromList([header], canvas)
@@ -428,9 +428,11 @@ def to_pdf(parent, data):
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), font_size + 1), # Header font slightly larger
             ('FONTSIZE', (0, 1), (-1, -1), font_size),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('TOPPADDING', (0, 0), (-1, 0), 10),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('GRID', (0, 0), (-1, -1), 0.3, colors.black),
+            ('LINEBELOW', (0, 0), (-1, 0), 1.5, accent),
         ]))
         elements.append(Spacer(1, 0.1*inch))
         elements.append(Paragraph(f"<b>BROADSHEET FOR {meta['class']} ({meta['level']})</b>", styles['SectionHeader']))
@@ -575,10 +577,38 @@ def to_pdf(parent, data):
             elements.append(Spacer(1, 0.2*inch))
 
         # Signatures
-        elements.append(Spacer(1, 0.5*inch))
-        elements.append(Paragraph("Academic Master Signature: _________________________<br/><br/>", styles['Normal']))
-        elements.append(Paragraph("Head Teacher Signature: _________________________<br/><br/>", styles['Normal']))
-        elements.append(Paragraph("School Stamp:", styles['Normal']))
+        elements.append(Spacer(1, 0.4*inch))
+        
+        sig_data = [
+            [
+                Paragraph("<b>CLASS TEACHER</b>", styles['HeaderStyle']),
+                Paragraph("<b>ACADEMIC MASTER</b>", styles['HeaderStyle']),
+                Paragraph("<b>HEAD TEACHER</b>", styles['HeaderStyle']),
+                Paragraph("<b>OFFICIAL STAMP</b>", styles['HeaderStyle'])
+            ],
+            [
+                Paragraph("Signature: _________________", styles['ReportSmall']),
+                Paragraph("Signature: _________________", styles['ReportSmall']),
+                Paragraph("Signature: _________________", styles['ReportSmall']),
+                "" # Stamp space
+            ],
+            [
+                Paragraph("Date: ______________________", styles['ReportSmall']),
+                Paragraph("Date: ______________________", styles['ReportSmall']),
+                Paragraph("Date: ______________________", styles['ReportSmall']),
+                ""
+            ]
+        ]
+        
+        sig_table = Table(sig_data, colWidths=[doc.width/4]*4)
+        sig_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ('LINEABOVE', (0,0), (-1,0), 1, accent_dark),
+        ]))
+        elements.append(sig_table)
 
         # Build PDF and apply watermark callbacks (header/footer applied via PageTemplate)
         _set_progress(progress, 80, "Rendering PDF pages")

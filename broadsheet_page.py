@@ -3,7 +3,8 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, 
     QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QGridLayout,
-    QMessageBox, QGroupBox, QAbstractItemView, QFileDialog, QScrollArea
+    QMessageBox, QGroupBox, QAbstractItemView, QFileDialog, QScrollArea,
+    QFrame, QSizePolicy
 )
 
 from progress_dialog import ProgressDialog
@@ -19,7 +20,6 @@ from ui_helpers import show_error, show_info
 from table_utils import setup_table
 import combo_loaders
 
-from PySide6.QtWidgets import QFrame
 from class_utils import get_classes
 from ranking_engine import compute_student_scores
 import broadsheet_export
@@ -53,7 +53,23 @@ class BroadsheetPage(QWidget):
         self.history_class_name = None
         self.history_term_id = None
         self.history_year_id = None
-        self.layout = QVBoxLayout(self)
+        
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        root.addWidget(self.scroll_area)
+
+        self.content_widget = QWidget()
+        self.scroll_area.setWidget(self.content_widget)
+
+        self.layout = QVBoxLayout(self.content_widget)
+        self.scroll_layout = self.layout
+        self.layout.setContentsMargins(20, 20, 20, 20)
+        self.layout.setSpacing(12)
         
         title = QLabel("ACADEMIC BROADSHEET MODULE")
         title.setProperty("variant", "accent")
@@ -161,6 +177,9 @@ class BroadsheetPage(QWidget):
         gender_summary_layout = QVBoxLayout(self.gender_summary_group)
         self.gender_table = QTableWidget()
         setup_table(self.gender_table, ["Gender", "Count"])
+        self.gender_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.gender_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.gender_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         gender_summary_layout.addWidget(self.gender_table)
         summary_panels_layout.addWidget(self.gender_summary_group)
 
@@ -169,6 +188,9 @@ class BroadsheetPage(QWidget):
         division_summary_layout = QVBoxLayout(self.division_summary_group)
         self.division_table = QTableWidget()
         setup_table(self.division_table, ["Division", "Students"])
+        self.division_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.division_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.division_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         division_summary_layout.addWidget(self.division_table)
         summary_panels_layout.addWidget(self.division_summary_group)
 
@@ -192,6 +214,9 @@ class BroadsheetPage(QWidget):
         top_students_layout = QVBoxLayout(self.top_students_group)
         self.top_students_table = QTableWidget()
         setup_table(self.top_students_table, ["Pos", "Adm No", "Name", "Avg", "Div"])
+        self.top_students_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.top_students_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.top_students_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         top_students_layout.addWidget(self.top_students_table)
         self.scroll_layout.addWidget(self.top_students_group)
 
@@ -200,6 +225,9 @@ class BroadsheetPage(QWidget):
         bottom_students_layout = QVBoxLayout(self.bottom_students_group)
         self.bottom_students_table = QTableWidget()
         setup_table(self.bottom_students_table, ["Pos", "Adm No", "Name", "Avg", "Div"])
+        self.bottom_students_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.bottom_students_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.bottom_students_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         bottom_students_layout.addWidget(self.bottom_students_table)
         self.scroll_layout.addWidget(self.bottom_students_group)
 
@@ -208,6 +236,9 @@ class BroadsheetPage(QWidget):
         subject_perf_layout = QVBoxLayout(self.subject_perf_group)
         self.subject_perf_table = QTableWidget()
         setup_table(self.subject_perf_table, ["Subject", "Average", "Passes", "Fails"])
+        self.subject_perf_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.subject_perf_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.subject_perf_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         subject_perf_layout.addWidget(self.subject_perf_table)
         self.scroll_layout.addWidget(self.subject_perf_group)
 
@@ -218,6 +249,8 @@ class BroadsheetPage(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         full_broadsheet_layout.addWidget(self.table)
         self.scroll_layout.addWidget(self.full_broadsheet_group)
 
@@ -237,7 +270,16 @@ class BroadsheetPage(QWidget):
         EventBus.subscribe("GRADE_RULES_CHANGED", self.refresh_all)
         EventBus.subscribe("DIVISION_RULES_CHANGED", self.refresh_all)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, "_needs_refresh", False):
+            self._needs_refresh = False
+            self.refresh_all()
+
     def refresh_all(self):
+        if not self.isVisible():
+            self._needs_refresh = True
+            return
         self.load_years()
         combo_loaders.load_classes(self.class_box)
 
@@ -252,7 +294,7 @@ class BroadsheetPage(QWidget):
     def load_exams(self):
         combo_loaders.load_exams(self.exam_box, self.term_box.currentData())
 
-    def set_history_context(self, exam_id, class_name):
+    def set_history_context(self, exam_id, class_name, level=None):
         row = fetch_one("""
             SELECT e.term_id, t.academic_year_id, e.exam_name, t.term_name, y.year_name
             FROM exams e
@@ -266,6 +308,7 @@ class BroadsheetPage(QWidget):
         term_id, year_id, exam_name, term_name, year_name = row
         self.history_exam_id = exam_id
         self.history_class_name = class_name
+        self.history_level = level or SystemState.get_level()
         self.history_term_id = term_id
         self.history_year_id = year_id
         self.context_label.setText(
@@ -279,13 +322,14 @@ class BroadsheetPage(QWidget):
         self.history_class_name = None
         self.history_term_id = None
         self.history_year_id = None
+        self.history_level = None
         self.context_label.setText("")
 
     def get_broadsheet_data(self):
         # This method is now responsible for gathering ALL data needed for UI and export
         exam_id = self.history_exam_id or self.exam_box.currentData()
         class_name = self.history_class_name or self.class_box.currentText()
-        level = SystemState.get_level()
+        level = self.history_level or SystemState.get_level()
 
         if not (exam_id and class_name):
             return None # Return early if essential filters are missing
@@ -498,30 +542,34 @@ class BroadsheetPage(QWidget):
         subjects = data['subjects']
         rows = data['rows']
         
-        # Build Table
-        headers = ["Pos", "Adm No", "Name", "Sex"] + subjects + ["Total", "Avg", "Pts", "Div"]
-        self.table.setColumnCount(len(headers))
-        self.table.setHorizontalHeaderLabels(headers)
-        self.table.setRowCount(len(rows))
+        self.table.setUpdatesEnabled(False)
+        try:
+            # Build Table
+            headers = ["Pos", "Adm No", "Name", "Sex"] + subjects + ["Total", "Avg", "Pts", "Div"]
+            self.table.setColumnCount(len(headers))
+            self.table.setHorizontalHeaderLabels(headers)
+            self.table.setRowCount(len(rows))
 
-        for r_idx, r in enumerate(rows):
-            self.table.setItem(r_idx, 0, QTableWidgetItem(str(r['Position'])))
-            self.table.setItem(r_idx, 1, QTableWidgetItem(r['Admission No']))
-            self.table.setItem(r_idx, 2, QTableWidgetItem(r['Student Name']))
-            self.table.setItem(r_idx, 3, QTableWidgetItem(r['Gender']))
-            
-            col_offset = 4
-            for s_idx, sub in enumerate(subjects):
-                val = r['marks'][sub]
-                self.table.setItem(r_idx, col_offset + s_idx, QTableWidgetItem(str(val)))
-            
-            end_offset = col_offset + len(subjects)
-            self.table.setItem(r_idx, end_offset, QTableWidgetItem(str(r['Total'])))
-            self.table.setItem(r_idx, end_offset + 1, QTableWidgetItem(str(r['Average'])))
-            self.table.setItem(r_idx, end_offset + 2, QTableWidgetItem(str(r['Points'])))
-            self.table.setItem(r_idx, end_offset + 3, QTableWidgetItem(str(r['Division'])))
+            for r_idx, r in enumerate(rows):
+                self.table.setItem(r_idx, 0, QTableWidgetItem(str(r['Position'])))
+                self.table.setItem(r_idx, 1, QTableWidgetItem(r['Admission No']))
+                self.table.setItem(r_idx, 2, QTableWidgetItem(r['Student Name']))
+                self.table.setItem(r_idx, 3, QTableWidgetItem(r['Gender']))
+                
+                col_offset = 4
+                for s_idx, sub in enumerate(subjects):
+                    val = r['marks'][sub]
+                    self.table.setItem(r_idx, col_offset + s_idx, QTableWidgetItem(str(val)))
+                
+                end_offset = col_offset + len(subjects)
+                self.table.setItem(r_idx, end_offset, QTableWidgetItem(str(r['Total'])))
+                self.table.setItem(r_idx, end_offset + 1, QTableWidgetItem(str(r['Average'])))
+                self.table.setItem(r_idx, end_offset + 2, QTableWidgetItem(str(r['Points'])))
+                self.table.setItem(r_idx, end_offset + 3, QTableWidgetItem(str(r['Division'])))
 
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+            self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        finally:
+            self.table.setUpdatesEnabled(True)
         
         # Update Footer (Class Average is now from class_performance)
         class_avg = data['class_performance']['class_average']

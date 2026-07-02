@@ -6,11 +6,6 @@ from PySide6.QtWidgets import (
 
 from progress_dialog import ProgressDialog
 
-from subjects_page import SubjectsPage
-from enrollment_page import EnrollmentPage
-from academic_years import AcademicYearsPage
-from terms_page import TermsPage
-
 
 class AcademicsPage(QWidget):
 
@@ -26,17 +21,59 @@ class AcademicsPage(QWidget):
 
         root.addWidget(self.tabs)
 
-        self.subjects_page = SubjectsPage()
-        self.enrollment_page = EnrollmentPage()
-        self.years_page = AcademicYearsPage()
-        self.terms_page = TermsPage()
+        self._pages = {}
+        def create_subjects_page():
+            from subjects_page import SubjectsPage
+            return SubjectsPage()
 
-        self.tabs.addTab(self.subjects_page, "Subjects")
-        self.tabs.addTab(self.enrollment_page, "Enrollment")
-        self.tabs.addTab(self.years_page, "Academic Years")
-        self.tabs.addTab(self.terms_page, "Terms")
+        def create_enrollment_page():
+            from enrollment_page import EnrollmentPage
+            return EnrollmentPage()
 
-        self.tabs.setCurrentIndex(0)
+        def create_years_page():
+            from academic_years import AcademicYearsPage
+            return AcademicYearsPage()
+
+        def create_terms_page():
+            from terms_page import TermsPage
+            return TermsPage()
+
+        self._page_factories = {
+            "Subjects": create_subjects_page,
+            "Enrollment": create_enrollment_page,
+            "Academic Years": create_years_page,
+            "Terms": create_terms_page
+        }
+
+        # We'll add placeholder widgets and swap them on tab change
+        for name in ["Subjects", "Enrollment", "Academic Years", "Terms"]:
+            self.tabs.addTab(QWidget(), name)
+
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        self._on_tab_changed(0)
+
+    def _on_tab_changed(self, index):
+        if index < 0:
+            return
+        name = self.tabs.tabText(index)
+        if not name or name not in self._page_factories:
+            return
+
+        if name not in self._pages:
+            self._pages[name] = self._page_factories[name]()
+            # Replace the placeholder widget
+            self.tabs.blockSignals(True)
+            old_widget = self.tabs.widget(index)
+            self.tabs.removeTab(index)
+            self.tabs.insertTab(index, self._pages[name], name)
+            self.tabs.setCurrentIndex(index)
+            self.tabs.blockSignals(False)
+            
+            # Cleanup old widget
+            if old_widget:
+                old_widget.deleteLater()
+        
+        self.load()
 
     def load(self):
         page = self.tabs.currentWidget()

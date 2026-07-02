@@ -10,14 +10,14 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
     QLabel,
-    QFrame
+    QFrame,
+    QScrollArea,
+    QSizePolicy,
 )
 
 from progress_dialog import ProgressDialog
 from PySide6.QtCore import Qt
 
-import openpyxl
-import excel_utils
 from db_utils import get_cursor, fetch_all
 from system_state import SystemState
 from event_bus import EventBus
@@ -31,8 +31,21 @@ class EnrollmentPage(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        root.addWidget(self.scroll_area)
+
+        self.content_widget = QWidget()
+        self.scroll_area.setWidget(self.content_widget)
+
+        self.layout = QVBoxLayout(self.content_widget)
+        self.layout.setContentsMargins(20, 20, 20, 20)
+        self.layout.setSpacing(12)
 
         # =========================
         # FILTERS
@@ -99,6 +112,10 @@ class EnrollmentPage(QWidget):
         self.available_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.available_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.available_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.available_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.available_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.available_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.available_table.setMinimumHeight(300)
         left_vbox.addWidget(self.available_table)
         tables_layout.addLayout(left_vbox, 2)
 
@@ -134,6 +151,10 @@ class EnrollmentPage(QWidget):
         self.enrolled_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.enrolled_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.enrolled_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.enrolled_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.enrolled_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.enrolled_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.enrolled_table.setMinimumHeight(300)
         right_vbox.addWidget(self.enrolled_table)
         tables_layout.addLayout(right_vbox, 2)
 
@@ -171,6 +192,18 @@ class EnrollmentPage(QWidget):
     # =========================
     # DATA LOADING
     # =========================
+
+    def _update_table_heights(self):
+        # Calculate max height needed
+        self.available_table.resizeRowsToContents()
+        self.enrolled_table.resizeRowsToContents()
+        
+        h1 = self.available_table.horizontalHeader().height() + self.available_table.verticalHeader().length() + self.available_table.frameWidth()*2 + 4
+        h2 = self.enrolled_table.horizontalHeader().height() + self.enrolled_table.verticalHeader().length() + self.enrolled_table.frameWidth()*2 + 4
+        
+        max_h = max(300, h1, h2)
+        self.available_table.setFixedHeight(max_h)
+        self.enrolled_table.setFixedHeight(max_h)
 
     def load_years(self):
         combo_loaders.load_years(self.year_box)
@@ -324,6 +357,7 @@ class EnrollmentPage(QWidget):
     # =========================
 
     def download_template(self):
+        import excel_utils
         excel_utils.download_template(
             self, 
             "enrollment_template.xlsx",
@@ -333,6 +367,7 @@ class EnrollmentPage(QWidget):
         )
 
     def export_excel(self):
+        import excel_utils
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
         if not (year_id and term_id):
@@ -353,6 +388,8 @@ class EnrollmentPage(QWidget):
         )
 
     def import_excel(self):
+        import excel_utils
+        import openpyxl
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
         if not (year_id and term_id):

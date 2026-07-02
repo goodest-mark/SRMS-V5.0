@@ -59,7 +59,8 @@ def _init_db_inner(conn, cur):
         gender TEXT,
         class TEXT,
         stream TEXT,
-        level TEXT
+        level TEXT,
+        comments TEXT
     )
     """)
     
@@ -122,6 +123,23 @@ def _init_db_inner(conn, cur):
     ON DELETE CASCADE
 )
 """)
+
+    # =========================
+    # EXAM REMARKS (Manual Comments)
+    # =========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS exam_remarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admission_no TEXT,
+        exam_id INTEGER,
+        teacher_remarks TEXT,
+        headteacher_remarks TEXT,
+        developmental_notes TEXT,
+        UNIQUE(admission_no, exam_id),
+        FOREIGN KEY(admission_no) REFERENCES students(admission_no) ON DELETE CASCADE,
+        FOREIGN KEY(exam_id) REFERENCES exams(id) ON DELETE CASCADE
+    )
+    """)
 
     # =========================
     # SUBJECTS
@@ -528,6 +546,15 @@ def _init_db_inner(conn, cur):
             _validate_identifier(col)
             print(f"[MIGRATION] Adding missing security column: {col}")
             cur.execute(f"ALTER TABLE system_security ADD COLUMN {col} TEXT")
+
+    # =========================
+    # STUDENTS MIGRATION
+    # =========================
+    cur.execute("PRAGMA table_info(students)")
+    student_columns = [row[1] for row in cur.fetchall()]
+    if "comments" not in student_columns:
+        print("[MIGRATION] Adding comments column to students...")
+        cur.execute("ALTER TABLE students ADD COLUMN comments TEXT")
 
     def _hash_secret(value):
         salt = secrets.token_hex(16)

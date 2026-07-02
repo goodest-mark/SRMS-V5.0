@@ -65,7 +65,7 @@ class DashboardHome(QWidget):
 
     def __init__(self):
        super().__init__()
-
+       self._needs_refresh = False
        self.build_ui()
 
     # Load dashboard immediately
@@ -359,6 +359,9 @@ class DashboardHome(QWidget):
     # =====================================
 
     def load_dashboard(self):
+        if not self.isVisible():
+            self._needs_refresh = True
+            return
 
         try:
             with get_cursor() as cur:
@@ -439,3 +442,9 @@ class DashboardHome(QWidget):
             print(f"[ERROR] Dashboard failed to load: {error}")
             self.school_lbl.setText("Dashboard Error")
             self.exam_lbl.setText(f"Could not load data: {error}")
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._needs_refresh:
+            self._needs_refresh = False
+            self.load_dashboard()

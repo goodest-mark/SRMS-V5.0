@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLineEdit,
+    QWidget, QVBoxLayout, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QMessageBox
 )
 
@@ -43,6 +43,10 @@ class EditStudentWindow(QWidget):
         self.stream = QLineEdit()
         self.stream.setText(student_data[5])
 
+        self.comment = QTextEdit()
+        self.comment.setPlaceholderText("Comments / Remarks")
+        self.comment.setPlainText(student_data[6] if len(student_data) > 6 and student_data[6] else "")
+
         self.btn = QPushButton("UPDATE")
         self.btn.clicked.connect(self.update_student)
 
@@ -51,6 +55,7 @@ class EditStudentWindow(QWidget):
         layout.addWidget(self.gender)
         layout.addWidget(self.class_box)
         layout.addWidget(self.stream)
+        layout.addWidget(self.comment)
         layout.addWidget(self.btn)
 
         self.setLayout(layout)
@@ -58,13 +63,14 @@ class EditStudentWindow(QWidget):
     def update_student(self):
         execute("""
             UPDATE students
-            SET full_name=?, gender=?, class=?, stream=?
+            SET full_name=?, gender=?, class=?, stream=?, comments=?
             WHERE admission_no=?
         """, (
             self.name.text(),
             self.gender.currentText(),
             self.class_box.currentText(),
             self.stream.text(),
+            self.comment.toPlainText(),
             self.admission.text()
         ))
 

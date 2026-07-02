@@ -16,6 +16,7 @@ from settings_page import get_setting
 from watermark import draw_watermark
 from ranking_engine import compute_student_scores
 from grade_utils import get_grade
+from remarks_utils import get_default_remark, get_headteacher_remark, get_developmental_note
 
 # Color scheme
 NAVY = colors.HexColor('#1B3A5C')
@@ -228,10 +229,12 @@ def _get_student_styles():
     _student_styles_cache['note'] = ParagraphStyle(
         'student_note', fontName='Helvetica-Oblique', fontSize=6.8,
         alignment=TA_CENTER, leading=8, textColor=NAVY)
-    _student_styles_cache['comment'] = ParagraphStyle(
+    _student_styles_cache['student_comment'] = ParagraphStyle(
         'student_comment', fontName='Helvetica', fontSize=7,
         alignment=TA_LEFT, leading=8.5)
+    _student_styles_cache['comment'] = _student_styles_cache['student_comment']
     return _student_styles_cache
+
 
 
 def generate_report_book(parent, exam_id, class_name, save_path, progress_callback=None):
@@ -239,6 +242,10 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
     Generates one portrait A4 page per student using the same layout
     as the single-student report card.
     """
+    try:
+        from pypdf import PdfWriter
+    except Exception:
+        PdfWriter = None
     conn = connect()
     cur = conn.cursor()
     ST = _get_student_styles()
@@ -329,12 +336,8 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
         canvas.rect(x, y, w, h)
         canvas.restoreState()
 
-    doc = SimpleDocTemplate(
-        save_path, pagesize=STUDENT_PAGE_SIZE,
-        rightMargin=STUDENT_R_MARGIN, leftMargin=STUDENT_L_MARGIN,
-        topMargin=STUDENT_T_MARGIN, bottomMargin=STUDENT_B_MARGIN
-    )
-    elements = []
+    # We'll generate one PDF per student into temporary files then merge them.
+    temp_files = []
 
     class_students = sorted(
         class_students,
@@ -347,18 +350,29 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
     for pos, student in enumerate(class_students, start=1):
         student['class_position'] = pos
 
+    # Fetch manual remarks for all students in one go
+    cur.execute("""
+        SELECT admission_no, teacher_remarks, headteacher_remarks, developmental_notes
+        FROM exam_remarks
+        WHERE exam_id = ?
+    """, (exam_id,))
+    all_remarks = {r[0]: (r[1], r[2], r[3]) for r in cur.fetchall()}
+
     total_students = len([s for s in class_students if s['status'] == 'READY'])
 
     for index, student in enumerate(class_students):
         adm = student['admission']
+        t_rem, h_rem, d_notes = all_remarks.get(adm, (None, None, None))
+        
         cur.execute(
-            "SELECT full_name, gender, stream FROM students WHERE admission_no=?",
+            "SELECT full_name, gender, stream, comments FROM students WHERE admission_no=?",
             (adm,)
         )
         s_row = cur.fetchone()
         student_name = s_row[0] if s_row else student.get('name', '')
         student_gender = s_row[1] if s_row else student.get('gender', '')
         student_stream = (s_row[2] if s_row and s_row[2] else '-')
+        student_comment = s_row[3] if s_row and s_row[3] else ''
 
         cur.execute("""
             SELECT r.subject_name,
@@ -385,7 +399,8 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
         average = round(total_marks / num_subj, 2) if num_subj else 0
         overall_grade = get_grade(average, level=level) if marks_vals else '-'
 
-        elements.extend(_build_student_report_content(
+        # Build single-student content and write to a temp PDF.
+        content = _build_student_report_content(
             ST=ST,
             school_name=school_name,
             school_motto=school_motto,
@@ -421,18 +436,59 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
             use_req=use_req,
             head_teacher=head_teacher,
             academic_master=academic_master,
-            include_page_break=index < len(class_students) - 1
-        ))
+            student_comment=student_comment,
+            include_page_break=False,
+            school_stamp=school_stamp,
+            teacher_remarks=t_rem,
+            head_remarks=h_rem,
+            dev_notes=d_notes
+        )
+
+        # Write this student's single page to a temporary PDF file.
+        tf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        tf.close()
+        temp_files.append(tf.name)
+        try:
+            student_doc = SimpleDocTemplate(
+                tf.name, pagesize=STUDENT_PAGE_SIZE,
+                rightMargin=STUDENT_R_MARGIN, leftMargin=STUDENT_L_MARGIN,
+                topMargin=STUDENT_T_MARGIN, bottomMargin=STUDENT_B_MARGIN
+            )
+            student_doc.build(content, onFirstPage=on_page, onLaterPages=on_page)
+        except Exception as e:
+            # Clean up temp files on error
+            for p in temp_files:
+                try:
+                    os.unlink(p)
+                except Exception:
+                    pass
+            conn.close()
+            return False, str(e)
+
         report_progress(20 + int(((index + 1) / max(len(class_students), 1)) * 75), f"Rendered {index + 1}/{len(class_students)} students")
 
+    # Merge temp PDFs into final output
     try:
-        report_progress(95, "Rendering PDF")
-        doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+        if PdfWriter is None:
+            raise RuntimeError("pypdf is required to merge temporary PDFs. Install 'pypdf' in your environment.")
+
+        merger = PdfWriter()
+        for tf in temp_files:
+            merger.append(tf)
+        with open(save_path, 'wb') as out_f:
+            merger.write(out_f)
+        merger.close()
         report_progress(100, "Report cards generated")
-        return True, 'Report cards generated successfully.'
+        return True, save_path
     except Exception as e:
         return False, str(e)
     finally:
+        # cleanup temp files and DB connection
+        for p in temp_files:
+            try:
+                os.unlink(p)
+            except Exception:
+                pass
         conn.close()
 
 
@@ -478,7 +534,7 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
         school_website = ""
 
     cur.execute("""
-        SELECT admission_no, full_name, gender, class, stream, level
+        SELECT admission_no, full_name, gender, class, stream, level, comments
         FROM students
         WHERE admission_no=? AND level=?
     """, (admission_no, level))
@@ -488,7 +544,7 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
         return False, "Student record was not found."
     report_progress(10, "Loading student record")
 
-    student_adm, student_name, student_gender, class_name, student_stream, _student_level = student_row
+    student_adm, student_name, student_gender, class_name, student_stream, _student_level, student_comment = student_row
 
     context_query = """
         SELECT e.id, t.term_name, y.year_name, e.exam_name, e.level,
@@ -530,6 +586,15 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
     report_progress(25, "Loading exam context")
 
     exam_id, term_name, year_name, exam_name, _, term_id, year_id, _exam_status = context
+
+    # Fetch manual remarks
+    cur.execute("""
+        SELECT teacher_remarks, headteacher_remarks, developmental_notes
+        FROM exam_remarks
+        WHERE admission_no = ? AND exam_id = ?
+    """, (student_adm, exam_id))
+    remarks_row = cur.fetchone()
+    teacher_remarks, head_remarks, dev_notes = remarks_row if remarks_row else (None, None, None)
 
     cur.execute("""
         SELECT item_name, quantity
@@ -677,7 +742,12 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
         use_req=use_req,
         head_teacher=head_teacher,
         academic_master=academic_master,
+        student_comment=student_comment,
         include_page_break=False,
+        school_stamp=school_stamp,
+        teacher_remarks=teacher_remarks,
+        head_remarks=head_remarks,
+        dev_notes=dev_notes
     )
 
     keeper = KeepInFrame(
@@ -940,46 +1010,40 @@ def _build_student_page_results(ST, full_names, marks, grades, level):
         Paragraph('SUBJECT', ST['table_head']),
         Paragraph('MARKS', ST['table_head']),
         Paragraph('GRADE', ST['table_head']),
-        Paragraph('POINTS', ST['table_head']),
         Paragraph('REMARKS', ST['table_head']),
     ]]
 
-    from grade_utils import get_points
-
     for i in range(len(full_names)):
         g = grades[i]
-        p = get_points(g, level)
         r = _get_remark(g)
         rows.append([
             Paragraph(full_names[i], ST['table_body_left']),
             Paragraph(str(marks[i]), ST['table_body']),
             Paragraph(g, ST['table_body']),
-            Paragraph(str(p), ST['table_body']),
             Paragraph(r, ST['table_body']),
         ])
 
     # If no subjects, add a placeholder
     if len(full_names) == 0:
-        rows.append([Paragraph('-', ST['table_body'])] * 5)
+        rows.append([Paragraph('-', ST['table_body'])] * 4)
 
     col_widths = [
-        STUDENT_PAGE_W * 0.40,
-        STUDENT_PAGE_W * 0.12,
-        STUDENT_PAGE_W * 0.12,
-        STUDENT_PAGE_W * 0.12,
-        STUDENT_PAGE_W * 0.24
+        STUDENT_PAGE_W * 0.45,
+        STUDENT_PAGE_W * 0.15,
+        STUDENT_PAGE_W * 0.15,
+        STUDENT_PAGE_W * 0.25
     ]
 
     table = Table(rows, colWidths=col_widths)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), NAVY),
         ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-        ('BOX', (0, 0), (-1, -1), 0.6, NAVY),
-        ('GRID', (0, 0), (-1, -1), 0.4, GRID_COLOR),
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.3, GRID_COLOR),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('RIGHTPADDING', (0, 0), (-1, -1), 4),
     ]))
@@ -992,7 +1056,7 @@ def _build_student_page_totals(ST, total_marks, average, overall_grade, division
         Paragraph('AVERAGE', ST['summary_label']),
         Paragraph('OVERALL GRADE', ST['summary_label']),
         Paragraph('DIVISION', ST['summary_label']),
-        Paragraph('POINTS', ST['summary_label']),
+        Paragraph('AGGR. POINTS', ST['summary_label']),
     ], [
         Paragraph(_safe_text(total_marks), ST['summary_value']),
         Paragraph(f"{average:.2f}%", ST['summary_value']),
@@ -1003,8 +1067,8 @@ def _build_student_page_totals(ST, total_marks, average, overall_grade, division
     table = Table(rows, colWidths=[STUDENT_PAGE_W / 5.0] * 5)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), LIGHT_BG),
-        ('BOX', (0, 0), (-1, -1), 0.55, NAVY),
-        ('GRID', (0, 0), (-1, -1), 0.4, GRID_COLOR),
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.3, GRID_COLOR),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
@@ -1060,22 +1124,53 @@ def _build_student_page_requirements(ST, requirements_data, use_req):
     return Table([[title], [body]], colWidths=[STUDENT_PAGE_W])
 
 
-def _build_student_page_comments(ST, head_teacher, academic_master):
-    title = Table([[Paragraph('COMMENTS / SIGNATURES', ST['section_hdr'])]],
+
+
+def _build_student_page_comments(ST, head_teacher, academic_master, student_comment, stamp_path=None, average=0, division='-', level='O_LEVEL', teacher_remarks=None, head_remarks=None, dev_notes=None):
+    title = Table([[Paragraph('COMMENTS / SIGNATURES / OFFICIAL STAMP', ST['section_hdr'])]],
                   colWidths=[STUDENT_PAGE_W])
     title.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), NAVY),
         ('TEXTCOLOR', (0, 0), (-1, -1), WHITE),
-        ('BOX', (0, 0), (-1, -1), 0.6, NAVY),
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 6),
     ]))
 
+    smart_comment = get_default_remark(average, division, level)
+    
+    # Defaults if not provided
+    if not teacher_remarks:
+        teacher_remarks = smart_comment
+    if not head_remarks:
+        head_remarks = get_headteacher_remark(division)
+    if not dev_notes:
+        dev_notes = get_developmental_note(average)
+
+    # Priority for development/general comment: Developmental Notes > Student General Comment
+    main_comment = dev_notes if dev_notes else student_comment
+
+    stamp = ""
+    if stamp_path and os.path.exists(stamp_path):
+        try:
+            stamp = Image(stamp_path, width=0.8*inch, height=0.8*inch)
+        except:
+            pass
+
+    # Teacher Remarks fallback
+    t_rem_display = f"<i>{teacher_remarks}</i>" if teacher_remarks else '<font color="#9AA4B2">______________________________________________</font>'
+    h_rem_display = f"<i>{head_remarks}</i>" if head_remarks else '<font color="#9AA4B2">______________________________________________</font>'
+
     rows = [
         [
+            Paragraph('<b>Developmental Note</b>', ST['label']),
+            Paragraph(main_comment, ST['student_comment']),
+            stamp,
+        ],
+        [
             Paragraph(f"HEAD TEACHER<br/><font size='6'>{_safe_text(head_teacher)}</font>", ST['label']),
-            Paragraph('<font color="#9AA4B2">______________________________________________</font>', ST['comment']),
+            Paragraph(h_rem_display, ST['comment']),
             Paragraph('Signature: ____________________<br/>Date: ____________________', ST['tiny_left']),
         ],
         [
@@ -1085,19 +1180,20 @@ def _build_student_page_comments(ST, head_teacher, academic_master):
         ],
         [
             Paragraph("CLASS TEACHER", ST['label']),
-            Paragraph('<font color="#9AA4B2">______________________________________________</font>', ST['comment']),
+            Paragraph(t_rem_display, ST['comment']),
             Paragraph('Signature: ____________________<br/>Date: ____________________', ST['tiny_left']),
         ],
     ]
     body = Table(
         rows,
         colWidths=[1.15 * inch, STUDENT_PAGE_W - 1.15 * inch - 2.0 * inch, 2.0 * inch],
-        rowHeights=[0.52 * inch, 0.52 * inch, 0.52 * inch]
+        rowHeights=[0.85 * inch, 0.52 * inch, 0.52 * inch, 0.52 * inch]
     )
     body.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.55, NAVY),
-        ('GRID', (0, 0), (-1, -1), 0.35, GRID_COLOR),
+        ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.3, GRID_COLOR),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (2, 0), (2, 0), 'CENTER'),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
@@ -1162,7 +1258,8 @@ def _build_student_report_content(
     class_position, total_students, division, points, overall_grade,
     full_names, short_names, marks_vals, grades_vals, total_marks, average,
     requirements_data, use_req, head_teacher, academic_master,
-    include_page_break=False
+    student_comment='', include_page_break=False, school_stamp=None,
+    teacher_remarks=None, head_remarks=None, dev_notes=None
 ):
     content = [
         _build_student_page_header(
@@ -1191,7 +1288,11 @@ def _build_student_report_content(
         Spacer(1, 6),
         _build_student_page_requirements(ST, requirements_data, use_req),
         Spacer(1, 6),
-        _build_student_page_comments(ST, head_teacher, academic_master),
+        _build_student_page_comments(
+            ST, head_teacher, academic_master, student_comment,
+            stamp_path=school_stamp, average=average, division=division, level=level,
+            teacher_remarks=teacher_remarks, head_remarks=head_remarks, dev_notes=dev_notes
+        ),
         Spacer(1, 4),
         _build_student_page_dates(ST),
         Spacer(1, 4),

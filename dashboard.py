@@ -210,7 +210,7 @@ class MainWindow(QMainWindow):
         admission = self.table.item(row, 1).text()
 
         student = fetch_one("""
-            SELECT id, admission_no, full_name, gender, class, stream
+            SELECT id, admission_no, full_name, gender, class, stream, comments
             FROM students
             WHERE admission_no=?
         """, (admission,))
