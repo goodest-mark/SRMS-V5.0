@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,
     QLabel, QGroupBox, QFileDialog, QProgressBar
 )
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, QSignalBlocker
 
 from system_state import SystemState
 from event_bus import EventBus
@@ -61,9 +61,11 @@ class ReportBookPage(QWidget):
         self.term_box.currentIndexChanged.connect(self.load_exams)
 
         self.exam_box = QComboBox()
+        self.exam_box.currentIndexChanged.connect(self.update_summary)
         
         self.class_box = QComboBox()
         self.class_box.addItems(get_classes())
+        self.class_box.currentIndexChanged.connect(self.update_summary)
 
         filters_layout.addWidget(QLabel("Year:"))
         filters_layout.addWidget(self.year_box)
@@ -103,7 +105,7 @@ class ReportBookPage(QWidget):
         actions_layout = QHBoxLayout()
         
         self.preview_btn = QPushButton("PREVIEW SUMMARY")
-        self.preview_btn.clicked.connect(self.update_summary)
+        self.preview_btn.clicked.connect(lambda: self.update_summary(manual=True))
         self.preview_btn.setFixedHeight(40)
         
         self.generate_btn = QPushButton("GENERATE PDF BOOK")
@@ -136,8 +138,15 @@ class ReportBookPage(QWidget):
         if not self.isVisible():
             self._needs_refresh = True
             return
-        self.load_years()
-        combo_loaders.load_classes(self.class_box)
+        
+        blockers = [QSignalBlocker(w) for w in (self.year_box, self.term_box, self.exam_box, self.class_box)]
+        try:
+            self.load_years()
+            combo_loaders.load_classes(self.class_box)
+        finally:
+            del blockers
+        
+        self.update_summary()
 
     def load_years(self):
         combo_loaders.load_years(self.year_box)
@@ -177,13 +186,15 @@ class ReportBookPage(QWidget):
         self.history_level = None
         self.context_label.setText("")
 
-    def update_summary(self):
+    def update_summary(self, manual=False):
         exam_id = self.history_exam_id or self.exam_box.currentData()
         class_name = self.history_class_name or self.class_box.currentText()
         level = self.history_level or SystemState.get_level()
 
         if not (exam_id and class_name):
-            show_error(self, "Please select all context filters.")
+            if manual:
+                show_error(self, "Please select all context filters.")
+            self.summary_label.setText("Select criteria and click Preview...")
             return
 
         ranking = compute_student_scores(level, exam_id, class_name)

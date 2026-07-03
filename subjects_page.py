@@ -218,6 +218,7 @@ class SubjectsPage(QWidget):
 
             self.name.clear()
             self.load()
+            EventBus.emit("SUBJECTS_UPDATED")
 
         except Exception as e:
             show_error(self, str(e))
@@ -245,6 +246,7 @@ class SubjectsPage(QWidget):
             cur.execute("DELETE FROM subjects WHERE id=?", (subject_id,))
 
         self.load()
+        EventBus.emit("SUBJECTS_UPDATED")
 
     # =====================
     # EDIT
@@ -270,6 +272,7 @@ class SubjectsPage(QWidget):
 
         if dlg.exec():
             self.load()
+            EventBus.emit("SUBJECTS_UPDATED")
 
     # =====================
     # EXCEL FRAMEWORK
@@ -326,6 +329,7 @@ class SubjectsPage(QWidget):
                         continue
             
             self.load()
+            EventBus.emit("SUBJECTS_UPDATED")
             QMessageBox.information(self, "Import Complete", f"Imported {imported} subjects.")
             
         except Exception as e:

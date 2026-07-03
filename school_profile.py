@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt
 
 from db_utils import fetch_one, get_cursor
 from security_settings import authorize_action
+from event_bus import EventBus
 
 _ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 
@@ -196,6 +197,7 @@ class SchoolProfilePage(QWidget):
                     self.dashboard_bg_path, self.watermark_text.text() or "CONFIDENTIAL"
                 ))
             QMessageBox.information(self, "Success", "School Profile Configuration Saved.")
+            EventBus.emit("SCHOOL_PROFILE_UPDATED")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An unexpected error occurred while saving the school profile: {e}")
 

@@ -73,9 +73,11 @@ class DashboardHome(QWidget):
 
     # Refresh automatically when data changes
        EventBus.subscribe("STUDENTS_UPDATED", self.load_dashboard)
+       EventBus.subscribe("SUBJECTS_UPDATED", self.load_dashboard)
        EventBus.subscribe("RESULTS_UPDATED", self.load_dashboard)
        EventBus.subscribe("EXAMS_UPDATED", self.load_dashboard)
        EventBus.subscribe("LEVEL_CHANGED", self.load_dashboard)
+       EventBus.subscribe("SCHOOL_PROFILE_UPDATED", self.load_dashboard)
 
     def build_ui(self):
         """Build the complete dashboard UI with improved layout and styling."""

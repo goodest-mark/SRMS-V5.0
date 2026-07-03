@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from progress_dialog import ProgressDialog
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSignalBlocker
 
 from db_utils import fetch_all, fetch_one
 from system_state import SystemState
@@ -91,9 +91,11 @@ class BroadsheetPage(QWidget):
         self.term_box.currentIndexChanged.connect(self.load_exams)
 
         self.exam_box = QComboBox()
+        self.exam_box.currentIndexChanged.connect(self.preview_broadsheet)
         
         self.class_box = QComboBox()
         self.class_box.addItems(get_classes())
+        self.class_box.currentIndexChanged.connect(self.preview_broadsheet)
 
         filters_layout.addWidget(QLabel("Year:"))
         filters_layout.addWidget(self.year_box)
@@ -113,7 +115,7 @@ class BroadsheetPage(QWidget):
         actions_layout = QHBoxLayout()
 
         self.preview_btn = QPushButton("PREVIEW")
-        self.preview_btn.clicked.connect(self.preview_broadsheet)
+        self.preview_btn.clicked.connect(lambda: self.preview_broadsheet(manual=True))
         self.preview_btn.setProperty("variant", "accent")
         
         self.excel_btn = QPushButton("EXPORT EXCEL")
@@ -280,8 +282,22 @@ class BroadsheetPage(QWidget):
         if not self.isVisible():
             self._needs_refresh = True
             return
-        self.load_years()
-        combo_loaders.load_classes(self.class_box)
+        
+        blocker = QSignalBlocker(self.year_box)
+        blocker2 = QSignalBlocker(self.term_box)
+        blocker3 = QSignalBlocker(self.exam_box)
+        blocker4 = QSignalBlocker(self.class_box)
+        try:
+            self.load_years()
+            combo_loaders.load_classes(self.class_box)
+        finally:
+            blocker.unblock()
+            blocker2.unblock()
+            blocker3.unblock()
+            blocker4.unblock()
+        
+        # Trigger one refresh at the end
+        self.preview_broadsheet()
 
     def load_years(self):
         combo_loaders.load_years(self.year_box)
@@ -532,11 +548,13 @@ class BroadsheetPage(QWidget):
             }
         }
         
-    def preview_broadsheet(self):
+    def preview_broadsheet(self, manual=False):
         self.all_broadsheet_data = self.get_broadsheet_data() # Store data for export
         data = self.all_broadsheet_data
         if not data:
-            show_error(self, "No results found for the selected criteria.", title="No Data")
+            if manual:
+                show_error(self, "No results found for the selected criteria.", title="No Data")
+            self._clear_ui()
             return
 
         subjects = data['subjects']
@@ -597,6 +615,21 @@ class BroadsheetPage(QWidget):
             self.bottom_students_table,
             self.subject_perf_table
         ])
+
+    def _clear_ui(self):
+        self.table.setRowCount(0)
+        self.gender_table.setRowCount(0)
+        self.division_table.setRowCount(0)
+        self.top_students_table.setRowCount(0)
+        self.bottom_students_table.setRowCount(0)
+        self.subject_perf_table.setRowCount(0)
+        for widget in self.card_widgets.values():
+            widget.setText("-")
+        self.p_students.setText("Students: -")
+        self.p_avg.setText("Class Avg: -")
+        self.p_high.setText("Highest: -")
+        self.p_low.setText("Lowest: -")
+        self.footer.setText("No data found for the selected criteria.")
 
     def _expand_tables(self, tables):
         """Set table heights so all rows are visible and disable internal scrollbars."""

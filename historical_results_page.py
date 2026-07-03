@@ -173,6 +173,7 @@ class HistoricalResultsPage(QWidget):
 
         self.year_box.currentIndexChanged.connect(self.load_terms)
         self.term_box.currentIndexChanged.connect(self.load_exams)
+        self.exam_box.currentIndexChanged.connect(self.load_history)
         self.class_box.currentIndexChanged.connect(self.load_history)
 
         for label, widget in (

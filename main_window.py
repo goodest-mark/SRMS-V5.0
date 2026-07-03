@@ -305,6 +305,28 @@ class MainWindow(QMainWindow):
         self.update_clock()
         top_bar.addWidget(self.clock_lbl)
 
+        # Refresh Button
+        self.btn_refresh = QPushButton()
+        self.btn_refresh.setIcon(_icon("refresh.svg"))
+        self.btn_refresh.setIconSize(QSize(18, 18))
+        self.btn_refresh.setFixedSize(34, 34)
+        self.btn_refresh.setCursor(Qt.PointingHandCursor)
+        self.btn_refresh.setToolTip("Refresh system data")
+        self.btn_refresh.setStyleSheet("""
+            QPushButton {
+                background: rgba(2, 6, 23, 0.88);
+                border: 1px solid rgba(59, 130, 246, 0.25);
+                border-radius: 17px;
+                color: #FFFFFF;
+            }
+            QPushButton:hover {
+                background: rgba(59, 130, 246, 0.15);
+                border: 1px solid rgba(59, 130, 246, 0.45);
+            }
+        """)
+        self.btn_refresh.clicked.connect(self.refresh_all)
+        top_bar.addWidget(self.btn_refresh)
+
         top_bar.addWidget(self.level_switch)
 
         # =====================================
@@ -534,15 +556,25 @@ class MainWindow(QMainWindow):
         page,
         button
     ):
-        if page is not None and self.stack.indexOf(page) == -1:
+        if page is None:
+            return
+
+        is_already_active = (self.stack.currentWidget() == page)
+
+        if self.stack.indexOf(page) == -1:
             self.stack.addWidget(page)
         self.stack.setCurrentWidget(page)
         self.active_btn = button
         self.update_highlight(button)
         self._update_breadcrumb(button)
-        if page not in self._page_last_refreshed:
+
+        if not is_already_active:
+            if page not in self._page_last_refreshed:
+                self._refresh_page(page)
+                self._page_last_refreshed[page] = True
+        else:
+            # Re-clicking the active navigation button triggers a refresh
             self._refresh_page(page)
-            self._page_last_refreshed[page] = True
 
     def switch_named_page(self, page_name, button):
         page = self.ensure_page(page_name)
@@ -589,14 +621,11 @@ class MainWindow(QMainWindow):
             SystemState.set_level("A_LEVEL")
         else:
             SystemState.set_level("O_LEVEL")
-        # We don't call refresh_all here anymore because SystemState.set_level
-        # emits LEVEL_CHANGED, and we've optimized pages to handle it.
-        # However, we DO want to ensure the CURRENT page is refreshed immediately.
-        current = self.stack.currentWidget()
-        if current:
-            # Check if it has a refresh method or trigger it via the signal
-            # Most pages already subscribe to LEVEL_CHANGED.
-            pass 
+
+        # Ensure the CURRENT page is refreshed immediately.
+        # SystemState.set_level emits LEVEL_CHANGED, which many pages handle.
+        # But for robustness, we call refresh_all which targets both dashboard and current page.
+        self.refresh_all()
 
     def _update_breadcrumb(self, button):
         """Update breadcrumb based on current page."""
@@ -669,6 +698,7 @@ class MainWindow(QMainWindow):
 
         for method_name in (
             "refresh_all",
+            "load_dashboard",
             "load_data",
             "load",
             "load_years"
