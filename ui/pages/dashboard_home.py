@@ -11,12 +11,11 @@ from PySide6.QtWidgets import (
 )
 
 from PySide6.QtGui import QIcon, QFont
+from app_paths import icon_path
 from event_bus import EventBus
 from system_state import SystemState
 from db_utils import get_cursor
 from ui.cards import PremiumStatCard
-import os
-
 
 class GlassButton(QPushButton):
     """Modern glassmorphic button with icon and text for quick actions."""
@@ -41,9 +40,9 @@ class GlassButton(QPushButton):
 
 
 def _icon(name):
-    """Helper to get icon path."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_dir, "assets", "icons", name)
+    """Helper to get a shared icon path."""
+    path = icon_path(name)
+    return str(path) if path.exists() else ""
 
 
 class DashboardHome(QWidget):

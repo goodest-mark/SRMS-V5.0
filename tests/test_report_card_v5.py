@@ -3,6 +3,7 @@
 import os
 import sqlite3
 
+import report_card_v5 as report_card_module
 from report_card_v5 import generate_student_report_card, list_student_report_exams
 
 
@@ -92,6 +93,82 @@ class TestStudentReportCards:
         assert result == str(save_path)
         assert os.path.exists(save_path)
         assert os.path.getsize(save_path) > 0
+
+    def test_report_uses_historical_class_not_current_class(self, initialized_db, monkeypatch):
+        open_exam_id, _, _ = _seed_student_report_data(initialized_db)
+        conn = sqlite3.connect(initialized_db)
+        cur = conn.cursor()
+        cur.execute("UPDATE students SET exam_no='EX/2026/001' WHERE admission_no='ADM-RPT'")
+        cur.execute("UPDATE results SET class_name='Form I' WHERE admission_no='ADM-RPT' AND exam_id=?", (open_exam_id,))
+        cur.execute("UPDATE students SET class='Form II' WHERE admission_no='ADM-RPT'")
+        conn.commit()
+        conn.close()
+
+        captured = {}
+
+        class FakeDoc:
+            def __init__(self, *args, **kwargs):
+                self.width = 1
+                self.height = 1
+
+            def build(self, *args, **kwargs):
+                return None
+
+        def fake_content(**kwargs):
+            captured["class_name"] = kwargs["class_name"]
+            return []
+
+        monkeypatch.setattr(report_card_module, "SimpleDocTemplate", FakeDoc)
+        monkeypatch.setattr(report_card_module, "_build_student_report_content", fake_content)
+
+        success, result = generate_student_report_card(
+            None,
+            "ADM-RPT",
+            "O_LEVEL",
+            save_path=str(initialized_db) + ".pdf",
+            exam_id=open_exam_id,
+        )
+
+        assert success is True
+        assert captured["class_name"] == "Form I"
+        assert result.endswith(".pdf")
+
+    def test_report_receives_exam_number_when_present(self, initialized_db, monkeypatch):
+        open_exam_id, _, _ = _seed_student_report_data(initialized_db)
+        conn = sqlite3.connect(initialized_db)
+        cur = conn.cursor()
+        cur.execute("UPDATE students SET exam_no='EX/2026/002' WHERE admission_no='ADM-RPT'")
+        conn.commit()
+        conn.close()
+
+        captured = {}
+
+        class FakeDoc:
+            def __init__(self, *args, **kwargs):
+                self.width = 1
+                self.height = 1
+
+            def build(self, *args, **kwargs):
+                return None
+
+        def fake_content(**kwargs):
+            captured["exam_no"] = kwargs["exam_no"]
+            return []
+
+        monkeypatch.setattr(report_card_module, "SimpleDocTemplate", FakeDoc)
+        monkeypatch.setattr(report_card_module, "_build_student_report_content", fake_content)
+
+        success, result = generate_student_report_card(
+            None,
+            "ADM-RPT",
+            "O_LEVEL",
+            save_path=str(initialized_db) + ".pdf",
+            exam_id=open_exam_id,
+        )
+
+        assert success is True
+        assert captured["exam_no"] == "EX/2026/002"
+        assert result.endswith(".pdf")
 
     def test_student_comments_column_is_available(self, initialized_db):
         import sqlite3

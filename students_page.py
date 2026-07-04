@@ -63,6 +63,9 @@ class StudentsPage(QWidget):
         self.adm = QLineEdit()
         self.adm.setPlaceholderText("Admission No *")
 
+        self.exam_no = QLineEdit()
+        self.exam_no.setPlaceholderText("Exam No (Optional)")
+
         self.name = QLineEdit()
         self.name.setPlaceholderText("Full Name *")
 
@@ -96,6 +99,7 @@ class StudentsPage(QWidget):
         self.template_btn.clicked.connect(self.download_template)
 
         form.addWidget(self.adm)
+        form.addWidget(self.exam_no)
         form.addWidget(self.name)
         form.addWidget(self.gender)
         form.addWidget(self.class_box)
@@ -115,10 +119,11 @@ class StudentsPage(QWidget):
         layout.addWidget(self.search)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels([
             "ID",
             "Admission No",
+            "Exam No",
             "Full Name",
             "Gender",
             "Class",
@@ -252,20 +257,21 @@ class StudentsPage(QWidget):
         if search_text:
             pattern = f"%{search_text}%"
             rows = fetch_all("""
-                SELECT id, admission_no, full_name, gender, class, stream, level
+                SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
                 FROM students
                 WHERE level=?
                   AND (
                       admission_no LIKE ?
+                      OR COALESCE(exam_no, '') LIKE ?
                       OR full_name LIKE ?
                       OR class LIKE ?
                       OR COALESCE(stream, '') LIKE ?
                   )
                 ORDER BY id DESC
-            """, (level, pattern, pattern, pattern, pattern))
+            """, (level, pattern, pattern, pattern, pattern, pattern))
         else:
             rows = fetch_all("""
-                SELECT id, admission_no, full_name, gender, class, stream, level
+                SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
                 FROM students
                 WHERE level=?
                 ORDER BY id DESC
@@ -287,6 +293,7 @@ class StudentsPage(QWidget):
 
     def save_student(self):
         admission_no = self.adm.text().strip()
+        exam_no = self.exam_no.text().strip()
         full_name = self.name.text().strip()
         gender = self.gender.currentText().strip()
         class_name = self.class_box.currentText().strip()
@@ -305,15 +312,15 @@ class StudentsPage(QWidget):
             with get_cursor(commit=True) as cur:
                 if self.selected_id is None:
                     cur.execute("""
-                        INSERT INTO students (admission_no, full_name, gender, class, stream, level, comments)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (admission_no, full_name, gender, class_name, stream, level, comment))
+                        INSERT INTO students (admission_no, exam_no, full_name, gender, class, stream, level, comments)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (admission_no, exam_no, full_name, gender, class_name, stream, level, comment))
                 else:
                     cur.execute("""
                         UPDATE students
-                        SET admission_no=?, full_name=?, gender=?, class=?, stream=?, level=?, comments=?
+                        SET admission_no=?, exam_no=?, full_name=?, gender=?, class=?, stream=?, level=?, comments=?
                         WHERE id=?
-                    """, (admission_no, full_name, gender, class_name, stream, level, comment, self.selected_id))
+                    """, (admission_no, exam_no, full_name, gender, class_name, stream, level, comment, self.selected_id))
 
         except sqlite3.IntegrityError:
             QMessageBox.warning(
@@ -341,19 +348,20 @@ class StudentsPage(QWidget):
         self.selected_id = int(self.table.item(row, 0).text())
         self.selected_admission_no = self.table.item(row, 1).text()
         self.adm.setText(self.selected_admission_no)
-        self.name.setText(self.table.item(row, 2).text())
+        self.exam_no.setText(self.table.item(row, 2).text())
+        self.name.setText(self.table.item(row, 3).text())
 
-        gender = self.table.item(row, 3).text()
+        gender = self.table.item(row, 4).text()
         gender_index = self.gender.findText(gender)
         if gender_index >= 0:
             self.gender.setCurrentIndex(gender_index)
 
-        class_name = self.table.item(row, 4).text()
+        class_name = self.table.item(row, 5).text()
         class_index = self.class_box.findText(class_name)
         if class_index >= 0:
             self.class_box.setCurrentIndex(class_index)
 
-        self.stream.setText(self.table.item(row, 5).text())
+        self.stream.setText(self.table.item(row, 6).text())
 
         with get_cursor() as cur:
             cur.execute("SELECT comments FROM students WHERE id=?", (self.selected_id,))
@@ -594,6 +602,7 @@ class StudentsPage(QWidget):
         self.selected_admission_no = None
 
         self.adm.clear()
+        self.exam_no.clear()
         self.name.clear()
         self.stream.clear()
         self.comment.clear()
@@ -614,23 +623,31 @@ class StudentsPage(QWidget):
 
     def download_template(self):
         import excel_utils
+        level = SystemState.get_level()
         excel_utils.download_template(
             self, 
             "students_template.xlsx",
             "STUDENT REGISTRATION FORM",
-            ["Admission No*", "Full Name*", "Gender*", "Class*", "Stream", "Level", "Comments"],
-            samples=["2024/001", "John Doe", "Male", "Form I", "A", SystemState.get_level(), "Good progress"]
+            ["Admission No*", "Exam No", "Full Name*", "Gender*", "Class*", "Stream", "Level", "Comments"],
+            instructions=[
+                "1. Do not change the column headers in Row 10.",
+                "2. Start student data entry from Row 12.",
+                "3. Admission No is required for every student.",
+                "4. Exam No is optional.",
+                f"5. Use the current level: {level}.",
+            ],
+            samples=["2024/001", "EX/2024/001", "John Doe", "Male", "Form I", "A", SystemState.get_level(), "Good progress"]
         )
 
     def export_excel(self):
         import excel_utils
         level = SystemState.get_level()
-        data = fetch_all("SELECT admission_no, full_name, gender, class, stream, comments FROM students WHERE level=?", (level,))
+        data = fetch_all("SELECT admission_no, exam_no, full_name, gender, class, stream, comments FROM students WHERE level=?", (level,))
         
         excel_utils.export_to_excel(
             self, 
             f"students_{level}.xlsx", 
-            ["Admission No", "Full Name", "Gender", "Class", "Stream", "Comments"],
+            ["Admission No", "Exam No", "Full Name", "Gender", "Class", "Stream", "Comments"],
             data
         )
 
@@ -662,12 +679,22 @@ class StudentsPage(QWidget):
                         continue
 
                     adm = str(row[0]).strip()
-                    name = str(row[1] or "").strip()
-                    gender = str(row[2] or "").strip()
-                    cls = str(row[3] or "").strip()
-                    stream = str(row[4] or "").strip()
-                    level_excel = str(row[5] or "").strip().upper()
-                    comment = str(row[6] or "").strip()
+                    if len(row) >= 8:
+                        exam_no = str(row[1] or "").strip()
+                        name = str(row[2] or "").strip()
+                        gender = str(row[3] or "").strip()
+                        cls = str(row[4] or "").strip()
+                        stream = str(row[5] or "").strip()
+                        level_excel = str(row[6] or "").strip().upper()
+                        comment = str(row[7] or "").strip()
+                    else:
+                        exam_no = ""
+                        name = str(row[1] or "").strip()
+                        gender = str(row[2] or "").strip()
+                        cls = str(row[3] or "").strip()
+                        stream = str(row[4] or "").strip()
+                        level_excel = str(row[5] or "").strip().upper()
+                        comment = str(row[6] or "").strip()
 
                     if not name or not cls or not level_excel:
                         rejected += 1
@@ -688,16 +715,17 @@ class StudentsPage(QWidget):
                         exists = cur.fetchone()
 
                         cur.execute("""
-                            INSERT INTO students (admission_no, full_name, gender, class, stream, level, comments)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO students (admission_no, exam_no, full_name, gender, class, stream, level, comments)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                             ON CONFLICT(admission_no) DO UPDATE SET
+                                exam_no=excluded.exam_no,
                                 full_name=excluded.full_name,
                                 gender=excluded.gender,
                                 class=excluded.class,
                                 stream=excluded.stream,
                                 level=excluded.level,
                                 comments=excluded.comments
-                        """, (adm, name, gender, cls, stream, level_excel, comment))
+                        """, (adm, exam_no, name, gender, cls, stream, level_excel, comment))
                         
                         if exists:
                             updated += 1

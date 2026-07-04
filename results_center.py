@@ -75,7 +75,7 @@ class ResultsCenter(QWidget):
             return self.results_entry_page
         if name == "dashboard":
             if self.dashboard_page is None:
-                from results_dashboard import ResultsDashboard
+                from ui.pages.results_dashboard import ResultsDashboard
                 self.dashboard_page = ResultsDashboard()
                 self.stack.addWidget(self.dashboard_page)
             return self.dashboard_page

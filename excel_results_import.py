@@ -126,10 +126,9 @@ class ExcelResultsImport(QWidget):
         for row in fetch_all("""
             SELECT DISTINCT e.subject_name 
             FROM enrollments e
-            JOIN students s ON s.admission_no = e.admission_no
-            WHERE s.class=? AND s.level=?
+            WHERE UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
             ORDER BY e.subject_name
-        """, (class_name, level)):
+        """, (class_name,)):
             self.subject_box.addItem(row[0])
 
     def browse_file(self):
@@ -231,9 +230,10 @@ class ExcelResultsImport(QWidget):
                     SELECT 1 FROM enrollments
                     WHERE admission_no=?
                       AND subject_name=?
+                      AND class_name=?
                       AND academic_year_id=?
                       AND term_id=?
-                """, (adm_no, subject_name, year_id, term_id))
+                """, (adm_no, subject_name, class_name, year_id, term_id))
 
                 if not cur.fetchone():
                     self.add_log(idx, f"{adm_no} not enrolled in {subject_name} this term.", "ERROR")
@@ -241,11 +241,12 @@ class ExcelResultsImport(QWidget):
                     continue
 
                 cur.execute("""
-                    INSERT INTO results (admission_no, subject_name, marks, exam_id)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO results (admission_no, subject_name, marks, exam_id, class_name)
+                    VALUES (?, ?, ?, ?, ?)
                     ON CONFLICT(admission_no, subject_name, exam_id)
-                    DO UPDATE SET marks = excluded.marks
-                """, (adm_no, subject_name, int(marks), exam_id))
+                    DO UPDATE SET marks = excluded.marks,
+                                  class_name = excluded.class_name
+                """, (adm_no, subject_name, int(marks), exam_id, class_name))
 
                 imported += 1
 

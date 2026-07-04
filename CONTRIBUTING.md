@@ -1,3 +1,7 @@
+# SRMS V5 Contributing
+
+Repository: `https://github.com/fizzoh/SRMSV5.0.git`
+
 # SRMS V5 Development Roadmap
 
 ## Current Project Status

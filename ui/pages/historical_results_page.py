@@ -115,7 +115,7 @@ class HistoricalResultsPage(QWidget):
         return RankingPage()
 
     def _create_broadsheet_page(self):
-        from broadsheet_page import BroadsheetPage
+        from ui.pages.broadsheet_page import BroadsheetPage
         return BroadsheetPage()
 
     def _create_reports_page(self):
@@ -266,9 +266,6 @@ class HistoricalResultsPage(QWidget):
         return tab
 
     def refresh_all(self):
-        if not self.isVisible():
-            self._needs_refresh = True
-            return
         self._history_level = SystemState.get_level()
         self._invalidate_history_cache()
         blockers = [QSignalBlocker(widget) for widget in (self.year_box, self.term_box, self.exam_box, self.class_box)]
@@ -277,6 +274,7 @@ class HistoricalResultsPage(QWidget):
             combo_loaders.load_terms(self.term_box, self.year_box.currentData())
             combo_loaders.load_completed_exams(
                 self.exam_box,
+                self.year_box.currentData(),
                 self.term_box.currentData(),
                 level=self._history_level,
                 search_text=self.search_bar.text().strip(),
@@ -299,6 +297,7 @@ class HistoricalResultsPage(QWidget):
         try:
             combo_loaders.load_completed_exams(
                 self.exam_box,
+                self.year_box.currentData(),
                 self.term_box.currentData(),
                 level=self._history_level or SystemState.get_level(),
                 search_text=self.search_bar.text().strip(),
@@ -398,7 +397,7 @@ class HistoricalResultsPage(QWidget):
         self._schedule_history_reload()
 
     def _schedule_history_reload(self):
-        self._history_reload_timer.start(0)
+        self._load_history_now()
 
     def _on_history_data_changed(self):
         self._invalidate_history_cache()
@@ -411,10 +410,6 @@ class HistoricalResultsPage(QWidget):
         self._history_cache.clear()
 
     def _load_history_now(self):
-        if not self.isVisible():
-            self._needs_refresh = True
-            return
-
         exam_id = self.exam_box.currentData()
         class_name = self.class_box.currentText().strip()
         level = self._history_level or SystemState.get_level()

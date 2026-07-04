@@ -1,6 +1,27 @@
 """Shared UI helper functions to eliminate repeated dialog/widget boilerplate."""
 
+import re
+
 from PySide6.QtWidgets import QMessageBox, QComboBox
+
+
+def get_subject_short_name(subject_name, subject_short_name=None):
+    """Return a normalized 4-letter subject abbreviation."""
+    if subject_short_name:
+        cleaned = re.sub(r"[^A-Z0-9]", "", str(subject_short_name).strip().upper())
+        return cleaned[:4] if cleaned else str(subject_short_name).strip().upper()
+
+    if not subject_name:
+        return ""
+
+    text = str(subject_name).strip().upper()
+    tokens = re.findall(r"[A-Z0-9]+", text)
+    if len(tokens) > 1:
+        abbr = "".join(token[0] for token in tokens)[:4]
+        if len(abbr) == 4:
+            return abbr
+    compact = re.sub(r"[^A-Z0-9]", "", text)
+    return compact[:4] if len(compact) >= 4 else compact
 
 
 def confirm_action(parent, title, message):

@@ -1,13 +1,9 @@
-import os
-
 from PySide6.QtGui import QIcon, QPainter, QColor, QPen
 from PySide6.QtCore import (
     QSize, Qt, QPropertyAnimation, QEasingCurve,
     QParallelAnimationGroup, QRectF, Property, Signal,
     QTimer, QDateTime
 )
-
-from progress_dialog import ProgressDialog
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -21,9 +17,8 @@ from PySide6.QtWidgets import (
     QSizePolicy
 )
 
-from progress_dialog import ProgressDialog
-
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from app_paths import icon_path
+from ui.pages.initial_setup_wizard import InitialSetupWizard, needs_initial_setup
 
 
 class LevelToggleSwitch(QWidget):
@@ -143,16 +138,20 @@ from theme import normalize_theme_name, apply_theme as apply_app_theme
 
 
 def _icon(name):
-    """Return a QIcon using an absolute path from assets/icons/."""
-    return QIcon(os.path.join(_BASE_DIR, "assets", "icons", name))
+    """Return a QIcon using the shared assets/icons path."""
+    path = icon_path(name)
+    return QIcon(str(path)) if path.exists() else QIcon()
 
 
 class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self._closing = False
+        self._setup_mode = needs_initial_setup()
 
         self.setWindowTitle("SRMS V5")
+        self.setWindowIcon(_icon("icon.ico"))
 
         root = QWidget()
         self.setCentralWidget(root)
@@ -342,8 +341,11 @@ class MainWindow(QMainWindow):
         # =====================================
 
         self.stack = QStackedWidget()
+        self.setup_page = InitialSetupWizard()
+        self.setup_page.completed.connect(self._on_setup_completed)
+        self.stack.addWidget(self.setup_page)
 
-        from dashboard_home import DashboardHome
+        from ui.pages.dashboard_home import DashboardHome
         self.dashboard = DashboardHome()
         self.students = None
         self.academics = None
@@ -370,7 +372,7 @@ class MainWindow(QMainWindow):
             return ResultsCenter()
 
         def create_history_page():
-            from historical_results_page import HistoricalResultsPage
+            from ui.pages.historical_results_page import HistoricalResultsPage
             return HistoricalResultsPage()
 
         def create_school_center():
@@ -526,6 +528,10 @@ class MainWindow(QMainWindow):
             self.btn_dashboard
         )
 
+        if self._setup_mode:
+            self._enter_setup_mode()
+            self.switch_page(self.setup_page, None)
+
         # =====================================
         # WINDOW GEOMETRY
         # =====================================
@@ -542,14 +548,31 @@ class MainWindow(QMainWindow):
         qr.moveCenter(available.center())
         self.move(qr.topLeft())
 
+    def closeEvent(self, event):
+        self._closing = True
+        timer = getattr(self, "timer", None)
+        if timer is not None:
+            timer.stop()
+        super().closeEvent(event)
+
     # =====================================
     # NAVIGATION
     # =====================================
 
     def update_clock(self):
         """Update the live clock display."""
-        now = QDateTime.currentDateTime()
-        self.clock_lbl.setText(now.toString("dd MMM yyyy  hh:mm AP"))
+        if self._closing:
+            return
+
+        clock_lbl = getattr(self, "clock_lbl", None)
+        if clock_lbl is None:
+            return
+
+        try:
+            now = QDateTime.currentDateTime()
+            clock_lbl.setText(now.toString("dd MMM yyyy  hh:mm AP"))
+        except (AttributeError, RuntimeError, KeyboardInterrupt):
+            return
 
     def switch_page(
         self,
@@ -596,6 +619,8 @@ class MainWindow(QMainWindow):
         self,
         active_btn
     ):
+        if active_btn is None:
+            return
         for btn in self.nav_buttons:
             if btn == active_btn:
                 btn.setStyleSheet(self.nav_button_active_style)
@@ -670,16 +695,19 @@ class MainWindow(QMainWindow):
     def open_history_ranking(self, exam_id, class_name):
         history = self.ensure_page("history")
         self.switch_page(history, self.btn_history)
+        history.refresh_all()
         history.activate_ranking(exam_id, class_name)
 
     def open_history_broadsheet(self, exam_id, class_name):
         history = self.ensure_page("history")
         self.switch_page(history, self.btn_history)
+        history.refresh_all()
         history.activate_broadsheet(exam_id, class_name)
 
     def open_history_reports(self, exam_id, class_name):
         history = self.ensure_page("history")
         self.switch_page(history, self.btn_history)
+        history.refresh_all()
         history.activate_reports(exam_id, class_name)
 
     # =====================================
@@ -688,6 +716,8 @@ class MainWindow(QMainWindow):
 
     def refresh_all(self):
         self._refresh_page(self.dashboard)
+        if getattr(self, "history", None) is not None:
+            self._refresh_page(self.history)
         self._refresh_page(self.stack.currentWidget())
         current = self.stack.currentWidget()
         if current is not None:
@@ -733,3 +763,21 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app:
             apply_app_theme(app, normalized)
+
+    def _enter_setup_mode(self):
+        self.top_nav_widget.setVisible(False)
+        self.clock_lbl.setVisible(False)
+        self.btn_refresh.setVisible(False)
+        self.level_switch.setVisible(False)
+
+    def _exit_setup_mode(self):
+        self.top_nav_widget.setVisible(True)
+        self.clock_lbl.setVisible(True)
+        self.btn_refresh.setVisible(True)
+        self.level_switch.setVisible(True)
+
+    def _on_setup_completed(self):
+        self._setup_mode = False
+        self._exit_setup_mode()
+        self.switch_page(self.dashboard, self.btn_dashboard)
+        self.refresh_all()

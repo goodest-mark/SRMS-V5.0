@@ -7,6 +7,7 @@ from progress_dialog import ProgressDialog
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QProgressDialog, QApplication
 from progress_dialog import ProgressDialog
 from reportlab.lib import colors
+from ui_helpers import get_subject_short_name
 from progress_dialog import ProgressDialog
 from reportlab.lib.pagesizes import landscape, A4
 from progress_dialog import ProgressDialog
@@ -121,7 +122,8 @@ def to_excel(parent, data):
 
         # Main Broadsheet Table Header
         subjects = data['subjects']
-        headers = ["Position", "Admission No", "Student Name", "Gender"] + subjects + ["Total", "Average", "Points", "Division"]
+        subject_headers = data.get('subject_headers', [get_subject_short_name(s) for s in subjects])
+        headers = ["Position", "Admission No", "Student Name", "Gender"] + subject_headers + ["Total", "Average", "Points", "Division"]
         
         ws.append(headers)
         header_row = ws.max_row
@@ -208,13 +210,14 @@ def to_excel(parent, data):
         max_avg = -1
         min_avg = 101
         for sub_name, stats in data['subject_performance'].items():
-            ws.append([sub_name, stats['average'], stats['passes'], stats['fails']])
+            display_name = get_subject_short_name(sub_name)
+            ws.append([display_name, stats['average'], stats['passes'], stats['fails']])
             if stats['average'] > max_avg:
                 max_avg = stats['average']
-                best_sub = sub_name
+                best_sub = display_name
             if stats['average'] < min_avg:
                 min_avg = stats['average']
-                worst_sub = sub_name
+                worst_sub = display_name
         ws.append([f"Best Subject: {best_sub} (Avg: {max_avg})"])
         ws.append([f"Worst Subject: {worst_sub} (Avg: {min_avg})"])
         ws.append([])
@@ -398,7 +401,8 @@ def to_pdf(parent, data):
 
         # Main Broadsheet Table
         subjects = data['subjects']
-        headers = ["Pos", "Adm No", "Name", "Sex"] + subjects + ["Tot", "Avg", "Pts", "Div"]
+        subject_headers = data.get('subject_headers', [get_subject_short_name(s) for s in subjects])
+        headers = ["Pos", "Adm No", "Name", "Sex"] + subject_headers + ["Tot", "Avg", "Pts", "Div"]
         
         table_data = [headers]
         for r in data['rows']:
@@ -542,7 +546,7 @@ def to_pdf(parent, data):
         elements.append(Paragraph("SUBJECT PERFORMANCE ANALYSIS", styles['SectionHeader']))
         sub_perf_data = [["Subject", "Average", "Passes", "Fails"]]
         for sub_name, stats in sub_perf.items():
-            sub_perf_data.append([sub_name, stats['average'], stats['passes'], stats['fails']])
+            sub_perf_data.append([get_subject_short_name(sub_name), stats['average'], stats['passes'], stats['fails']])
         sub_perf_table = Table(sub_perf_data, colWidths=[2.5*inch, 1*inch, 1*inch, 1*inch])
         sub_perf_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), light),
@@ -553,8 +557,8 @@ def to_pdf(parent, data):
             ('FONTSIZE', (0, 0), (-1, -1), 10),
         ]))
         elements.append(sub_perf_table)
-        elements.append(Paragraph(f"Best Subject: {data['best_subject']} (Avg: {data['max_avg']})", styles['Normal']))
-        elements.append(Paragraph(f"Worst Subject: {data['worst_subject']} (Avg: {data['min_avg']})", styles['Normal']))
+        elements.append(Paragraph(f"Best Subject: {get_subject_short_name(data['best_subject'])} (Avg: {data['max_avg']})", styles['Normal']))
+        elements.append(Paragraph(f"Worst Subject: {get_subject_short_name(data['worst_subject'])} (Avg: {data['min_avg']})", styles['Normal']))
         elements.append(Spacer(1, 0.2*inch))
 
         # 7. Subject Ranking
@@ -563,7 +567,8 @@ def to_pdf(parent, data):
             elements.append(Paragraph("SUBJECT RANKING (by Average Score)", styles['SectionHeader']))
             sub_ranking_data = [["Rank", "Subject"]]
             for rank, (sub_name, stats) in enumerate(sub_ranking, 1):
-                sub_ranking_data.append([rank, f"{sub_name} (Avg: {stats['average']})"])
+                display_name = get_subject_short_name(sub_name)
+                sub_ranking_data.append([rank, f"{display_name} (Avg: {stats['average']})"])
             sub_ranking_table = Table(sub_ranking_data, colWidths=[1*inch, 3*inch])
             sub_ranking_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),

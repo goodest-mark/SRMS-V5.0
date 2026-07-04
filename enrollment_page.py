@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
     QSizePolicy,
+    QCheckBox,
 )
 
 from progress_dialog import ProgressDialog
@@ -22,7 +23,7 @@ from db_utils import get_cursor, fetch_all
 from system_state import SystemState
 from event_bus import EventBus
 from class_utils import get_classes
-from ui_helpers import show_error, show_info
+from ui_helpers import show_error, show_info, get_subject_short_name
 import combo_loaders
 
 
@@ -67,18 +68,12 @@ class EnrollmentPage(QWidget):
         self.class_box.addItems(["-- Select Class --"] + get_classes())
         self.class_box.currentIndexChanged.connect(self.load_students)
 
-        # Student
-        self.student_box = QComboBox()
-        self.student_box.currentIndexChanged.connect(self.load_enrollment_data)
-
         filters_layout.addWidget(QLabel("Year:"))
         filters_layout.addWidget(self.year_box)
         filters_layout.addWidget(QLabel("Term:"))
         filters_layout.addWidget(self.term_box)
         filters_layout.addWidget(QLabel("Class:"))
         filters_layout.addWidget(self.class_box)
-        filters_layout.addWidget(QLabel("Student:"))
-        filters_layout.addWidget(self.student_box)
         
         self.import_btn = QPushButton("IMPORT")
         self.import_btn.clicked.connect(self.import_excel)
@@ -98,76 +93,56 @@ class EnrollmentPage(QWidget):
         self.layout.addLayout(filters_layout)
 
         # =========================
-        # TABLES AREA
+        # MODE / PREVIEW
         # =========================
 
-        tables_layout = QHBoxLayout()
+        mode_layout = QHBoxLayout()
+        self.enrollment_mode_checkbox = QCheckBox("Enrollment Mode")
+        self.enrollment_mode_checkbox.setChecked(True)
+        self.enrollment_mode_checkbox.toggled.connect(self.set_enrollment_mode)
+        mode_layout.addWidget(self.enrollment_mode_checkbox)
 
-        # LEFT: Available
-        left_vbox = QVBoxLayout()
-        left_vbox.addWidget(QLabel("AVAILABLE SUBJECTS"))
-        self.available_table = QTableWidget()
-        self.available_table.setColumnCount(1)
-        self.available_table.setHorizontalHeaderLabels(["Subject Name"])
-        self.available_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.available_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.available_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.available_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.available_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.available_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.available_table.setMinimumHeight(300)
-        left_vbox.addWidget(self.available_table)
-        tables_layout.addLayout(left_vbox, 2)
+        self.preview_label = QLabel("Preview mode: changes are disabled until Enrollment Mode is enabled.")
+        self.preview_label.setWordWrap(True)
+        self.preview_label.setProperty("variant", "muted")
+        mode_layout.addWidget(self.preview_label, 1)
+        mode_layout.addStretch()
+        self.layout.addLayout(mode_layout)
 
-        # MIDDLE: Buttons
-        btns_vbox = QVBoxLayout()
-        btns_vbox.addStretch()
-        
-        self.enroll_one_btn = QPushButton(">")
-        self.remove_one_btn = QPushButton("<")
-        self.enroll_all_btn = QPushButton("Enroll All")
-        self.remove_all_btn = QPushButton("Remove All")
-        
-        self.enroll_one_btn.clicked.connect(self.enroll_one)
-        self.remove_one_btn.clicked.connect(self.remove_one)
-        self.enroll_all_btn.clicked.connect(self.enroll_all)
-        self.remove_all_btn.clicked.connect(self.remove_all)
-        
-        btns_vbox.addWidget(self.enroll_one_btn)
-        btns_vbox.addWidget(self.remove_one_btn)
-        btns_vbox.addSpacing(20)
-        btns_vbox.addWidget(self.enroll_all_btn)
-        btns_vbox.addWidget(self.remove_all_btn)
-        
-        btns_vbox.addStretch()
-        tables_layout.addLayout(btns_vbox, 0)
+        # =========================
+        # TABLE AREA
+        # =========================
 
-        # RIGHT: Enrolled
-        right_vbox = QVBoxLayout()
-        right_vbox.addWidget(QLabel("ENROLLED SUBJECTS"))
-        self.enrolled_table = QTableWidget()
-        self.enrolled_table.setColumnCount(1)
-        self.enrolled_table.setHorizontalHeaderLabels(["Subject Name"])
-        self.enrolled_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.enrolled_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.enrolled_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.enrolled_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.enrolled_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.enrolled_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.enrolled_table.setMinimumHeight(300)
-        right_vbox.addWidget(self.enrolled_table)
-        tables_layout.addLayout(right_vbox, 2)
-
-        self.layout.addLayout(tables_layout)
+        self.enrollment_table = QTableWidget()
+        self.enrollment_table.setColumnCount(1)
+        self.enrollment_table.setHorizontalHeaderLabels(["Student Name"])
+        self.enrollment_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.enrollment_table.setSelectionBehavior(QAbstractItemView.SelectItems)
+        self.enrollment_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.enrollment_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.enrollment_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.enrollment_table.setMinimumHeight(400)
+        self.layout.addWidget(QLabel("DYNAMIC ENROLLMENT GRID"))
+        self.layout.addWidget(self.enrollment_table)
 
         # =========================
         # SAVE BUTTON
         # =========================
 
+        action_row = QHBoxLayout()
+        action_row.addStretch()
+
+        self.enroll_all_btn = QPushButton("ENROLL ALL")
+        self.enroll_all_btn.setFixedHeight(40)
+        self.enroll_all_btn.clicked.connect(self.enroll_all)
+
         self.save_btn = QPushButton("SAVE ENROLLMENTS")
         self.save_btn.setFixedHeight(40)
         self.save_btn.clicked.connect(self.save_enrollments)
-        self.layout.addWidget(self.save_btn)
+
+        action_row.addWidget(self.enroll_all_btn)
+        action_row.addWidget(self.save_btn)
+        self.layout.addLayout(action_row)
 
         # =========================
         # INITIAL LOAD
@@ -176,6 +151,7 @@ class EnrollmentPage(QWidget):
         EventBus.subscribe("LEVEL_CHANGED", self.on_level_changed)
         
         self.load_years()
+        self.set_enrollment_mode(True)
 
     # =========================
     # EVENT HANDLERS
@@ -183,27 +159,35 @@ class EnrollmentPage(QWidget):
 
     def on_level_changed(self):
         combo_loaders.load_classes(self.class_box, placeholder="-- Select Class --")
-        self.student_box.clear()
         self.clear_tables()
 
     def on_filter_changed(self):
         self.load_enrollment_data()
+
+    def set_enrollment_mode(self, enabled):
+        self.enrollment_mode_checkbox.setChecked(enabled)
+        self.preview_label.setText(
+            "Preview mode: changes are disabled until Enrollment Mode is enabled."
+            if not enabled
+            else "Enrollment mode is active. You can edit the student subject list."
+        )
+
+        self.save_btn.setEnabled(enabled)
+        self.enrollment_table.setEnabled(enabled)
 
     # =========================
     # DATA LOADING
     # =========================
 
     def _update_table_heights(self):
-        # Calculate max height needed
-        self.available_table.resizeRowsToContents()
-        self.enrolled_table.resizeRowsToContents()
-        
-        h1 = self.available_table.horizontalHeader().height() + self.available_table.verticalHeader().length() + self.available_table.frameWidth()*2 + 4
-        h2 = self.enrolled_table.horizontalHeader().height() + self.enrolled_table.verticalHeader().length() + self.enrolled_table.frameWidth()*2 + 4
-        
-        max_h = max(300, h1, h2)
-        self.available_table.setFixedHeight(max_h)
-        self.enrolled_table.setFixedHeight(max_h)
+        self.enrollment_table.resizeRowsToContents()
+        height = (
+            self.enrollment_table.horizontalHeader().height()
+            + self.enrollment_table.verticalHeader().length()
+            + self.enrollment_table.frameWidth() * 2
+            + 4
+        )
+        self.enrollment_table.setFixedHeight(max(400, height))
 
     def load_years(self):
         combo_loaders.load_years(self.year_box)
@@ -213,144 +197,163 @@ class EnrollmentPage(QWidget):
         combo_loaders.load_terms(self.term_box, self.year_box.currentData())
 
     def load_students(self):
-        self.student_box.blockSignals(True)
-        self.student_box.clear()
         class_name = self.class_box.currentText()
-        
+        self.student_list = []
+        self.subject_list = []
+
         if class_name and class_name != "-- Select Class --":
-            rows = fetch_all("""
-                SELECT admission_no, full_name 
-                FROM students 
-                WHERE class=? AND level=?
-                ORDER BY full_name
-            """, (class_name, SystemState.get_level()))
-            
-            for row in rows:
-                self.student_box.addItem(f"{row[1]} ({row[0]})", row[0])
-        
-        self.student_box.blockSignals(False)
+            self.student_list = [
+                (row[0], row[1])
+                for row in fetch_all(
+                    """
+                    SELECT admission_no, full_name
+                    FROM students
+                    WHERE class=? AND level=?
+                    ORDER BY full_name
+                    """,
+                    (class_name, SystemState.get_level()),
+                )
+            ]
+
         self.load_enrollment_data()
 
     def load_enrollment_data(self):
-        self.clear_tables()
-        
-        adm_no = self.student_box.currentData()
+        self.enrollment_table.clear()
+
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
-        
-        if not (adm_no and year_id and term_id):
+        class_name = self.class_box.currentText()
+
+        if not (year_id and term_id and class_name and class_name != "-- Select Class --"):
+            self.enrollment_table.setRowCount(0)
+            self.enrollment_table.setColumnCount(1)
+            self.enrollment_table.setHorizontalHeaderLabels(["Student Name"])
             return
 
-        level = SystemState.get_level()
-        
-        enrolled = [r[0] for r in fetch_all("""
-            SELECT subject_name 
-            FROM enrollments 
-            WHERE admission_no=? AND academic_year_id=? AND term_id=?
-            ORDER BY subject_name
-        """, (adm_no, year_id, term_id))]
-        
-        all_subjects = [r[0] for r in fetch_all("""
-            SELECT subject_name 
-            FROM subjects 
-            WHERE level=?
-            ORDER BY subject_name
-        """, (level,))]
-        
-        available = [s for s in all_subjects if s not in enrolled]
-        
-        self.fill_table(self.available_table, available)
-        self.fill_table(self.enrolled_table, enrolled)
+        self.subject_list = [
+            row[0]
+            for row in fetch_all(
+                """
+                SELECT subject_name
+                FROM subjects
+                WHERE level=?
+                ORDER BY subject_name
+                """,
+                (SystemState.get_level(),),
+            )
+        ]
 
-    def fill_table(self, table, data):
-        table.setRowCount(len(data))
-        for i, name in enumerate(data):
-            table.setItem(i, 0, QTableWidgetItem(name))
+        enrollments = {
+            (row[0], row[1])
+            for row in fetch_all(
+                """
+                SELECT e.admission_no, e.subject_name
+                FROM enrollments e
+                JOIN students s ON s.admission_no = e.admission_no
+                WHERE e.academic_year_id=? AND e.term_id=?
+                  AND e.class_name=?
+                  AND s.level=?
+                """,
+                (year_id, term_id, class_name, SystemState.get_level()),
+            )
+        }
+
+        self.enrollment_table.setRowCount(len(self.student_list))
+        self.enrollment_table.setColumnCount(len(self.subject_list) + 1)
+
+        headers = ["Student"] + [get_subject_short_name(subject) for subject in self.subject_list]
+        self.enrollment_table.setHorizontalHeaderLabels(headers)
+        self.enrollment_table.verticalHeader().setVisible(False)
+
+        for row_index, (admission_no, full_name) in enumerate(self.student_list):
+            student_item = QTableWidgetItem(f"{full_name} ({admission_no})")
+            student_item.setFlags(student_item.flags() & ~Qt.ItemIsEditable)
+            self.enrollment_table.setItem(row_index, 0, student_item)
+
+            for col_index, subject_name in enumerate(self.subject_list, start=1):
+                checkbox = QTableWidgetItem()
+                checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                checkbox.setCheckState(
+                    Qt.Checked if (admission_no, subject_name) in enrollments else Qt.Unchecked
+                )
+                checkbox.setData(Qt.UserRole, subject_name)
+                self.enrollment_table.setItem(row_index, col_index, checkbox)
+
+        self.enrollment_table.resizeColumnsToContents()
+        self.enrollment_table.resizeRowsToContents()
 
     def clear_tables(self):
-        self.available_table.setRowCount(0)
-        self.enrolled_table.setRowCount(0)
-
-    # =========================
-    # ACTIONS
-    # =========================
-
-    def enroll_one(self):
-        row = self.available_table.currentRow()
-        if row < 0: return
-        
-        subject = self.available_table.item(row, 0).text()
-        self.available_table.removeRow(row)
-        
-        next_row = self.enrolled_table.rowCount()
-        self.enrolled_table.insertRow(next_row)
-        self.enrolled_table.setItem(next_row, 0, QTableWidgetItem(subject))
-
-    def remove_one(self):
-        row = self.enrolled_table.currentRow()
-        if row < 0: return
-        
-        subject = self.enrolled_table.item(row, 0).text()
-        self.enrolled_table.removeRow(row)
-        
-        next_row = self.available_table.rowCount()
-        self.available_table.insertRow(next_row)
-        self.available_table.setItem(next_row, 0, QTableWidgetItem(subject))
-
-    def enroll_all(self):
-        while self.available_table.rowCount() > 0:
-            subject = self.available_table.item(0, 0).text()
-            self.available_table.removeRow(0)
-            
-            next_row = self.enrolled_table.rowCount()
-            self.enrolled_table.insertRow(next_row)
-            self.enrolled_table.setItem(next_row, 0, QTableWidgetItem(subject))
-
-    def remove_all(self):
-        while self.enrolled_table.rowCount() > 0:
-            subject = self.enrolled_table.item(0, 0).text()
-            self.enrolled_table.removeRow(0)
-            
-            next_row = self.available_table.rowCount()
-            self.available_table.insertRow(next_row)
-            self.available_table.setItem(next_row, 0, QTableWidgetItem(subject))
+        self.enrollment_table.setRowCount(0)
 
     # =========================
     # SAVE
     # =========================
 
     def save_enrollments(self):
-        adm_no = self.student_box.currentData()
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
-        
-        if not (adm_no and year_id and term_id):
-            show_error(self, "Please select all filters correctly.")
+        class_name = self.class_box.currentText()
+
+        if not (year_id and term_id and class_name and class_name != "-- Select Class --"):
+            show_error(self, "Please select Year, Term, and Class before saving enrollments.")
             return
 
         enrolled_subjects = []
-        for i in range(self.enrolled_table.rowCount()):
-            enrolled_subjects.append(self.enrolled_table.item(i, 0).text())
+        for row_index, (admission_no, _) in enumerate(self.student_list):
+            for col_index, subject_name in enumerate(self.subject_list, start=1):
+                item = self.enrollment_table.item(row_index, col_index)
+                if item is None:
+                    continue
+                if item.checkState() == Qt.Checked:
+                    enrolled_subjects.append((admission_no, subject_name))
+
+        admission_numbers = [student_id for student_id, _ in self.student_list]
 
         try:
             with get_cursor(commit=True) as cur:
-                cur.execute("""
-                    DELETE FROM enrollments 
-                    WHERE admission_no=? AND academic_year_id=? AND term_id=?
-                """, (adm_no, year_id, term_id))
-                
-                for sub in enrolled_subjects:
+                if admission_numbers:
+                    placeholders = ",".join("?" for _ in admission_numbers)
+                    cur.execute(f"""
+                        DELETE FROM enrollments
+                        WHERE academic_year_id=?
+                          AND term_id=?
+                          AND class_name=?
+                          AND admission_no IN ({placeholders})
+                    """, (year_id, term_id, class_name, *admission_numbers))
+
+                for admission_no, subject_name in enrolled_subjects:
                     cur.execute("""
-                        INSERT INTO enrollments(admission_no, subject_name, academic_year_id, term_id)
-                        VALUES (?, ?, ?, ?)
-                    """, (adm_no, sub, year_id, term_id))
-            
+                        INSERT OR REPLACE INTO enrollments(admission_no, subject_name, class_name, academic_year_id, term_id)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (admission_no, subject_name, class_name, year_id, term_id))
+
             show_info(self, "Enrollments saved successfully.")
-            
-        except Exception as e:
+
+        except Exception:
             QMessageBox.critical(self, "Error", "An unexpected error occurred while saving enrollments.")
-        
+
         self.load_enrollment_data()
+
+    def enroll_all(self):
+        year_id = self.year_box.currentData()
+        term_id = self.term_box.currentData()
+        class_name = self.class_box.currentText()
+
+        if not (year_id and term_id and class_name and class_name != "-- Select Class --"):
+            show_error(self, "Please select Year, Term, and Class before using Enroll All.")
+            return
+
+        if not self.student_list or not self.subject_list:
+            show_error(self, "No students or subjects found for the selected class.")
+            return
+
+        for row_index in range(self.enrollment_table.rowCount()):
+            for col_index in range(1, self.enrollment_table.columnCount()):
+                item = self.enrollment_table.item(row_index, col_index)
+                if item is not None:
+                    item.setCheckState(Qt.Checked)
+
+        self.save_enrollments()
 
     # =========================
     # EXCEL FRAMEWORK
@@ -358,11 +361,21 @@ class EnrollmentPage(QWidget):
 
     def download_template(self):
         import excel_utils
+        year = self.year_box.currentText().strip() or "SELECTED YEAR"
+        term = self.term_box.currentText().strip() or "SELECTED TERM"
+        level = self.level_box.currentText().strip() or SystemState.get_level()
         excel_utils.download_template(
             self, 
             "enrollment_template.xlsx",
-            "STUDENT SUBJECT ENROLLMENT FORM",
+            f"STUDENT SUBJECT ENROLLMENT FORM - {year} {term}",
             ["Admission No*", "Subject Name*"],
+            instructions=[
+                f"1. Template generated for Year: {year}, Term: {term}, Level: {level}.",
+                "2. Do not modify the column headers in Row 10.",
+                "3. Start data entry from Row 12.",
+                "4. Admission No must already exist in the system.",
+                "5. Subject Name must match the learner's enrolled subject list.",
+            ],
             samples=["2024/001", "Mathematics"]
         )
 
@@ -375,10 +388,10 @@ class EnrollmentPage(QWidget):
             return
             
         data = fetch_all("""
-            SELECT admission_no, subject_name 
+            SELECT admission_no, subject_name
             FROM enrollments 
-            WHERE academic_year_id=? AND term_id=?
-        """, (year_id, term_id))
+            WHERE academic_year_id=? AND term_id=? AND class_name=?
+        """, (year_id, term_id, self.class_box.currentText()))
         
         excel_utils.export_to_excel(
             self, 
@@ -392,6 +405,7 @@ class EnrollmentPage(QWidget):
         import openpyxl
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
+        class_name = self.class_box.currentText()
         if not (year_id and term_id):
             show_error(self, "Select Year and Term first")
             return
@@ -425,10 +439,9 @@ class EnrollmentPage(QWidget):
                             continue
 
                         cur.execute("""
-                            INSERT INTO enrollments (admission_no, subject_name, academic_year_id, term_id)
-                            VALUES (?, ?, ?, ?)
-                            ON CONFLICT(admission_no, subject_name, academic_year_id, term_id) DO NOTHING
-                        """, (adm, subject, year_id, term_id))
+                            INSERT OR REPLACE INTO enrollments (admission_no, subject_name, class_name, academic_year_id, term_id)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (adm, subject, class_name, year_id, term_id))
                         imported += 1
                     except Exception as e:
                         print(f"[ERROR] Failed to import enrollment for '{adm}' in '{subject}': {e}")

@@ -157,7 +157,12 @@ class ReportBookPage(QWidget):
         self.load_exams()
 
     def load_exams(self):
-        combo_loaders.load_exams(self.exam_box, self.term_box.currentData())
+        combo_loaders.load_completed_exams(
+            self.exam_box,
+            self.year_box.currentData(),
+            self.term_box.currentData(),
+            level=self.history_level or SystemState.get_level(),
+        )
 
     def set_history_context(self, exam_id, class_name, level=None):
         row = fetch_one("""
@@ -177,6 +182,17 @@ class ReportBookPage(QWidget):
         self.context_label.setText(
             f"History context: {exam_name} - {term_name} - {year_name} - {class_name}"
         )
+        year_idx = self.year_box.findData(year_id)
+        if year_idx >= 0:
+            self.year_box.setCurrentIndex(year_idx)
+        self.load_terms()
+        term_idx = self.term_box.findData(term_id)
+        if term_idx >= 0:
+            self.term_box.setCurrentIndex(term_idx)
+        self.load_exams()
+        exam_idx = self.exam_box.findData(exam_id)
+        if exam_idx >= 0:
+            self.exam_box.setCurrentIndex(exam_idx)
         self.class_box.setCurrentText(class_name)
         self.update_summary()
 
@@ -208,7 +224,7 @@ class ReportBookPage(QWidget):
 
         summary_text = (
             f"<b>CLASS:</b> {class_name} ({level})<br>"
-            f"<b>EXAM:</b> {self.exam_box.currentText()}<br><br>"
+            f"<b>EXAM:</b> {self.exam_box.currentText() or '-'}<br><br>"
             f"<b>Total Students:</b> {total}<br>"
             f"<b>Ready Students:</b> {ready}<br>"
             f"<b>Incomplete Students:</b> {incomplete}"

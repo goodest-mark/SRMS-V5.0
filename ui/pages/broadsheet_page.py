@@ -1,5 +1,3 @@
-import os
-
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, 
     QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QGridLayout,
@@ -16,7 +14,7 @@ from event_bus import EventBus
 from settings_page import get_setting
 from security_settings import get_school_profile_from_db
 from grade_utils import get_grade, get_points
-from ui_helpers import show_error, show_info
+from ui_helpers import show_error, show_info, get_subject_short_name
 from table_utils import setup_table
 import combo_loaders
 
@@ -25,6 +23,14 @@ from ranking_engine import compute_student_scores
 import broadsheet_export
 from datetime import datetime
 from ui.cards import PremiumStatCard
+from app_paths import icon_path
+
+
+def _numeric_or_zero(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _assign_class_positions(students):
@@ -32,14 +38,13 @@ def _assign_class_positions(students):
     class_students = sorted(
         students,
         key=lambda x: (
-            -float(x.get('average', 0) or 0),
-            -float(x.get('total_marks', 0) or 0),
+            -_numeric_or_zero(x.get('average', 0)),
+            -_numeric_or_zero(x.get('total_marks', 0)),
             x.get('admission', '')
         )
     )
 
     for index, student in enumerate(class_students, start=1):
-        student = student
         student['class_position'] = index
 
     return class_students
@@ -53,6 +58,7 @@ class BroadsheetPage(QWidget):
         self.history_class_name = None
         self.history_term_id = None
         self.history_year_id = None
+        self.history_level = None
         
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -163,7 +169,7 @@ class BroadsheetPage(QWidget):
             card = PremiumStatCard(
                 label,
                 subtitle,
-                os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons", icon_name),
+                str(icon_path(icon_name)),
                 accent
             )
             self.card_widgets[key] = card.value_lbl
@@ -360,7 +366,7 @@ class BroadsheetPage(QWidget):
 
         ranking_summary = _assign_class_positions(ranking_summary)
 
-        # 2. Get all enrolled subjects for this class/term
+        # 2. Get all enrolled subjects for this historical class/term
         if self.history_year_id is not None and self.history_term_id is not None:
             year_id = self.history_year_id
             term_id = self.history_term_id
@@ -376,13 +382,25 @@ class BroadsheetPage(QWidget):
         if not year_id:
             return None
 
-        subjects = [r[0] for r in fetch_all("""
-            SELECT DISTINCT e.subject_name 
-            FROM enrollments e
-            JOIN students s ON e.admission_no = s.admission_no
-            WHERE s.class = ? AND e.academic_year_id = ? AND e.term_id = ?
-            ORDER BY e.subject_name
-        """, (class_name, year_id, term_id))]
+        # Use the actual admissions included in the historical class ranking to resolve
+        # enrolled subjects. This preserves context when a student has since moved class.
+        admissions = [s['admission'] for s in ranking_summary]
+        if not admissions:
+            return None
+
+        placeholders = ",".join(["?" for _ in admissions])
+        params = admissions + [year_id, term_id]
+
+        subjects = [r[0] for r in fetch_all(f"""
+            SELECT DISTINCT subject_name
+            FROM enrollments
+            WHERE admission_no IN ({placeholders})
+              AND academic_year_id = ?
+              AND term_id = ?
+            ORDER BY subject_name
+        """, tuple(params))]
+
+        subject_headers = [get_subject_short_name(sub) for sub in subjects]
 
         # 3. Get all marks for these students/exam
         results_raw = fetch_all("""
@@ -519,6 +537,7 @@ class BroadsheetPage(QWidget):
 
         return {
             'subjects': subjects,
+            'subject_headers': subject_headers,
             'rows': rows,
             'meta': {
                 'year': self.year_box.currentText(),
@@ -559,11 +578,12 @@ class BroadsheetPage(QWidget):
 
         subjects = data['subjects']
         rows = data['rows']
+        headers = data.get('subject_headers', subjects)
         
         self.table.setUpdatesEnabled(False)
         try:
             # Build Table
-            headers = ["Pos", "Adm No", "Name", "Sex"] + subjects + ["Total", "Avg", "Pts", "Div"]
+            headers = ["Pos", "Adm No", "Name", "Sex"] + headers + ["Total", "Avg", "Pts", "Div"]
             self.table.setColumnCount(len(headers))
             self.table.setHorizontalHeaderLabels(headers)
             self.table.setRowCount(len(rows))
@@ -710,16 +730,17 @@ class BroadsheetPage(QWidget):
         ranking = sorted(subject_performance.items(), key=lambda it: it[1]['average'], reverse=True)
 
         for r_idx, (sub_name, stats) in enumerate(ranking):
+            display_name = get_subject_short_name(sub_name)
             self.subject_perf_table.setItem(r_idx, 0, QTableWidgetItem(str(r_idx+1)))
-            self.subject_perf_table.setItem(r_idx, 1, QTableWidgetItem(sub_name))
+            self.subject_perf_table.setItem(r_idx, 1, QTableWidgetItem(display_name))
             self.subject_perf_table.setItem(r_idx, 2, QTableWidgetItem(str(stats['average'])))
             self.subject_perf_table.setItem(r_idx, 3, QTableWidgetItem(str(stats['passes'])))
             self.subject_perf_table.setItem(r_idx, 4, QTableWidgetItem(str(stats['fails'])))
             
         if ranking:
-            self.card_widgets['best_sub'].setText(ranking[0][0][:10])
+            self.card_widgets['best_sub'].setText(get_subject_short_name(ranking[0][0]))
             self.card_widgets['best_sub'].setToolTip(ranking[0][0])
-            self.card_widgets['worst_sub'].setText(ranking[-1][0][:10])
+            self.card_widgets['worst_sub'].setText(get_subject_short_name(ranking[-1][0]))
             self.card_widgets['worst_sub'].setToolTip(ranking[-1][0])
 
         self.subject_perf_table.setColumnCount(5)

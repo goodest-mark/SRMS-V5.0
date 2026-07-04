@@ -47,11 +47,16 @@ def compute_student_scores(level, exam_id=None, class_name=None):
             cur.execute("""
                 SELECT e.admission_no, e.subject_name
                 FROM enrollments e
-                JOIN students s ON s.admission_no = e.admission_no
                 WHERE e.academic_year_id = ?
                   AND e.term_id = ?
-                  AND s.level = ?
-            """, (academic_year_id, term_id, level))
+                  AND COALESCE(e.class_name, '') = ?
+                  AND EXISTS (
+                      SELECT 1
+                      FROM students s
+                      WHERE s.admission_no = e.admission_no
+                        AND s.level = ?
+                  )
+            """, (academic_year_id, term_id, class_name or "", level))
             enrolled_pairs = {
                 (admission_no, subject_name)
                 for admission_no, subject_name in cur.fetchall()
@@ -63,7 +68,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
                 s.admission_no,
                 s.full_name,
                 s.gender,
-                s.class,
+                COALESCE(r.class_name, s.class) AS historical_class,
                 r.subject_name,
                 r.marks,
                 sub.subject_type
@@ -79,7 +84,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
         """
         params = [exam_id, level]
         if class_name:
-            query += " AND s.class = ?"
+            query += " AND COALESCE(r.class_name, s.class) = ?"
             params.append(class_name)
 
         cur.execute(query, params)

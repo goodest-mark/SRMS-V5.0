@@ -2,6 +2,8 @@
 
 School Report Management System (SRMS) is a desktop-based application designed to help secondary schools manage students, examinations, grading, report cards, rankings, and academic records efficiently.
 
+Repository: `https://github.com/fizzoh/SRMSV5.0.git`
+
 ## Features
 
 ### Student Management
@@ -51,9 +53,9 @@ School Report Management System (SRMS) is a desktop-based application designed t
 ## Installation
 
 ```bash
-git clone https://github.com/goodest-mark/SRMS.git
+git clone https://github.com/fizzoh/SRMSV5.0.git
 
-cd SRMS
+cd SRMSV5.0
 
 python3 -m venv venv
 source venv/bin/activate

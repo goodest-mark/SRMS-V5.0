@@ -1,6 +1,3 @@
-import sys
-import os
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -28,6 +25,7 @@ from system_state import SystemState
 from theme import apply_theme
 import combo_loaders
 from ui.cards import PremiumStatCard
+from app_paths import icon_path
 
 
 class ResultsDashboard(QWidget):
@@ -86,29 +84,28 @@ class ResultsDashboard(QWidget):
         summary_cards_layout.setHorizontalSpacing(12)
         summary_cards_layout.setVerticalSpacing(12)
 
-        base_dir = os.path.dirname(os.path.abspath(__file__))
         self.expected_results_card = PremiumStatCard(
             "Expected Results",
             "Subjects expected for the exam",
-            os.path.join(base_dir, "assets", "icons", "results.svg"),
+            str(icon_path("results.svg")),
             "primary"
         )
         self.entered_results_card = PremiumStatCard(
             "Entered Results",
             "Marks already recorded",
-            os.path.join(base_dir, "assets", "icons", "results.svg"),
+            str(icon_path("results.svg")),
             "success"
         )
         self.missing_results_card = PremiumStatCard(
             "Missing Results",
             "Subjects still pending",
-            os.path.join(base_dir, "assets", "icons", "results.svg"),
+            str(icon_path("results.svg")),
             "warning"
         )
         self.overall_completion_card = PremiumStatCard(
             "Completion %",
             "Overall completion ratio",
-            os.path.join(base_dir, "assets", "icons", "dashboard.svg"),
+            str(icon_path("dashboard.svg")),
             "secondary"
         )
 
@@ -219,18 +216,18 @@ class ResultsDashboard(QWidget):
                 COUNT(DISTINCT e.admission_no) as expected,
                 COUNT(DISTINCT r.admission_no) as entered
             FROM enrollments e
-            JOIN students s ON s.admission_no = e.admission_no
             LEFT JOIN results r ON r.subject_name = e.subject_name
                 AND r.exam_id = ?
                 AND r.admission_no = e.admission_no
-            WHERE s.class = ? AND s.level = ?
+                AND COALESCE(r.class_name, e.class_name) = ?
+            WHERE UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
               AND e.academic_year_id = ? AND e.term_id = ?
             GROUP BY e.subject_name
             ORDER BY e.subject_name
         """, (
             exam_id,
             class_name,
-            level,
+            class_name,
             year_id,
             term_id
         ))
@@ -331,8 +328,8 @@ class ResultsDashboard(QWidget):
             f"{completion:.2f}%"
         )
 
-    def open_results_entry(self, _index=None):
-        row = self.table.currentRow()
+    def open_results_entry(self, index=None):
+        row = index.row() if index is not None and index.isValid() else self.table.currentRow()
         exam_id = self.exam.currentData()
         class_name = self.class_box.currentText().strip()
 

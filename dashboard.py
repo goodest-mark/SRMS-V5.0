@@ -92,11 +92,12 @@ class MainWindow(QMainWindow):
 
         self.table = QTableWidget()
 
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
 
         self.table.setHorizontalHeaderLabels([
             "ID",
             "Admission No",
+            "Exam No",
             "Full Name",
             "Gender",
             "Class",
@@ -152,14 +153,14 @@ class MainWindow(QMainWindow):
 
         if text:
             rows = fetch_all("""
-                SELECT id, admission_no, full_name, gender, class, stream
+                SELECT id, admission_no, exam_no, full_name, gender, class, stream
                 FROM students
                 WHERE full_name LIKE ? OR admission_no LIKE ?
                 ORDER BY id DESC
             """, (f"%{text}%", f"%{text}%"))
         else:
             rows = fetch_all("""
-                SELECT id, admission_no, full_name, gender, class, stream
+                SELECT id, admission_no, exam_no, full_name, gender, class, stream
                 FROM students
                 ORDER BY id DESC
             """)
@@ -210,7 +211,7 @@ class MainWindow(QMainWindow):
         admission = self.table.item(row, 1).text()
 
         student = fetch_one("""
-            SELECT id, admission_no, full_name, gender, class, stream, comments
+            SELECT id, admission_no, exam_no, full_name, gender, class, stream, comments
             FROM students
             WHERE admission_no=?
         """, (admission,))

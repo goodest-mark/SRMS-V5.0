@@ -17,6 +17,7 @@ from watermark import draw_watermark
 from ranking_engine import compute_student_scores
 from grade_utils import get_grade
 from remarks_utils import get_default_remark, get_headteacher_remark, get_developmental_note
+from ui_helpers import get_subject_short_name
 
 # Color scheme
 NAVY = colors.HexColor('#1B3A5C')
@@ -50,6 +51,68 @@ def _numeric_or_zero(value):
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _safe_image(path, width, height):
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        return Image(path, width=width, height=height)
+    except Exception:
+        return None
+
+
+def _load_school_profile_assets(cur):
+    cur.execute("""
+        SELECT school_name, school_motto, school_address, school_phone,
+               school_email, school_logo, school_stamp, head_teacher,
+               academic_master, discipline_master, class_master,
+               head_teacher_signature, academic_master_signature,
+               discipline_master_signature, class_master_signature,
+               watermark_text, school_website,
+               head_teacher_signature_enabled, academic_master_signature_enabled,
+               discipline_master_signature_enabled, class_master_signature_enabled
+        FROM school_profile
+        LIMIT 1
+    """)
+    profile = cur.fetchone()
+    head_signature_enabled = bool(profile and len(profile) > 17 and profile[17])
+    academic_signature_enabled = bool(profile and len(profile) > 18 and profile[18])
+    discipline_signature_enabled = bool(profile and len(profile) > 19 and profile[19])
+    class_signature_enabled = bool(profile and len(profile) > 20 and profile[20])
+    return {
+        "school_name": profile[0] if profile else "SCHOOL MANAGEMENT SYSTEM",
+        "school_motto": profile[1] if profile and profile[1] else "",
+        "school_address": profile[2] if profile else "-",
+        "school_phone": profile[3] if profile else "",
+        "school_email": profile[4] if profile else "",
+        "school_logo": profile[5] if profile and profile[5] and os.path.exists(profile[5]) else None,
+        "school_stamp": profile[6] if profile and profile[6] and os.path.exists(profile[6]) else None,
+        "head_teacher": profile[7] if profile else "",
+        "academic_master": profile[8] if profile else "",
+        "discipline_master": profile[9] if profile else "",
+        "class_master": "",
+        "head_teacher_signature": profile[11] if head_signature_enabled and profile and profile[11] and os.path.exists(profile[11]) else None,
+        "academic_master_signature": profile[12] if academic_signature_enabled and profile and profile[12] and os.path.exists(profile[12]) else None,
+        "discipline_master_signature": profile[13] if discipline_signature_enabled and profile and profile[13] and os.path.exists(profile[13]) else None,
+        "class_master_signature": None,
+        "watermark_text": profile[15] if profile and profile[15] else "CONFIDENTIAL",
+        "school_website": profile[16] if profile and len(profile) > 16 and profile[16] else "",
+    }
+
+
+def _resolve_historical_class(cur, admission_no, exam_id, fallback_class):
+    cur.execute("""
+        SELECT class_name
+        FROM results
+        WHERE admission_no = ? AND exam_id = ? AND class_name IS NOT NULL AND class_name <> ''
+        ORDER BY id DESC
+        LIMIT 1
+    """, (admission_no, exam_id))
+    row = cur.fetchone()
+    if row and row[0]:
+        return row[0]
+    return fallback_class
 
 
 def list_student_report_exams(admission_no, level):
@@ -255,36 +318,30 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
             progress_callback(int(percent), message)
 
     # ── Fetch school profile ──
-    cur.execute("""
-        SELECT school_name, school_motto, school_address, school_phone,
-               school_email, school_logo, school_stamp, head_teacher,
-               academic_master, watermark_text, school_website
-        FROM school_profile LIMIT 1
-    """)
-    profile = cur.fetchone()
-
-    school_name = profile[0] if profile else "SCHOOL MANAGEMENT SYSTEM"
-    school_motto = profile[1] if profile and profile[1] else ""
-    school_addr = profile[2] if profile else "-"
-    school_phone = profile[3] if profile else ""
-    school_email = profile[4] if profile else ""
-    school_logo = (profile[5] if profile and profile[5]
-                   and os.path.exists(profile[5]) else None)
-    school_stamp = (profile[6] if profile and profile[6]
-                    and os.path.exists(profile[6]) else None)
-    head_teacher = profile[7] if profile else ""
-    academic_master = profile[8] if profile else ""
-    watermark_text = (profile[9] if profile and profile[9]
-                      else "CONFIDENTIAL")
-    try:
-        school_website = profile[10] if profile and len(profile) > 10 and profile[10] else ""
-    except (IndexError, TypeError):
-        school_website = ""
+    profile = _load_school_profile_assets(cur)
+    school_name = profile["school_name"]
+    school_motto = profile["school_motto"]
+    school_addr = profile["school_address"]
+    school_phone = profile["school_phone"]
+    school_email = profile["school_email"]
+    school_logo = profile["school_logo"]
+    school_stamp = profile["school_stamp"]
+    head_teacher = profile["head_teacher"]
+    academic_master = profile["academic_master"]
+    discipline_master = profile["discipline_master"]
+    class_master = profile["class_master"]
+    head_teacher_signature = profile["head_teacher_signature"]
+    academic_master_signature = profile["academic_master_signature"]
+    discipline_master_signature = profile["discipline_master_signature"]
+    class_master_signature = profile["class_master_signature"]
+    watermark_text = profile["watermark_text"]
+    school_website = profile["school_website"]
 
     # ── Academic context ──
     cur.execute("""
         SELECT t.term_name, y.year_name, e.exam_name, e.level,
-               t.id, t.academic_year_id
+               t.id, t.academic_year_id,
+               e.it_has_holiday, e.opening_date, e.closing_date
         FROM exams e
         JOIN terms t ON e.term_id = t.id
         JOIN academic_years y ON t.academic_year_id = y.id
@@ -295,7 +352,9 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
         conn.close()
         return False, "Selected exam does not exist."
 
-    term_name, year_name, exam_name, level, term_id, year_id = context
+    term_name, year_name, exam_name, level, term_id, year_id, exam_has_holiday, exam_opening_date, exam_closing_date = context
+    opening_date = exam_opening_date if exam_has_holiday and exam_opening_date else ""
+    closing_date = exam_closing_date if exam_has_holiday and exam_closing_date else ""
     report_progress(5, "Loading exam context")
 
     # ── Requirements ──
@@ -365,14 +424,15 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
         t_rem, h_rem, d_notes = all_remarks.get(adm, (None, None, None))
         
         cur.execute(
-            "SELECT full_name, gender, stream, comments FROM students WHERE admission_no=?",
+            "SELECT exam_no, full_name, gender, stream, comments FROM students WHERE admission_no=?",
             (adm,)
         )
         s_row = cur.fetchone()
-        student_name = s_row[0] if s_row else student.get('name', '')
-        student_gender = s_row[1] if s_row else student.get('gender', '')
-        student_stream = (s_row[2] if s_row and s_row[2] else '-')
-        student_comment = s_row[3] if s_row and s_row[3] else ''
+        exam_no = s_row[0] if s_row and s_row[0] else student.get('exam_no', '')
+        student_name = s_row[1] if s_row else student.get('name', '')
+        student_gender = s_row[2] if s_row else student.get('gender', '')
+        student_stream = (s_row[3] if s_row and s_row[3] else '-')
+        student_comment = s_row[4] if s_row and s_row[4] else ''
 
         cur.execute("""
             SELECT r.subject_name,
@@ -390,7 +450,7 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
         for fn, sn, mk in marks_rows:
             g = get_grade(mk, level=level)
             full_names.append(fn)
-            short_names.append(sn if sn != fn else fn[:4].upper())
+            short_names.append(get_subject_short_name(fn, sn))
             marks_vals.append(mk)
             grades_vals.append(g)
 
@@ -418,6 +478,7 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
             generated_date=generated_date,
             student_name=student_name,
             student_adm=adm,
+            exam_no=exam_no,
             student_gender=student_gender,
             student_stream=student_stream or "-",
             student_status=student['status'],
@@ -434,8 +495,12 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
             average=average,
             requirements_data=requirements_data,
             use_req=use_req,
+            opening_date=opening_date,
+            closing_date=closing_date,
             head_teacher=head_teacher,
             academic_master=academic_master,
+            discipline_master=discipline_master,
+            class_master=class_master,
             student_comment=student_comment,
             include_page_break=False,
             school_stamp=school_stamp,
@@ -507,34 +572,27 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
         if progress_callback is not None:
             progress_callback(int(percent), message)
 
-    cur.execute("""
-        SELECT school_name, school_motto, school_address, school_phone,
-               school_email, school_logo, school_stamp, head_teacher,
-               academic_master, watermark_text, school_website
-        FROM school_profile LIMIT 1
-    """)
-    profile = cur.fetchone()
-
-    school_name = profile[0] if profile else "SCHOOL MANAGEMENT SYSTEM"
-    school_motto = profile[1] if profile and profile[1] else ""
-    school_addr = profile[2] if profile else "-"
-    school_phone = profile[3] if profile else ""
-    school_email = profile[4] if profile else ""
-    school_logo = (profile[5] if profile and profile[5]
-                   and os.path.exists(profile[5]) else None)
-    school_stamp = (profile[6] if profile and profile[6]
-                    and os.path.exists(profile[6]) else None)
-    head_teacher = profile[7] if profile else ""
-    academic_master = profile[8] if profile else ""
-    watermark_text = (profile[9] if profile and profile[9]
-                      else "CONFIDENTIAL")
-    try:
-        school_website = profile[10] if profile and len(profile) > 10 and profile[10] else ""
-    except (IndexError, TypeError):
-        school_website = ""
+    profile = _load_school_profile_assets(cur)
+    school_name = profile["school_name"]
+    school_motto = profile["school_motto"]
+    school_addr = profile["school_address"]
+    school_phone = profile["school_phone"]
+    school_email = profile["school_email"]
+    school_logo = profile["school_logo"]
+    school_stamp = profile["school_stamp"]
+    head_teacher = profile["head_teacher"]
+    academic_master = profile["academic_master"]
+    discipline_master = profile["discipline_master"]
+    class_master = profile["class_master"]
+    head_teacher_signature = profile["head_teacher_signature"]
+    academic_master_signature = profile["academic_master_signature"]
+    discipline_master_signature = profile["discipline_master_signature"]
+    class_master_signature = profile["class_master_signature"]
+    watermark_text = profile["watermark_text"]
+    school_website = profile["school_website"]
 
     cur.execute("""
-        SELECT admission_no, full_name, gender, class, stream, level, comments
+        SELECT admission_no, exam_no, full_name, gender, class, stream, level, comments
         FROM students
         WHERE admission_no=? AND level=?
     """, (admission_no, level))
@@ -544,11 +602,12 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
         return False, "Student record was not found."
     report_progress(10, "Loading student record")
 
-    student_adm, student_name, student_gender, class_name, student_stream, _student_level, student_comment = student_row
+    student_adm, exam_no, student_name, student_gender, current_class, student_stream, _student_level, student_comment = student_row
 
     context_query = """
         SELECT e.id, t.term_name, y.year_name, e.exam_name, e.level,
-               t.id, t.academic_year_id, e.status
+               t.id, t.academic_year_id, e.status,
+               e.it_has_holiday, e.opening_date, e.closing_date
         FROM exams e
         JOIN terms t ON e.term_id = t.id
         JOIN academic_years y ON t.academic_year_id = y.id
@@ -585,7 +644,10 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
         return False, "No exam report is available for this student and exam yet."
     report_progress(25, "Loading exam context")
 
-    exam_id, term_name, year_name, exam_name, _, term_id, year_id, _exam_status = context
+    exam_id, term_name, year_name, exam_name, _, term_id, year_id, _exam_status, exam_has_holiday, exam_opening_date, exam_closing_date = context
+    opening_date = exam_opening_date if exam_has_holiday and exam_opening_date else ""
+    closing_date = exam_closing_date if exam_has_holiday and exam_closing_date else ""
+    class_name = _resolve_historical_class(cur, student_adm, exam_id, current_class)
 
     # Fetch manual remarks
     cur.execute("""
@@ -662,7 +724,7 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
     for fn, sn, mk in marks_rows:
         g = get_grade(mk, level=level)
         full_names.append(fn)
-        short_names.append(sn if sn != fn else fn[:4].upper())
+        short_names.append(get_subject_short_name(fn, sn))
         marks_vals.append(mk)
         grades_vals.append(g)
     report_progress(70, "Building report sections")
@@ -724,6 +786,7 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
         generated_date=generated_date,
         student_name=student_name,
         student_adm=student_adm,
+        exam_no=exam_no,
         student_gender=student_gender,
         student_stream=student_stream or "-",
         student_status=target_student['status'],
@@ -740,11 +803,19 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
         average=average,
         requirements_data=requirements_data,
         use_req=use_req,
+        opening_date=opening_date,
+        closing_date=closing_date,
         head_teacher=head_teacher,
         academic_master=academic_master,
+        discipline_master=discipline_master,
+        class_master=class_master,
         student_comment=student_comment,
         include_page_break=False,
         school_stamp=school_stamp,
+        head_teacher_signature=head_teacher_signature,
+        academic_master_signature=academic_master_signature,
+        discipline_master_signature=discipline_master_signature,
+        class_master_signature=class_master_signature,
         teacher_remarks=teacher_remarks,
         head_remarks=head_remarks,
         dev_notes=dev_notes
@@ -906,7 +977,7 @@ def _build_student_page_header(ST, school_name, motto, addr, phone, email, websi
     return header
 
 
-def _build_student_page_identity(ST, student_name, admission_no, gender,
+def _build_student_page_identity(ST, student_name, admission_no, exam_no, gender,
                                  class_name, stream, level, report_id, status,
                                  year_name, term_name, exam_name, gen_date):
     return Table([[
@@ -916,6 +987,7 @@ def _build_student_page_identity(ST, student_name, admission_no, gender,
             [
                 ("Student Name", student_name),
                 ("Admission No", admission_no),
+                ("Exam No", exam_no or "-"),
                 ("Gender", gender or "-"),
                 ("Level", level),
                 ("Report ID", report_id),
@@ -1077,7 +1149,7 @@ def _build_student_page_totals(ST, total_marks, average, overall_grade, division
     return table
 
 
-def _build_student_page_requirements(ST, requirements_data, use_req):
+def _build_student_page_requirements(ST, requirements_data, use_req, opening_date="", closing_date=""):
     title = Table([[Paragraph('SCHOOL REQUIREMENTS', ST['section_hdr'])]],
                   colWidths=[STUDENT_PAGE_W])
     title.setStyle(TableStyle([
@@ -1121,13 +1193,28 @@ def _build_student_page_requirements(ST, requirements_data, use_req):
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('RIGHTPADDING', (0, 0), (-1, -1), 4),
     ]))
-    return Table([[title], [body]], colWidths=[STUDENT_PAGE_W])
+
+    meta = Table([[
+        Paragraph(f'<b>OPENING DATE</b><br/>{_safe_text(opening_date)}', ST['tiny_left']),
+        Paragraph(f'<b>CLOSING DATE</b><br/>{_safe_text(closing_date)}', ST['tiny_left']),
+    ]], colWidths=[STUDENT_PAGE_W / 2.0, STUDENT_PAGE_W / 2.0])
+    meta.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 0.45, NAVY),
+        ('GRID', (0, 0), (-1, -1), 0.25, GRID_COLOR),
+        ('BACKGROUND', (0, 0), (-1, -1), NAVY_LIGHT),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+
+    return Table([[title], [meta], [body]], colWidths=[STUDENT_PAGE_W])
 
 
 
 
 def _build_student_page_comments(ST, head_teacher, academic_master, student_comment, stamp_path=None, average=0, division='-', level='O_LEVEL', teacher_remarks=None, head_remarks=None, dev_notes=None):
-    title = Table([[Paragraph('COMMENTS / SIGNATURES / OFFICIAL STAMP', ST['section_hdr'])]],
+    title = Table([[Paragraph('COMMENTS / OFFICIAL STAMP', ST['section_hdr'])]],
                   colWidths=[STUDENT_PAGE_W])
     title.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), NAVY),
@@ -1169,31 +1256,31 @@ def _build_student_page_comments(ST, head_teacher, academic_master, student_comm
             stamp,
         ],
         [
-            Paragraph(f"HEAD TEACHER<br/><font size='6'>{_safe_text(head_teacher)}</font>", ST['label']),
-            Paragraph(h_rem_display, ST['comment']),
-            Paragraph('Signature: ____________________<br/>Date: ____________________', ST['tiny_left']),
-        ],
-        [
-            Paragraph(f"ACADEMIC MASTER<br/><font size='6'>{_safe_text(academic_master)}</font>", ST['label']),
-            Paragraph('<font color="#9AA4B2">______________________________________________</font>', ST['comment']),
-            Paragraph('Signature: ____________________<br/>Date: ____________________', ST['tiny_left']),
-        ],
-        [
-            Paragraph("CLASS TEACHER", ST['label']),
+            Paragraph('<b>CLASS TEACHER COMMENT</b>', ST['label']),
             Paragraph(t_rem_display, ST['comment']),
-            Paragraph('Signature: ____________________<br/>Date: ____________________', ST['tiny_left']),
+            Paragraph('<font color="#9AA4B2">Reviewed below</font>', ST['tiny_left']),
+        ],
+        [
+            Paragraph('<b>ACADEMIC MASTER COMMENT</b>', ST['label']),
+            Paragraph('<font color="#9AA4B2">______________________________________________</font>', ST['comment']),
+            Paragraph('<font color="#9AA4B2">Reviewed below</font>', ST['tiny_left']),
+        ],
+        [
+            Paragraph('<b>HEAD TEACHER COMMENT</b>', ST['label']),
+            Paragraph(h_rem_display, ST['comment']),
+            Paragraph('<font color="#9AA4B2">Reviewed below</font>', ST['tiny_left']),
         ],
     ]
     body = Table(
         rows,
-        colWidths=[1.15 * inch, STUDENT_PAGE_W - 1.15 * inch - 2.0 * inch, 2.0 * inch],
-        rowHeights=[0.85 * inch, 0.52 * inch, 0.52 * inch, 0.52 * inch]
+        colWidths=[1.3 * inch, STUDENT_PAGE_W - 1.3 * inch - 1.35 * inch, 1.35 * inch],
+        rowHeights=[0.82 * inch, 0.5 * inch, 0.5 * inch, 0.5 * inch]
     )
     body.setStyle(TableStyle([
         ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
         ('GRID', (0, 0), (-1, -1), 0.3, GRID_COLOR),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (2, 0), (2, 0), 'CENTER'),
+        ('ALIGN', (2, 0), (2, -1), 'CENTER'),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
@@ -1254,11 +1341,14 @@ def _build_student_report_content(
     ST, school_name, school_motto, school_addr, school_phone,
     school_email, school_website, school_logo, use_logo,
     year_name, term_name, exam_name, level, class_name, generated_date,
-    student_name, student_adm, student_gender, student_stream, student_status,
+    student_name, student_adm, exam_no, student_gender, student_stream, student_status,
     class_position, total_students, division, points, overall_grade,
     full_names, short_names, marks_vals, grades_vals, total_marks, average,
-    requirements_data, use_req, head_teacher, academic_master,
+    requirements_data, use_req, opening_date, closing_date, head_teacher, academic_master,
     student_comment='', include_page_break=False, school_stamp=None,
+    head_teacher_signature=None, academic_master_signature=None,
+    discipline_master=None, discipline_master_signature=None,
+    class_master=None, class_master_signature=None,
     teacher_remarks=None, head_remarks=None, dev_notes=None
 ):
     content = [
@@ -1270,7 +1360,7 @@ def _build_student_report_content(
         ),
         Spacer(1, 6),
         _build_student_page_identity(
-            ST, student_name, student_adm, student_gender,
+            ST, student_name, student_adm, exam_no, student_gender,
             class_name, student_stream, level,
             f"SRMS-{year_name}-{student_adm.replace('/', '')}",
             student_status, year_name, term_name, exam_name, generated_date
@@ -1286,7 +1376,7 @@ def _build_student_report_content(
             ST, total_marks, average, overall_grade, division, points
         ),
         Spacer(1, 6),
-        _build_student_page_requirements(ST, requirements_data, use_req),
+        _build_student_page_requirements(ST, requirements_data, use_req, opening_date, closing_date),
         Spacer(1, 6),
         _build_student_page_comments(
             ST, head_teacher, academic_master, student_comment,
@@ -1294,7 +1384,18 @@ def _build_student_report_content(
             teacher_remarks=teacher_remarks, head_remarks=head_remarks, dev_notes=dev_notes
         ),
         Spacer(1, 4),
-        _build_student_page_dates(ST),
+        _build_signatures(
+            ST,
+            head_teacher=head_teacher,
+            academic_master=academic_master,
+            discipline_master=discipline_master,
+            class_master=class_master,
+            head_teacher_signature=head_teacher_signature,
+            academic_master_signature=academic_master_signature,
+            discipline_master_signature=discipline_master_signature,
+            class_master_signature=class_master_signature,
+            stamp_path=school_stamp,
+        ),
         Spacer(1, 4),
         _build_student_page_footer(ST),
         Spacer(1, 3),
@@ -1539,39 +1640,60 @@ def _build_lower_section(ST, marks, full_names, grades,
     return row
 
 
-def _build_signatures(ST, head_teacher, academic_master, stamp_path):
-    """Signature section with four columns."""
-    col_w = PAGE_W / 4
+def _build_signatures(
+    ST,
+    head_teacher,
+    academic_master,
+    discipline_master,
+    class_master,
+    head_teacher_signature=None,
+    academic_master_signature=None,
+    discipline_master_signature=None,
+    class_master_signature=None,
+    stamp_path=None,
+):
+    """Signature section with imported signatures for the signatories."""
+    col_w = (PAGE_W - 12) / 2
+    sig_style = ST.get('tiny_left') or ST.get('sig')
+    sig_hdr_style = ST.get('tiny_b') or ST.get('sig_hdr')
+
+    def signature_block(role, name, image_path):
+        image = _safe_image(image_path, 0.62 * inch, 0.28 * inch)
+        image_row = image if image is not None else Paragraph('Signature: ______________', sig_style)
+        name_row = Paragraph(
+            f'Name: {name}' if name else 'Name: ______________',
+            sig_style
+        )
+        block = Table([
+            [Paragraph(f'<b>{role}</b>', sig_hdr_style)],
+            [image_row],
+            [name_row],
+        ], colWidths=[col_w - 10], rowHeights=[0.22 * inch, 0.40 * inch, 0.26 * inch])
+        block.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ]))
+        return block
 
     data = [
-        [Paragraph('<b>CLASS TEACHER</b>', ST['sig_hdr']),
-         Paragraph('<b>ACADEMIC MASTER</b>', ST['sig_hdr']),
-         Paragraph('<b>HEAD TEACHER</b>', ST['sig_hdr']),
-         Paragraph('<b>PARENT / GUARDIAN</b>', ST['sig_hdr'])],
-        [Paragraph('Signature: ______________', ST['sig']),
-         Paragraph('Signature: ______________', ST['sig']),
-         Paragraph('Signature: ______________', ST['sig']),
-         Paragraph('Signature: ______________', ST['sig'])],
-        [Paragraph('Name: ______________', ST['sig']),
-         Paragraph(
-             f'Name: {academic_master}' if academic_master
-             else 'Name: ______________', ST['sig']),
-         Paragraph(
-             f'Name: {head_teacher}' if head_teacher
-             else 'Name: ______________', ST['sig']),
-         Paragraph('Name: ______________', ST['sig'])],
-        [Paragraph('Date: ______________', ST['sig']),
-         Paragraph('Date: ______________', ST['sig']),
-         Paragraph('Date: ______________', ST['sig']),
-         Paragraph('Date: ______________', ST['sig'])],
+        [signature_block("HEAD TEACHER / HEAD MISTRESS", head_teacher, head_teacher_signature),
+         signature_block("ACADEMIC MASTER / MISTRESS", academic_master, academic_master_signature)],
+        [signature_block("DISCIPLINE MASTER / MISTRESS", discipline_master, discipline_master_signature),
+         signature_block("CLASS MASTER / MISTRESS", class_master, class_master_signature)],
     ]
 
-    tbl = Table(data, colWidths=[col_w] * 4)
+    tbl = Table(data, colWidths=[col_w] * 2)
     tbl.setStyle(TableStyle([
         ('LINEABOVE', (0, 0), (-1, 0), 1, NAVY),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
     ]))
     return tbl
 

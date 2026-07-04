@@ -133,29 +133,55 @@ def load_results_exams(combo, level=None):
     combo.blockSignals(False)
 
 
-def load_completed_exams(combo, term_id=None, level=None, search_text=""):
-    """Populate an exam combo box with COMPLETED exams for historical review."""
+def load_completed_exams(combo, year_id=None, term_id=None, level=None, search_text=""):
+    """Populate an exam combo box with COMPLETED exams for historical review.
+
+    The history view is anchored to the selected academic year. If a term is
+    selected, it is used as the primary filter, but the loader falls back to
+    the full year so completed exams are still visible when the selected term
+    would otherwise hide them.
+    """
     current = combo.currentData()
     if level is None:
         level = SystemState.get_level()
     combo.blockSignals(True)
     combo.clear()
     query = """
-        SELECT id, exam_name
-        FROM exams
-        WHERE level=?
-          AND status='COMPLETED'
+        SELECT e.id, e.exam_name
+        FROM exams e
+        JOIN terms t ON e.term_id = t.id
+        WHERE e.level=?
+          AND e.status='COMPLETED'
     """
     params = [level]
+    if year_id:
+        query += " AND t.academic_year_id=?"
+        params.append(year_id)
     if term_id:
         query += " AND term_id=?"
         params.append(term_id)
     if search_text:
-        query += " AND exam_name LIKE ?"
+        query += " AND e.exam_name LIKE ?"
         params.append(f"%{search_text}%")
-    query += " ORDER BY exam_name"
-    for row in fetch_all(query, tuple(params)):
-        combo.addItem(f"{row[1]} [COMPLETED]", row[0])
+    query += " ORDER BY e.exam_name, e.id DESC"
+    rows = fetch_all(query, tuple(params))
+    if not rows and year_id and term_id:
+        fallback_query = """
+            SELECT e.id, e.exam_name
+            FROM exams e
+            JOIN terms t ON e.term_id = t.id
+            WHERE e.level=?
+              AND e.status='COMPLETED'
+              AND t.academic_year_id=?
+        """
+        fallback_params = [level, year_id]
+        if search_text:
+            fallback_query += " AND e.exam_name LIKE ?"
+            fallback_params.append(f"%{search_text}%")
+        fallback_query += " ORDER BY e.exam_name, e.id DESC"
+        rows = fetch_all(fallback_query, tuple(fallback_params))
+    for exam_id, exam_name in rows:
+        combo.addItem(f"{exam_name} [COMPLETED]", exam_id)
     _restore_by_data(combo, current)
     combo.blockSignals(False)
 

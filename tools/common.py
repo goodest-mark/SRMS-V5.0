@@ -1,6 +1,4 @@
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent.parent
+from app_paths import ROOT
 
 def python_files():
     for f in ROOT.rglob("*.py"):

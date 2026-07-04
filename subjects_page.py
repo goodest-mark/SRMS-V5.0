@@ -21,7 +21,7 @@ import excel_utils
 from academic_rules import allowed_subject_types
 from db_utils import get_cursor, fetch_all
 from table_utils import setup_table, populate_table
-from ui_helpers import confirm_action, show_error
+from ui_helpers import confirm_action, show_error, get_subject_short_name
 from system_state import SystemState
 from event_bus import EventBus
 from subject_dialog import SubjectDialog
@@ -212,9 +212,9 @@ class SubjectsPage(QWidget):
         try:
             with get_cursor(commit=True) as cur:
                 cur.execute("""
-                    INSERT INTO subjects(subject_name, level, subject_type)
-                    VALUES (?, ?, ?)
-                """, (name, SystemState.get_level(), self.subject_type.currentText()))
+                    INSERT INTO subjects(subject_name, subject_short_name, level, subject_type)
+                    VALUES (?, ?, ?, ?)
+                """, (name, get_subject_short_name(name), SystemState.get_level(), self.subject_type.currentText()))
 
             self.name.clear()
             self.load()
@@ -279,11 +279,19 @@ class SubjectsPage(QWidget):
     # =====================
 
     def download_template(self):
+        level = SystemState.get_level()
         excel_utils.download_template(
             self, 
             "subjects_template.xlsx",
-            "SUBJECT REGISTRATION FORM",
+            f"SUBJECT REGISTRATION FORM - {level}",
             ["Subject Name*", "Subject Type*", "Level"],
+            instructions=[
+                f"1. Template generated for Level: {level}.",
+                "2. Do not modify the column headers in Row 10.",
+                "3. Start data entry from Row 12.",
+                "4. Subject Type should be COUNTED, PRINCIPAL, or another configured type.",
+                "5. Level must match the selected system level on the page.",
+            ],
             samples=["Mathematics", "COUNTED", SystemState.get_level()]
         )
 
@@ -318,11 +326,12 @@ class SubjectsPage(QWidget):
                     
                     try:
                         cur.execute("""
-                            INSERT INTO subjects (subject_name, level, subject_type)
-                            VALUES (?, ?, ?)
+                            INSERT INTO subjects (subject_name, subject_short_name, level, subject_type)
+                            VALUES (?, ?, ?, ?)
                             ON CONFLICT(subject_name, level) DO UPDATE SET
-                                subject_type=excluded.subject_type
-                        """, (str(name), level, str(stype)))
+                                subject_type=excluded.subject_type,
+                                subject_short_name=excluded.subject_short_name
+                        """, (str(name), get_subject_short_name(str(name)), level, str(stype)))
                         imported += 1
                     except Exception as e:
                         print(f"[ERROR] Failed to import subject '{name}': {e}")

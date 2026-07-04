@@ -60,6 +60,14 @@ class TestInitDb:
         assert cur.fetchone() is not None
         conn.close()
 
+    def test_exams_table_has_holiday_fields(self, initialized_db):
+        conn = sqlite3.connect(initialized_db)
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(exams)")
+        columns = {row[1] for row in cur.fetchall()}
+        conn.close()
+        assert {"it_has_holiday", "opening_date", "closing_date"} <= columns
+
     def test_creates_results_table(self, initialized_db):
         conn = sqlite3.connect(initialized_db)
         cur = conn.cursor()
@@ -73,6 +81,28 @@ class TestInitDb:
         cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='division_rules'")
         assert cur.fetchone() is not None
         conn.close()
+
+    def test_students_table_has_optional_exam_no_column(self, initialized_db):
+        conn = sqlite3.connect(initialized_db)
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(students)")
+        columns = {row[1] for row in cur.fetchall()}
+        conn.close()
+        assert "exam_no" in columns
+
+    def test_school_profile_has_stamp_and_signature_columns(self, initialized_db):
+        conn = sqlite3.connect(initialized_db)
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(school_profile)")
+        columns = {row[1] for row in cur.fetchall()}
+        conn.close()
+        assert {
+            "school_stamp",
+            "head_teacher_signature",
+            "academic_master_signature",
+            "discipline_master_signature",
+            "class_master_signature",
+        } <= columns
 
     def test_creates_enrollments_table(self, initialized_db):
         conn = sqlite3.connect(initialized_db)
@@ -128,7 +158,7 @@ class TestInitDb:
         cur.execute("SELECT COUNT(*) FROM exams")
         count = cur.fetchone()[0]
         conn.close()
-        assert count >= 4  # At least 4 exams (2 terms * 2 exams * 2 levels)
+        assert count == 0
 
     def test_default_system_settings_created(self, initialized_db):
         conn = sqlite3.connect(initialized_db)

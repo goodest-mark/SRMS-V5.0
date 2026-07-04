@@ -262,6 +262,28 @@ class TestComputeStudentScoresOLevel:
         for student in ready:
             assert student["division"] in ["I", "II", "III", "IV", "0", "UNKNOWN"]
 
+    def test_promoted_student_still_appears_for_historical_class(self, db_with_results):
+        conn = sqlite3.connect(db_with_results["db_path"])
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE results SET class_name = ? WHERE admission_no = ? AND exam_id = ?",
+            ("Form I", "ADM001", db_with_results["exam_id"]),
+        )
+        cur.execute(
+            "UPDATE students SET class = ? WHERE admission_no = ?",
+            ("Form II", "ADM001"),
+        )
+        conn.commit()
+        conn.close()
+
+        ranking = compute_student_scores(
+            "O_LEVEL",
+            exam_id=db_with_results["exam_id"],
+            class_name="Form I",
+        )
+
+        assert any(student["admission"] == "ADM001" for student in ranking)
+
     def test_empty_results_returns_empty_list(self, initialized_db):
         ranking = compute_student_scores("O_LEVEL")
         assert ranking == []

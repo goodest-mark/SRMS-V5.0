@@ -26,31 +26,36 @@ class EditStudentWindow(QWidget):
         self.admission.setText(student_data[1])
         self.admission.setReadOnly(True)
 
+        self.exam_no = QLineEdit()
+        self.exam_no.setText(student_data[2] if len(student_data) > 2 and student_data[2] else "")
+        self.exam_no.setPlaceholderText("Exam No (Optional)")
+
         self.name = QLineEdit()
-        self.name.setText(student_data[2])
+        self.name.setText(student_data[3])
 
         self.gender = QComboBox()
         self.gender.addItems(["Male", "Female"])
-        self.gender.setCurrentText(student_data[3])
+        self.gender.setCurrentText(student_data[4])
 
         self.class_box = QComboBox()
         self.class_box.addItems([
             "Form I", "Form II", "Form III",
             "Form IV", "Form V", "Form VI"
         ])
-        self.class_box.setCurrentText(student_data[4])
+        self.class_box.setCurrentText(student_data[5])
 
         self.stream = QLineEdit()
-        self.stream.setText(student_data[5])
+        self.stream.setText(student_data[6])
 
         self.comment = QTextEdit()
         self.comment.setPlaceholderText("Comments / Remarks")
-        self.comment.setPlainText(student_data[6] if len(student_data) > 6 and student_data[6] else "")
+        self.comment.setPlainText(student_data[7] if len(student_data) > 7 and student_data[7] else "")
 
         self.btn = QPushButton("UPDATE")
         self.btn.clicked.connect(self.update_student)
 
         layout.addWidget(self.admission)
+        layout.addWidget(self.exam_no)
         layout.addWidget(self.name)
         layout.addWidget(self.gender)
         layout.addWidget(self.class_box)
@@ -63,9 +68,10 @@ class EditStudentWindow(QWidget):
     def update_student(self):
         execute("""
             UPDATE students
-            SET full_name=?, gender=?, class=?, stream=?, comments=?
+            SET exam_no=?, full_name=?, gender=?, class=?, stream=?, comments=?
             WHERE admission_no=?
         """, (
+            self.exam_no.text(),
             self.name.text(),
             self.gender.currentText(),
             self.class_box.currentText(),

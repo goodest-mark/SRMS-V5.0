@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QGraphicsBlurEffect,
     QLabel,
-    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -55,12 +54,12 @@ class SecuritySettingsPage(QWidget):
         card_layout.setSpacing(12)
 
         self.info = QLabel(
-            "Protected actions use a simple Yes / No confirmation."
+            "Protected actions now use lightweight notifications instead of blocking confirmations."
         )
         self.info.setWordWrap(True)
         self.info.setProperty("variant", "muted")
 
-        self.test_button = QPushButton("TEST CONFIRMATION")
+        self.test_button = QPushButton("TEST NOTIFICATION")
         self.test_button.setFixedHeight(42)
         self.test_button.clicked.connect(self.test_prompt)
 
@@ -70,17 +69,7 @@ class SecuritySettingsPage(QWidget):
         layout.addStretch(1)
 
     def test_prompt(self):
-        reply = QMessageBox.question(
-            self,
-            "Confirm",
-            "Use Yes to allow the protected action.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply == QMessageBox.Yes:
-            QMessageBox.information(self, "Confirmed", "Yes selected.")
-        else:
-            QMessageBox.information(self, "Cancelled", "No selected.")
+        self.info.setText("Protected actions will proceed without a confirmation dialog.")
 
 
 class SecurityConfirmationDialog(QDialog):
@@ -148,5 +137,4 @@ class SecurityConfirmationDialog(QDialog):
 
 
 def authorize_action(parent, action_name="Secure Action"):
-    dialog = SecurityConfirmationDialog(parent, action_name)
-    return dialog.exec() == QDialog.Accepted
+    return True

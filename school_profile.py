@@ -2,7 +2,7 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit,
     QPushButton, QMessageBox, QLabel, QFileDialog, QGroupBox,
-    QScrollArea, QFrame, QSizePolicy
+    QScrollArea, QFrame, QSizePolicy, QCheckBox
 )
 
 from PySide6.QtGui import QPixmap
@@ -29,6 +29,13 @@ class SchoolProfilePage(QWidget):
         super().__init__()
         self.logo_path = ""
         self.stamp_path = ""
+        self.head_teacher_signature_path = ""
+        self.academic_master_signature_path = ""
+        self.discipline_master_signature_path = ""
+        self.class_master_signature_path = ""
+        self.head_teacher_signature_enabled = QCheckBox("Enabled")
+        self.academic_master_signature_enabled = QCheckBox("Enabled")
+        self.discipline_master_signature_enabled = QCheckBox("Enabled")
         self.login_bg_path = ""
         self.dashboard_bg_path = ""
 
@@ -65,18 +72,6 @@ class SchoolProfilePage(QWidget):
         self.school_motto = QLineEdit()
         form1.addRow("School Name:", self.school_name)
         form1.addRow("Motto:", self.school_motto)
-        
-        logo_layout = QHBoxLayout()
-        self.logo_preview = QLabel("No Logo")
-        self.logo_preview.setObjectName("ProfilePreview")
-        self.logo_preview.setFixedSize(120, 120)
-        self.logo_preview.setAlignment(Qt.AlignCenter)
-        btn_logo = QPushButton("UPLOAD LOGO")
-        btn_logo.clicked.connect(self.upload_logo)
-        logo_layout.addWidget(self.logo_preview)
-        logo_layout.addWidget(btn_logo)
-        logo_layout.addStretch()
-        form1.addRow("School Logo:", logo_layout)
 
         # SECTION 2: Contact
         sec2 = QGroupBox("SECTION 2: CONTACT INFORMATION")
@@ -95,8 +90,12 @@ class SchoolProfilePage(QWidget):
         form3 = QFormLayout(sec3)
         self.head_teacher = QLineEdit()
         self.academic_master = QLineEdit()
+        self.discipline_master = QLineEdit()
+        self.class_master = QLineEdit()
         form3.addRow("Head Teacher:", self.head_teacher)
         form3.addRow("Academic Master:", self.academic_master)
+        form3.addRow("Discipline Master:", self.discipline_master)
+        form3.addRow("Class Master / Mistress:", self.class_master)
 
         # SECTION 4: BRANDING
         sec4 = QGroupBox("SECTION 4: BRANDING")
@@ -104,10 +103,44 @@ class SchoolProfilePage(QWidget):
         self.watermark_text = QLineEdit()
         form4.addRow("Watermark Text:", self.watermark_text)
 
+        self.logo_preview, logo_btn = self._build_image_row("No Logo", "UPLOAD LOGO", self.upload_logo)
+        form1.addRow("School Logo:", self._wrap_row(self.logo_preview, logo_btn))
+
+        self.stamp_preview, stamp_btn = self._build_image_row("No Stamp", "UPLOAD STAMP", self.upload_stamp)
+        form4.addRow("School Stamp:", self._wrap_row(self.stamp_preview, stamp_btn))
+
+        # SECTION 5: SIGNATURES
+        sec5 = QGroupBox("SECTION 5: SIGNATURES")
+        form5 = QFormLayout(sec5)
+        self.head_signature_preview, head_sig_btn, self.head_teacher_signature_enabled, head_row = self._build_signature_row(
+            "No Signature", "UPLOAD HEAD SIGNATURE", self.upload_head_signature, self.head_teacher_signature_enabled
+        )
+        self.academic_signature_preview, academic_sig_btn, self.academic_master_signature_enabled, academic_row = self._build_signature_row(
+            "No Signature", "UPLOAD ACADEMIC SIGNATURE", self.upload_academic_signature, self.academic_master_signature_enabled
+        )
+        self.discipline_signature_preview, discipline_sig_btn, self.discipline_master_signature_enabled, discipline_row = self._build_signature_row(
+            "No Signature", "UPLOAD DISCIPLINE SIGNATURE", self.upload_discipline_signature, self.discipline_master_signature_enabled
+        )
+        self.class_signature_preview = QLabel("Handled on paper")
+        self.class_signature_preview.setObjectName("ProfilePreview")
+        self.class_signature_preview.setFixedSize(120, 120)
+        self.class_signature_preview.setAlignment(Qt.AlignCenter)
+        class_sig_btn = QPushButton("PHYSICAL SIGN ONLY")
+        class_sig_btn.setEnabled(False)
+        class_row = QHBoxLayout()
+        class_row.addWidget(self.class_signature_preview)
+        class_row.addWidget(class_sig_btn)
+        class_row.addStretch()
+        form5.addRow("Head Teacher / Head Mistress:", head_row)
+        form5.addRow("Academic Master / Mistress:", academic_row)
+        form5.addRow("Discipline Master / Mistress:", discipline_row)
+        form5.addRow("Class Master / Mistress:", class_row)
+
         container_layout.addWidget(sec1)
         container_layout.addWidget(sec2)
         container_layout.addWidget(sec3)
         container_layout.addWidget(sec4)
+        container_layout.addWidget(sec5)
         
         # ACTIONS
         btns_layout = QHBoxLayout()
@@ -131,11 +164,63 @@ class SchoolProfilePage(QWidget):
 
         self.load()
 
+    def _build_image_row(self, placeholder, button_text, callback):
+        preview = QLabel(placeholder)
+        preview.setObjectName("ProfilePreview")
+        preview.setFixedSize(120, 120)
+        preview.setAlignment(Qt.AlignCenter)
+        button = QPushButton(button_text)
+        button.clicked.connect(callback)
+        return preview, button
+
+    def _build_signature_row(self, placeholder, button_text, callback, checkbox):
+        preview, button = self._build_image_row(placeholder, button_text, callback)
+        row = QHBoxLayout()
+        row.addWidget(preview)
+        row.addWidget(button)
+        row.addWidget(checkbox)
+        row.addStretch()
+        checkbox.setChecked(False)
+        button.setEnabled(False)
+        checkbox.toggled.connect(button.setEnabled)
+        return preview, button, checkbox, row
+
+    def _wrap_row(self, preview, button):
+        row = QHBoxLayout()
+        row.addWidget(preview)
+        row.addWidget(button)
+        row.addStretch()
+        return row
+
     def upload_logo(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Logo", "", "Images (*.png *.jpg *.jpeg)")
         if file_path and _is_safe_image_path(file_path):
             self.logo_path = file_path
             self.show_preview(self.logo_preview, file_path)
+
+    def upload_stamp(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Stamp", "", "Images (*.png *.jpg *.jpeg)")
+        if file_path and _is_safe_image_path(file_path):
+            self.stamp_path = file_path
+            self.show_preview(self.stamp_preview, file_path)
+
+    def upload_head_signature(self):
+        self._upload_signature("Select Head Teacher Signature", "head_teacher_signature_path", self.head_signature_preview)
+
+    def upload_academic_signature(self):
+        self._upload_signature("Select Academic Master Signature", "academic_master_signature_path", self.academic_signature_preview)
+
+    def upload_discipline_signature(self):
+        self._upload_signature("Select Discipline Master Signature", "discipline_master_signature_path", self.discipline_signature_preview)
+
+    def upload_class_signature(self):
+        QMessageBox.information(self, "Physical Sign Only", "Class master signs the report physically on paper.")
+
+    def _upload_signature(self, title, attr_name, preview):
+        file_path, _ = QFileDialog.getOpenFileName(self, title, "", "Images (*.png *.jpg *.jpeg)")
+        if file_path and _is_safe_image_path(file_path):
+            setattr(self, attr_name, file_path)
+            self.show_preview(preview, file_path)
 
     def show_preview(self, label, path):
         if path and os.path.exists(path):
@@ -149,9 +234,13 @@ class SchoolProfilePage(QWidget):
         try:
             row = fetch_one("""
                 SELECT school_name, school_motto, school_address, school_phone,
-                       school_email, school_website, head_teacher, academic_master,
-                       school_logo, school_stamp, login_background, dashboard_background,
-                       watermark_text
+                school_email, school_website, head_teacher, academic_master,
+                       discipline_master, class_master, school_logo, school_stamp,
+                       head_teacher_signature, academic_master_signature,
+                       discipline_master_signature, class_master_signature,
+                       login_background, dashboard_background, watermark_text,
+                       head_teacher_signature_enabled, academic_master_signature_enabled,
+                       discipline_master_signature_enabled, class_master_signature_enabled
                 FROM school_profile LIMIT 1
             """)
             
@@ -164,13 +253,27 @@ class SchoolProfilePage(QWidget):
                 self.school_website.setText(row[5] or "")
                 self.head_teacher.setText(row[6] or "")
                 self.academic_master.setText(row[7] or "")
-                self.logo_path = row[8] or ""
-                self.stamp_path = row[9] or ""
-                self.login_bg_path = row[10] or ""
-                self.dashboard_bg_path = row[11] or ""
-                self.watermark_text.setText(row[12] or "CONFIDENTIAL")
-                
+                self.discipline_master.setText(row[8] or "")
+                self.class_master.setText(row[9] or "")
+                self.logo_path = row[10] or ""
+                self.stamp_path = row[11] or ""
+                self.head_teacher_signature_path = row[12] or ""
+                self.academic_master_signature_path = row[13] or ""
+                self.discipline_master_signature_path = row[14] or ""
+                self.class_master_signature_path = row[15] or ""
+                self.login_bg_path = row[16] or ""
+                self.dashboard_bg_path = row[17] or ""
+                self.watermark_text.setText(row[18] or "CONFIDENTIAL")
+                self.head_teacher_signature_enabled.setChecked(bool(row[19]))
+                self.academic_master_signature_enabled.setChecked(bool(row[20]))
+                self.discipline_master_signature_enabled.setChecked(bool(row[21]))
+
                 if self.logo_path: self.show_preview(self.logo_preview, self.logo_path)
+                if self.stamp_path: self.show_preview(self.stamp_preview, self.stamp_path)
+                if self.head_teacher_signature_enabled.isChecked() and self.head_teacher_signature_path: self.show_preview(self.head_signature_preview, self.head_teacher_signature_path)
+                if self.academic_master_signature_enabled.isChecked() and self.academic_master_signature_path: self.show_preview(self.academic_signature_preview, self.academic_master_signature_path)
+                if self.discipline_master_signature_enabled.isChecked() and self.discipline_master_signature_path: self.show_preview(self.discipline_signature_preview, self.discipline_master_signature_path)
+                self.class_signature_preview.setText("Handled on paper")
         except Exception as e:
             print(f"[ERROR] Failed to load school profile: {e}")
             QMessageBox.warning(self, "Load Error", "Could not load school profile data.")
@@ -186,16 +289,33 @@ class SchoolProfilePage(QWidget):
                     INSERT INTO school_profile (
                         school_name, school_motto, school_address, school_phone,
                         school_email, school_website, head_teacher, academic_master,
-                        school_logo, school_stamp, login_background, dashboard_background,
-                        watermark_text
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        discipline_master, class_master, school_logo, school_stamp,
+                        head_teacher_signature, academic_master_signature,
+                        discipline_master_signature, class_master_signature,
+                        login_background, dashboard_background, watermark_text,
+                        head_teacher_signature_enabled, academic_master_signature_enabled,
+                        discipline_master_signature_enabled, class_master_signature_enabled
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     self.school_name.text(), self.school_motto.text(), self.school_address.text(),
                     self.school_phone.text(), self.school_email.text(), self.school_website.text(),
                     self.head_teacher.text(), self.academic_master.text(),
-                    self.logo_path, self.stamp_path, self.login_bg_path,
-                    self.dashboard_bg_path, self.watermark_text.text() or "CONFIDENTIAL"
+                    self.discipline_master.text(), self.class_master.text(),
+                    self.logo_path, self.stamp_path,
+                    self.head_teacher_signature_path if self.head_teacher_signature_enabled.isChecked() else "",
+                    self.academic_master_signature_path if self.academic_master_signature_enabled.isChecked() else "",
+                    self.discipline_master_signature_path if self.discipline_master_signature_enabled.isChecked() else "",
+                    "",
+                    self.login_bg_path,
+                    self.dashboard_bg_path, self.watermark_text.text() or "CONFIDENTIAL",
+                    1 if self.head_teacher_signature_enabled.isChecked() else 0,
+                    1 if self.academic_master_signature_enabled.isChecked() else 0,
+                    1 if self.discipline_master_signature_enabled.isChecked() else 0,
+                    0
                 ))
+                cur.execute(
+                    "REPLACE INTO system_settings (setting_key, setting_value) VALUES ('setup_complete', '1')"
+                )
             QMessageBox.information(self, "Success", "School Profile Configuration Saved.")
             EventBus.emit("SCHOOL_PROFILE_UPDATED")
         except Exception as e:
@@ -211,6 +331,23 @@ class SchoolProfilePage(QWidget):
         self.head_teacher.clear()
         self.academic_master.clear()
         self.logo_path = ""
+        self.stamp_path = ""
+        self.head_teacher_signature_path = ""
+        self.academic_master_signature_path = ""
+        self.discipline_master_signature_path = ""
+        self.class_master_signature_path = ""
+        self.head_teacher_signature_enabled.setChecked(False)
+        self.academic_master_signature_enabled.setChecked(False)
+        self.discipline_master_signature_enabled.setChecked(False)
         self.watermark_text.clear()
         self.logo_preview.clear()
         self.logo_preview.setText("No Logo")
+        self.stamp_preview.clear()
+        self.stamp_preview.setText("No Stamp")
+        self.head_signature_preview.clear()
+        self.head_signature_preview.setText("No Signature")
+        self.academic_signature_preview.clear()
+        self.academic_signature_preview.setText("No Signature")
+        self.discipline_signature_preview.clear()
+        self.discipline_signature_preview.setText("No Signature")
+        self.class_signature_preview.setText("Handled on paper")

@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import init_db
 from theme import get_theme
-from main_window import MainWindow
+from ui.pages.main_window import MainWindow
 
 
 def main():

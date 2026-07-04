@@ -1,10 +1,9 @@
-from pathlib import Path
 from PySide6.QtGui import QIcon
 
-ROOT=Path(__file__).resolve().parent.parent
+from app_paths import icon_path
 
 def icon(name):
-    p=ROOT/"assets"/"icons"/f"{name}.svg"
+    p = icon_path(name)
     if p.exists():
         return QIcon(str(p))
     return QIcon()

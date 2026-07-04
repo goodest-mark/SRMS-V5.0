@@ -3,11 +3,13 @@ import hashlib
 import re
 import secrets
 
-DB_NAME = "srms.db"
+from app_paths import DATABASE_FILE
+
+DB_NAME = str(DATABASE_FILE)
 
 # Whitelist pattern for identifiers used in migrations
 _SAFE_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-_SAFE_DEFINITION = re.compile(r"^[a-zA-Z_ \"]+$")
+_SAFE_DEFINITION = re.compile(r'^[a-zA-Z0-9_ "\(\)]+$')
 
 
 def _validate_identifier(name):
@@ -55,6 +57,7 @@ def _init_db_inner(conn, cur):
     CREATE TABLE IF NOT EXISTS students (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         admission_no TEXT UNIQUE,
+        exam_no TEXT,
         full_name TEXT,
         gender TEXT,
         class TEXT,
@@ -163,11 +166,13 @@ def _init_db_inner(conn, cur):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         admission_no TEXT NOT NULL,
         subject_name TEXT NOT NULL,
+        class_name TEXT,
         academic_year_id INTEGER,
         term_id INTEGER,
         UNIQUE(
             admission_no,
             subject_name,
+            class_name,
             academic_year_id,
             term_id
         ),
@@ -233,6 +238,9 @@ def _init_db_inner(conn, cur):
         exam_name TEXT,
         term_id INTEGER,
         level TEXT,
+        it_has_holiday INTEGER DEFAULT 0,
+        opening_date TEXT,
+        closing_date TEXT,
         status TEXT DEFAULT 'OPEN',
 
         FOREIGN KEY (term_id)
@@ -251,6 +259,7 @@ def _init_db_inner(conn, cur):
         subject_name TEXT,
         marks INTEGER,
         exam_id INTEGER,
+        class_name TEXT,
         UNIQUE(admission_no, subject_name, exam_id),
 
         FOREIGN KEY (admission_no)
@@ -342,47 +351,6 @@ def _init_db_inner(conn, cur):
 
         term2 = cur.lastrowid
 
-        # Default Exams
-        defaults = [
-            ("Midterm", term1),
-            ("Terminal", term1),
-            ("Midterm", term2),
-            ("Annual", term2)
-        ]
-
-        for index, (exam_name, term_id) in enumerate(defaults):
-            status = "OPEN" if index == 0 else "CLOSED"
-
-            cur.execute("""
-            INSERT INTO exams(
-                exam_name,
-                term_id,
-                level,
-                status
-            )
-            VALUES (?, ?, ?, ?)
-            """, (
-                exam_name,
-                term_id,
-                "O_LEVEL",
-                status
-            ))
-
-            cur.execute("""
-            INSERT INTO exams(
-                exam_name,
-                term_id,
-                level,
-                status
-            )
-            VALUES (?, ?, ?, ?)
-            """, (
-                exam_name,
-                term_id,
-                "A_LEVEL",
-                status
-            ))
-
     # Default Division Rules (Tanzania Standard Example)
     cur.execute("SELECT COUNT(*) FROM division_rules")
     if cur.fetchone()[0] == 0:
@@ -462,12 +430,22 @@ def _init_db_inner(conn, cur):
         school_website TEXT,
         head_teacher TEXT,
         academic_master TEXT,
+        discipline_master TEXT,
+        class_master TEXT,
         school_logo TEXT,
         school_stamp TEXT,
+        head_teacher_signature TEXT,
+        academic_master_signature TEXT,
+        discipline_master_signature TEXT,
+        class_master_signature TEXT,
         login_background TEXT,
         dashboard_background TEXT,
         watermark_text TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        head_teacher_signature_enabled INTEGER DEFAULT 0,
+        academic_master_signature_enabled INTEGER DEFAULT 0,
+        discipline_master_signature_enabled INTEGER DEFAULT 0,
+        class_master_signature_enabled INTEGER DEFAULT 0
     )
     """)
 
@@ -481,9 +459,17 @@ def _init_db_inner(conn, cur):
     v5_columns = [
         ('school_motto', 'TEXT'), ('school_address', 'TEXT'), ('school_phone', 'TEXT'),
         ('school_email', 'TEXT'), ('school_website', 'TEXT'), ('head_teacher', 'TEXT'),
-        ('academic_master', 'TEXT'), ('school_logo', 'TEXT'), ('school_stamp', 'TEXT'),
+        ('academic_master', 'TEXT'), ('discipline_master', 'TEXT'), ('class_master', 'TEXT'),
+        ('school_logo', 'TEXT'), ('school_stamp', 'TEXT'),
+        ('head_teacher_signature', 'TEXT'), ('academic_master_signature', 'TEXT'),
+        ('discipline_master_signature', 'TEXT'), ('class_master_signature', 'TEXT'),
         ('login_background', 'TEXT'), ('dashboard_background', 'TEXT'),
-        ('watermark_text', 'TEXT DEFAULT "CONFIDENTIAL"'), ('created_at', 'TEXT DEFAULT CURRENT_TIMESTAMP')
+        ('watermark_text', 'TEXT DEFAULT "CONFIDENTIAL"'),
+        ('created_at', 'TEXT DEFAULT CURRENT_TIMESTAMP'),
+        ('head_teacher_signature_enabled', 'INTEGER DEFAULT 0'),
+        ('academic_master_signature_enabled', 'INTEGER DEFAULT 0'),
+        ('discipline_master_signature_enabled', 'INTEGER DEFAULT 0'),
+        ('class_master_signature_enabled', 'INTEGER DEFAULT 0')
     ]
 
     legacy_map = {
@@ -552,9 +538,55 @@ def _init_db_inner(conn, cur):
     # =========================
     cur.execute("PRAGMA table_info(students)")
     student_columns = [row[1] for row in cur.fetchall()]
+    if "exam_no" not in student_columns:
+        print("[MIGRATION] Adding exam_no column to students...")
+        cur.execute("ALTER TABLE students ADD COLUMN exam_no TEXT")
     if "comments" not in student_columns:
         print("[MIGRATION] Adding comments column to students...")
         cur.execute("ALTER TABLE students ADD COLUMN comments TEXT")
+
+    cur.execute("PRAGMA table_info(results)")
+    result_columns = [row[1] for row in cur.fetchall()]
+    if "class_name" not in result_columns:
+        print("[MIGRATION] Adding class_name to results...")
+        cur.execute("ALTER TABLE results ADD COLUMN class_name TEXT")
+        cur.execute("""
+            UPDATE results
+            SET class_name = (
+                SELECT s.class
+                FROM students s
+                WHERE s.admission_no = results.admission_no
+            )
+            WHERE class_name IS NULL OR class_name = ''
+        """)
+
+    cur.execute("PRAGMA table_info(enrollments)")
+    enrollment_columns = [row[1] for row in cur.fetchall()]
+    if "class_name" not in enrollment_columns:
+        print("[MIGRATION] Adding class_name to enrollments...")
+        cur.execute("ALTER TABLE enrollments ADD COLUMN class_name TEXT")
+        cur.execute("""
+            UPDATE enrollments
+            SET class_name = (
+                SELECT s.class
+                FROM students s
+                WHERE s.admission_no = enrollments.admission_no
+            )
+            WHERE class_name IS NULL OR class_name = ''
+        """)
+
+    cur.execute("PRAGMA table_info(exams)")
+    exam_columns = [row[1] for row in cur.fetchall()]
+    for col, definition in [
+        ("it_has_holiday", "INTEGER DEFAULT 0"),
+        ("opening_date", "TEXT"),
+        ("closing_date", "TEXT"),
+    ]:
+        if col not in exam_columns:
+            _validate_identifier(col)
+            _validate_definition(definition)
+            print(f"[MIGRATION] Adding missing exam column: {col}")
+            cur.execute(f"ALTER TABLE exams ADD COLUMN {col} {definition}")
 
     def _hash_secret(value):
         salt = secrets.token_hex(16)
@@ -652,6 +684,7 @@ def _init_db_inner(conn, cur):
             ('default_level', 'O_LEVEL'),
             ('backup_folder', './backups'),
             ('auto_backup', '0'),
+            ('setup_complete', '0'),
             ('schema_version', '2')  # Version 2 = migrated schema with new column names
         ]
         cur.executemany("INSERT INTO system_settings VALUES (?, ?)", defaults)
@@ -660,6 +693,10 @@ def _init_db_inner(conn, cur):
     cur.execute("SELECT COUNT(*) FROM system_settings WHERE setting_key='schema_version'")
     if cur.fetchone()[0] == 0:
         cur.execute("INSERT INTO system_settings (setting_key, setting_value) VALUES ('schema_version', '2')")
+
+    cur.execute("SELECT COUNT(*) FROM system_settings WHERE setting_key='setup_complete'")
+    if cur.fetchone()[0] == 0:
+        cur.execute("INSERT INTO system_settings (setting_key, setting_value) VALUES ('setup_complete', '0')")
 
     # Preserve the newest open exam and close legacy duplicates per level.
     cur.execute("""

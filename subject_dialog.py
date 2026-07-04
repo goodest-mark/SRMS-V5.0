@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from progress_dialog import ProgressDialog
 
 from db_utils import fetch_one, get_cursor
-from ui_helpers import show_error, show_info
+from ui_helpers import show_error, show_info, get_subject_short_name
 
 
 class SubjectDialog(QDialog):
@@ -121,11 +121,13 @@ class SubjectDialog(QDialog):
                     UPDATE subjects
                     SET
                         subject_name=?,
+                        subject_short_name=?,
                         level=?,
                         subject_type=?
                     WHERE id=?
                 """, (
                     name,
+                    get_subject_short_name(name),
                     self.level.currentText(),
                     self.subject_type.currentText(),
                     self.subject_id

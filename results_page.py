@@ -1,4 +1,6 @@
-from PySide6.QtCore import Qt
+import re
+
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -26,6 +28,21 @@ from event_bus import EventBus
 from system_state import SystemState
 from ui_helpers import show_error, show_info
 import combo_loaders
+
+
+def _subject_name_matches(candidate, target):
+    """Match subject names while ignoring display suffixes and case."""
+    if candidate is None or target is None:
+        return False
+
+    def normalize(value):
+        text = str(value).strip().lower()
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\s*\([^)]+\)$", "", text)
+        text = re.sub(r"\s*\[[^\]]+\]$", "", text)
+        return text
+
+    return normalize(candidate) == normalize(target)
 
 
 class MarksDelegate(QStyledItemDelegate):
@@ -87,6 +104,7 @@ class ResultsPage(QWidget):
 
         self.loading_table = False
         self.exam_read_only = False
+        self._dashboard_subject_name = None
 
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
@@ -229,10 +247,6 @@ class ResultsPage(QWidget):
         EventBus.subscribe("LEVEL_CHANGED", self.on_level_changed)
         EventBus.subscribe("STUDENTS_UPDATED", self.refresh_all)
         EventBus.subscribe("EXAMS_UPDATED", self.refresh_all)
-        EventBus.subscribe(
-            "OPEN_RESULTS_ENTRY",
-            self.open_from_dashboard,
-        )
 
         self.refresh_all()
 
@@ -248,6 +262,9 @@ class ResultsPage(QWidget):
         class_name,
         subject_name,
     ):
+        class_name = str(class_name).strip()
+        subject_name = str(subject_name).strip()
+        self._dashboard_subject_name = subject_name
         self.load_exams()
         self.load_classes()
 
@@ -267,17 +284,21 @@ class ResultsPage(QWidget):
             self.exam.blockSignals(False)
             self.class_box.blockSignals(False)
 
-        self.load_subjects()
-        
-        # Match subject name by stripping percentage if needed
+        self.load_subjects(load_table=False)
+        selected_index = -1
         for i in range(self.subject.count()):
+            item_data = self.subject.itemData(i)
             item_text = self.subject.itemText(i)
-            base_name = item_text.split(" (")[0]
-            if base_name == subject_name:
-                self.subject.setCurrentIndex(i)
-                return
+            if _subject_name_matches(item_data, subject_name) or _subject_name_matches(item_text, subject_name):
+                selected_index = i
+                break
 
-        self._clear_table()
+        if selected_index >= 0:
+            self.subject.setCurrentIndex(selected_index)
+        elif self.subject.count() == 0:
+            self._clear_table()
+
+        QTimer.singleShot(0, lambda: self.load_students(subject_name))
 
     def refresh_all(self):
         self.load_exams()
@@ -290,7 +311,7 @@ class ResultsPage(QWidget):
     def load_classes(self):
         combo_loaders.load_classes(self.class_box)
 
-    def load_subjects(self):
+    def load_subjects(self, load_table=True):
         exam_id = self.exam.currentData()
         class_name = self.class_box.currentText().strip()
         level = SystemState.get_level()
@@ -317,29 +338,30 @@ class ResultsPage(QWidget):
                 COUNT(DISTINCT e.admission_no) as expected,
                 (SELECT COUNT(*) FROM results r 
                  JOIN students s2 ON s2.admission_no = r.admission_no
-                 WHERE r.subject_name = e.subject_name 
+                 WHERE UPPER(TRIM(r.subject_name)) = UPPER(TRIM(e.subject_name))
                    AND r.exam_id = ?
-                   AND s2.class = ?
+                   AND UPPER(TRIM(COALESCE(r.class_name, s2.class))) = UPPER(TRIM(?))
                    AND s2.level = ?) as entered
             FROM enrollments e
-            JOIN students s ON s.admission_no = e.admission_no
-            WHERE s.class=? AND s.level=?
+            WHERE UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
               AND e.academic_year_id=? AND e.term_id=?
             GROUP BY e.subject_name
             ORDER BY e.subject_name
-        """, (exam_id, class_name, level, class_name, level, year_id, term_id))
+        """, (exam_id, class_name, level, class_name, year_id, term_id))
 
         self.subject.blockSignals(True)
         self.subject.clear()
 
         for name, expected, entered in rows:
+            if entered > 0:
+                continue
             perc = (entered / expected * 100) if expected > 0 else 0
             display_name = f"{name} ({perc:.0f}%)"
             self.subject.addItem(display_name, name)
 
         # Restore selection
         for i in range(self.subject.count()):
-            if self.subject.itemData(i) == current_subject_base:
+            if _subject_name_matches(self.subject.itemData(i), current_subject_base) or _subject_name_matches(self.subject.itemText(i), current_subject_base):
                 self.subject.setCurrentIndex(i)
                 break
         else:
@@ -349,12 +371,18 @@ class ResultsPage(QWidget):
                 self._clear_table()
 
         self.subject.blockSignals(False)
-        self.load_students()
+        if load_table:
+            self.load_students()
 
-    def load_students(self):
+    def load_students(self, subject_name=None):
         exam_id = self.exam.currentData()
         class_name = self.class_box.currentText().strip()
-        subject_name = self.subject.currentData()
+        subject_name = (
+            subject_name
+            or self._dashboard_subject_name
+            or self.subject.currentData()
+            or self.subject.currentText().split(" (")[0].strip()
+        )
         level = SystemState.get_level()
 
         if exam_id is None or not class_name or not subject_name:
@@ -370,24 +398,38 @@ class ResultsPage(QWidget):
             
         year_id, term_id = context
 
-        rows = fetch_all("""
-            SELECT
+        student_rows = fetch_all("""
+            SELECT DISTINCT
                 s.admission_no,
-                s.full_name,
-                r.marks
+                s.full_name
             FROM enrollments e
             JOIN students s ON s.admission_no = e.admission_no
-            LEFT JOIN results r ON r.admission_no = s.admission_no
-                AND r.subject_name = e.subject_name
-                AND r.exam_id = ?
-            WHERE
-                e.subject_name = ?
-            AND s.class = ?
-            AND s.level = ?
-            AND e.academic_year_id = ?
-            AND e.term_id = ?
+            WHERE UPPER(TRIM(e.subject_name)) = UPPER(TRIM(?))
+              AND s.level = ?
+              AND UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
+              AND e.academic_year_id = ?
+              AND e.term_id = ?
             ORDER BY s.full_name
-        """, (exam_id, subject_name, class_name, level, year_id, term_id))
+        """, (subject_name, level, class_name, year_id, term_id))
+
+        result_rows = fetch_all("""
+            SELECT
+                admission_no,
+                marks
+            FROM results
+            WHERE exam_id = ?
+              AND UPPER(TRIM(subject_name)) = UPPER(TRIM(?))
+              AND UPPER(TRIM(COALESCE(class_name, ''))) = UPPER(TRIM(?))
+        """, (exam_id, subject_name, class_name))
+
+        marks_by_admission = {
+            admission_no: marks
+            for admission_no, marks in result_rows
+        }
+        rows = [
+            (admission_no, full_name, marks_by_admission.get(admission_no))
+            for admission_no, full_name in student_rows
+        ]
 
         self.loading_table = True
         self.table.setRowCount(len(rows))
@@ -423,6 +465,7 @@ class ResultsPage(QWidget):
 
         self.loading_table = False
         self.update_summary()
+        self._dashboard_subject_name = None
 
     def save_all(self):
         exam_id = self.exam.currentData()
@@ -442,6 +485,7 @@ class ResultsPage(QWidget):
 
         marks_to_save = []
         invalid_rows = []
+        class_name = self.class_box.currentText().strip()
 
         for row in range(self.table.rowCount()):
             admission_item = self.table.item(row, 0)
@@ -469,11 +513,12 @@ class ResultsPage(QWidget):
             with get_cursor(commit=True) as cur:
                 for admission_no, marks in marks_to_save:
                     cur.execute("""
-                        INSERT INTO results (admission_no, subject_name, marks, exam_id)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO results (admission_no, subject_name, marks, exam_id, class_name)
+                        VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT(admission_no, subject_name, exam_id)
-                        DO UPDATE SET marks = excluded.marks
-                    """, (admission_no, subject_name, marks, exam_id))
+                        DO UPDATE SET marks = excluded.marks,
+                                      class_name = excluded.class_name
+                    """, (admission_no, subject_name, marks, exam_id, class_name))
         except Exception as e:
             QMessageBox.critical(self, "Database Error", f"An unexpected error occurred while saving results: {e}")
             return
@@ -509,11 +554,23 @@ class ResultsPage(QWidget):
     # =========================
 
     def download_template(self):
+        exam_name = self.exam.currentText().strip() or "SELECTED EXAM"
+        class_name = self.class_box.currentText().strip() or "SELECTED CLASS"
+        subject_name = self.subject.currentText().strip() or "SELECTED SUBJECT"
+        level = SystemState.get_level()
+
         excel_utils.download_template(
             self, 
             "marks_template.xlsx",
-            "EXAMINATION MARKS ENTRY FORM",
+            f"EXAMINATION MARKS ENTRY FORM - {exam_name}",
             ["Admission No*", "Marks (0-100)*"],
+            instructions=[
+                f"1. Template generated for Exam: {exam_name}.",
+                f"2. Class: {class_name} | Subject: {subject_name} | Level: {level}.",
+                "3. Do not change the column headers in Row 10.",
+                "4. Start data entry from Row 12 and keep marks between 0 and 100.",
+                "5. Admission numbers must already exist in the system.",
+            ],
             samples=["2024/001", "85"]
         )
 
@@ -554,17 +611,18 @@ class ResultsPage(QWidget):
 
                     cur.execute("""
                         SELECT 1 FROM enrollments
-                        WHERE admission_no=? AND subject_name=? AND academic_year_id=? AND term_id=?
-                    """, (str(adm), subject_name, year_id, term_id))
+                        WHERE admission_no=? AND subject_name=? AND class_name=? AND academic_year_id=? AND term_id=?
+                    """, (str(adm), subject_name, class_name, year_id, term_id))
 
                     if cur.fetchone():
                         try:
                             cur.execute("""
-                                INSERT INTO results (admission_no, subject_name, marks, exam_id)
-                                VALUES (?, ?, ?, ?)
+                                INSERT INTO results (admission_no, subject_name, marks, exam_id, class_name)
+                                VALUES (?, ?, ?, ?, ?)
                                 ON CONFLICT(admission_no, subject_name, exam_id) DO UPDATE SET
-                                    marks=excluded.marks
-                            """, (str(adm), subject_name, int(marks), exam_id))
+                                    marks=excluded.marks,
+                                    class_name=excluded.class_name
+                            """, (str(adm), subject_name, int(marks), exam_id, self.class_box.currentText().strip()))
                             imported += 1
                         except Exception as e:
                             print(f"[ERROR] Failed to import result for '{adm}': {e}")

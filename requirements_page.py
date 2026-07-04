@@ -292,11 +292,22 @@ class RequirementsPage(QWidget):
     # =========================
 
     def download_template(self):
+        year = self.year_box.currentText().strip() or "SELECTED YEAR"
+        term = self.term_box.currentText().strip() or "SELECTED TERM"
+        level = self.level_box.currentText().strip() or "SELECTED LEVEL"
+        class_name = self.class_box.currentText().strip() or "SELECTED CLASS"
         excel_utils.download_template(
             self, 
             "requirements_template.xlsx",
-            "SCHOOL REQUIREMENTS TEMPLATE",
+            f"SCHOOL REQUIREMENTS TEMPLATE - {year} {term}",
             ["Item Name*", "Quantity*", "Notes"],
+            instructions=[
+                f"1. Template generated for Year: {year}, Term: {term}, Level: {level}, Class: {class_name}.",
+                "2. Do not modify the column headers in Row 10.",
+                "3. Start data entry from Row 12.",
+                "4. Use Quantity for the number of items required.",
+                "5. Notes are optional but helpful for stores and procurement.",
+            ],
             samples=["Reams of Paper", "2", "Urgently needed"]
         )
 

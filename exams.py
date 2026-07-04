@@ -35,6 +35,14 @@ class ExamsWindow(QWidget):
             self.open_add
         )
 
+        self.edit_btn = QPushButton(
+            "EDIT EXAM"
+        )
+
+        self.edit_btn.clicked.connect(
+            self.open_edit
+        )
+
         self.delete_btn = QPushButton(
             "DELETE EXAM"
         )
@@ -60,6 +68,7 @@ class ExamsWindow(QWidget):
         )
 
         top.addWidget(self.add_btn)
+        top.addWidget(self.edit_btn)
         top.addWidget(self.delete_btn)
         top.addWidget(self.status_btn)
         top.addWidget(self.complete_btn)
@@ -86,6 +95,17 @@ class ExamsWindow(QWidget):
     def open_add(self):
 
         self.win = AddExamWindow()
+        self.win.show()
+
+    def open_edit(self):
+
+        row = self.table.currentRow()
+        if row < 0:
+            show_error(self, "Select exam first")
+            return
+
+        exam_id = self.table.item(row, 0).text()
+        self.win = AddExamWindow(exam_id=exam_id)
         self.win.show()
 
     def load_data(self):
