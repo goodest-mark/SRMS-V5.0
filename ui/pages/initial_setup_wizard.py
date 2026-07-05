@@ -390,7 +390,7 @@ class InitialSetupWizard(QWidget):
                         login_background, dashboard_background, watermark_text,
                         head_teacher_signature_enabled, academic_master_signature_enabled,
                         discipline_master_signature_enabled, class_master_signature_enabled
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         school_name,
