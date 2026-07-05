@@ -12,6 +12,7 @@ from progress_dialog import ProgressDialog
 
 from db_utils import fetch_one, get_cursor
 from ui_helpers import show_error, show_info, get_subject_short_name
+from academic_rules import normalize_subject_type, validate_subject_type
 
 
 class SubjectDialog(QDialog):
@@ -102,10 +103,9 @@ class SubjectDialog(QDialog):
 
         self.refresh_types()
 
-        if row[2]:
-            self.subject_type.setCurrentText(
-                row[2]
-            )
+        normalized = normalize_subject_type(row[1], row[2])
+        if normalized and validate_subject_type(row[1], normalized):
+            self.subject_type.setCurrentText(normalized)
 
     def save_changes(self):
 
@@ -116,6 +116,7 @@ class SubjectDialog(QDialog):
             return
 
         try:
+            subject_type = normalize_subject_type(self.level.currentText(), self.subject_type.currentText())
             with get_cursor(commit=True) as cur:
                 cur.execute("""
                     UPDATE subjects
@@ -129,7 +130,7 @@ class SubjectDialog(QDialog):
                     name,
                     get_subject_short_name(name),
                     self.level.currentText(),
-                    self.subject_type.currentText(),
+                    subject_type,
                     self.subject_id
                 ))
 

@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 import sqlite3
 
-from class_utils import get_classes
+from class_utils import get_classes, get_level_for_class
 from db_utils import get_cursor, fetch_all
 from event_bus import EventBus
 from system_state import SystemState
@@ -665,9 +665,7 @@ class StudentsPage(QWidget):
             imported = 0
             updated = 0
             rejected = 0
-
-            o_classes = ["Form I", "Form II", "Form III", "Form IV"]
-            a_classes = ["Form V", "Form VI"]
+            redirected = 0
 
             with get_cursor(commit=True) as cur:
                 for row in rows:
@@ -696,19 +694,17 @@ class StudentsPage(QWidget):
                         level_excel = str(row[5] or "").strip().upper()
                         comment = str(row[6] or "").strip()
 
-                    if not name or not cls or not level_excel:
+                    if not name or not cls:
                         rejected += 1
                         continue
 
-                    is_valid = False
-                    if level_excel == "O_LEVEL" and cls in o_classes:
-                        is_valid = True
-                    elif level_excel == "A_LEVEL" and cls in a_classes:
-                        is_valid = True
-
-                    if not is_valid:
+                    resolved_level = get_level_for_class(cls)
+                    if resolved_level is None:
                         rejected += 1
                         continue
+                    if level_excel and level_excel != resolved_level:
+                        redirected += 1
+                    level_excel = resolved_level
                     
                     try:
                         cur.execute("SELECT 1 FROM students WHERE admission_no=?", (adm,))
@@ -742,6 +738,7 @@ class StudentsPage(QWidget):
                                   f"Operation Summary:\n"
                                   f"- New Students Imported: {imported}\n"
                                   f"- Existing Records Updated: {updated}\n"
+                                  f"- Rows Redirected to Actual Level: {redirected}\n"
                                   f"- Records Rejected (Invalid Data): {rejected}")
             
         except Exception as e:

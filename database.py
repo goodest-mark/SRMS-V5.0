@@ -4,6 +4,7 @@ import re
 import secrets
 
 from app_paths import DATABASE_FILE
+from academic_rules import default_subject_type, validate_subject_type
 
 DB_NAME = str(DATABASE_FILE)
 
@@ -506,6 +507,17 @@ def _init_db_inner(conn, cur):
             ALTER TABLE subjects
             ADD COLUMN subject_short_name TEXT
         """)
+
+    cur.execute("SELECT id, level, subject_type FROM subjects")
+    for subject_id, level, subject_type in cur.fetchall():
+        if not validate_subject_type(level, subject_type):
+            normalized = default_subject_type(level)
+            if normalized:
+                print(f"[MIGRATION] Normalizing subject_type for subject {subject_id} ({level}) to {normalized}")
+                cur.execute(
+                    "UPDATE subjects SET subject_type=? WHERE id=?",
+                    (normalized, subject_id),
+                )
 
 
     print("[DATABASE] School profile migration check complete.")

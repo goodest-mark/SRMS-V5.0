@@ -266,8 +266,10 @@ class EnrollmentPage(QWidget):
         self.enrollment_table.verticalHeader().setVisible(False)
 
         for row_index, (admission_no, full_name) in enumerate(self.student_list):
-            student_item = QTableWidgetItem(f"{full_name} ({admission_no})")
+            student_item = QTableWidgetItem(full_name)
             student_item.setFlags(student_item.flags() & ~Qt.ItemIsEditable)
+            student_item.setData(Qt.UserRole, admission_no)
+            student_item.setToolTip(admission_no)
             self.enrollment_table.setItem(row_index, 0, student_item)
 
             for col_index, subject_name in enumerate(self.subject_list, start=1):

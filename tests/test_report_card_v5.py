@@ -26,14 +26,27 @@ def _seed_student_report_data(db_path):
         """
     )
 
+    cur.execute("SELECT id FROM academic_years ORDER BY id DESC LIMIT 1")
+    year_id = cur.fetchone()[0]
+    cur.execute("SELECT id FROM terms WHERE academic_year_id=? ORDER BY id LIMIT 1", (year_id,))
+    term_id = cur.fetchone()[0]
+
     cur.execute(
-        "SELECT id FROM exams WHERE level='O_LEVEL' AND status='OPEN' ORDER BY id DESC LIMIT 1"
+        """
+        INSERT INTO exams (exam_name, term_id, level, status)
+        VALUES ('Open Report Exam', ?, 'O_LEVEL', 'OPEN')
+        """,
+        (term_id,),
     )
-    open_exam_id = cur.fetchone()[0]
+    open_exam_id = cur.lastrowid
     cur.execute(
-        "SELECT id FROM exams WHERE level='O_LEVEL' AND status='CLOSED' ORDER BY id DESC LIMIT 1"
+        """
+        INSERT INTO exams (exam_name, term_id, level, status)
+        VALUES ('Closed Report Exam', ?, 'O_LEVEL', 'CLOSED')
+        """,
+        (term_id,),
     )
-    closed_exam_id = cur.fetchone()[0]
+    closed_exam_id = cur.lastrowid
 
     cur.execute(
         """
@@ -65,6 +78,40 @@ def _seed_student_report_data(db_path):
 
 
 class TestStudentReportCards:
+    def test_student_page_metrics_uses_rank_division_points_percentage_status(self):
+        table = report_card_module._build_student_page_metrics(
+            report_card_module._get_student_styles(),
+            position=5,
+            total_students=45,
+            division="I",
+            points=7,
+            average=74.55,
+            status="READY",
+        )
+
+        labels = [cell.getPlainText() for cell in table._cellvalues[0]]
+        values = [cell.getPlainText() for cell in table._cellvalues[1]]
+
+        assert labels == ["RANK", "DIVISION", "POINTS", "PERCENTAGE", "STATUS"]
+        assert values[0] == "5 / 45"
+        assert values[3] == "74.55%"
+
+    def test_student_page_results_uses_short_subject_headers(self):
+        table = report_card_module._build_student_page_results(
+            report_card_module._get_student_styles(),
+            short_names=["BIO", "CHEM", "PHYS"],
+            marks=[56, 78, 64],
+            grades=["C/", "A/", "B"],
+        )
+
+        header = [cell.getPlainText() for cell in table._cellvalues[0]]
+        marks_row = [cell.getPlainText() for cell in table._cellvalues[1]]
+        grades_row = [cell.getPlainText() for cell in table._cellvalues[2]]
+
+        assert header == ["ITEM", "BIO", "CHEM", "PHYS"]
+        assert marks_row == ["MARKS (%)", "56", "78", "64"]
+        assert grades_row == ["GRADE", "C/", "A/", "B"]
+
     def test_report_exam_list_includes_all_statuses_with_results(self, initialized_db):
         open_exam_id, closed_exam_id, completed_exam_id = _seed_student_report_data(
             initialized_db
@@ -179,3 +226,39 @@ class TestStudentReportCards:
         conn.close()
 
         assert "comments" in columns
+
+    def test_signature_section_only_exposes_head_teacher_signature(self):
+        table = report_card_module._build_signatures(
+            report_card_module._get_student_styles(),
+            head_teacher="Head Teacher Name",
+            academic_master="Academic Master Name",
+            discipline_master="Discipline Master Name",
+            class_master="Class Master Name",
+            head_teacher_signature=None,
+            academic_master_signature=None,
+            discipline_master_signature=None,
+            class_master_signature=None,
+            stamp_path=None,
+        )
+
+        left_block = table._cellvalues[0][0]
+        right_block = table._cellvalues[0][1]
+        left_text = " ".join(
+            cell.getPlainText()
+            for row in left_block._cellvalues
+            for cell in row
+            if hasattr(cell, "getPlainText")
+        )
+        right_text = " ".join(
+            cell.getPlainText()
+            for row in right_block._cellvalues
+            for cell in row
+            if hasattr(cell, "getPlainText")
+        )
+
+        assert "HEAD TEACHER / HEADMASTER SIGNATURE" in left_text
+        assert "Head Teacher Name" in left_text
+        assert "ACADEMIC MASTER" not in left_text
+        assert "DISCIPLINE MASTER" not in left_text
+        assert "CLASS MASTER" not in left_text
+        assert "SCHOOL OFFICIAL STAMP" in right_text

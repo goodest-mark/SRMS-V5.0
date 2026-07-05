@@ -1,7 +1,7 @@
 """Unit tests for class_utils module."""
 import pytest
 from system_state import SystemState
-from class_utils import get_classes
+from class_utils import get_classes, get_level_for_class
 
 
 class TestGetClasses:
@@ -33,3 +33,12 @@ class TestGetClasses:
         SystemState.level = None
         result = get_classes()
         assert result == []
+
+    def test_class_to_level_mapping(self):
+        assert get_level_for_class("Form I") == "O_LEVEL"
+        assert get_level_for_class("Form IV") == "O_LEVEL"
+        assert get_level_for_class("Form V") == "A_LEVEL"
+        assert get_level_for_class("Form VI") == "A_LEVEL"
+
+    def test_unknown_class_returns_none(self):
+        assert get_level_for_class("Form VII") is None

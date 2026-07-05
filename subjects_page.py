@@ -18,7 +18,7 @@ from progress_dialog import ProgressDialog
 import openpyxl
 import excel_utils
 
-from academic_rules import allowed_subject_types
+from academic_rules import allowed_subject_types, normalize_subject_type, validate_subject_type
 from db_utils import get_cursor, fetch_all
 from table_utils import setup_table, populate_table
 from ui_helpers import confirm_action, show_error, get_subject_short_name
@@ -210,11 +210,15 @@ class SubjectsPage(QWidget):
             return
 
         try:
+            subject_type = normalize_subject_type(SystemState.get_level(), self.subject_type.currentText())
+            if not validate_subject_type(SystemState.get_level(), subject_type):
+                show_error(self, "Subject type is not valid for the selected level.")
+                return
             with get_cursor(commit=True) as cur:
                 cur.execute("""
                     INSERT INTO subjects(subject_name, subject_short_name, level, subject_type)
                     VALUES (?, ?, ?, ?)
-                """, (name, get_subject_short_name(name), SystemState.get_level(), self.subject_type.currentText()))
+                """, (name, get_subject_short_name(name), SystemState.get_level(), subject_type))
 
             self.name.clear()
             self.load()
@@ -325,13 +329,16 @@ class SubjectsPage(QWidget):
                     stype = row[1]
                     
                     try:
+                        subject_type = normalize_subject_type(level, str(stype))
+                        if not validate_subject_type(level, subject_type):
+                            raise ValueError(f"Invalid subject type for {level}")
                         cur.execute("""
                             INSERT INTO subjects (subject_name, subject_short_name, level, subject_type)
                             VALUES (?, ?, ?, ?)
                             ON CONFLICT(subject_name, level) DO UPDATE SET
                                 subject_type=excluded.subject_type,
                                 subject_short_name=excluded.subject_short_name
-                        """, (str(name), get_subject_short_name(str(name)), level, str(stype)))
+                        """, (str(name), get_subject_short_name(str(name)), level, subject_type))
                         imported += 1
                     except Exception as e:
                         print(f"[ERROR] Failed to import subject '{name}': {e}")

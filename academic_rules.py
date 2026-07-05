@@ -59,3 +59,15 @@ def is_ranking_subject(level, subject_type):
 
 def validate_subject_type(level, subject_type):
     return subject_type in allowed_subject_types(level)
+
+
+def default_subject_type(level):
+    allowed = allowed_subject_types(level)
+    return allowed[0] if allowed else None
+
+
+def normalize_subject_type(level, subject_type):
+    subject_type = (subject_type or "").strip().upper()
+    if validate_subject_type(level, subject_type):
+        return subject_type
+    return default_subject_type(level)
