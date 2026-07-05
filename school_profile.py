@@ -295,7 +295,7 @@ class SchoolProfilePage(QWidget):
                         login_background, dashboard_background, watermark_text,
                         head_teacher_signature_enabled, academic_master_signature_enabled,
                         discipline_master_signature_enabled, class_master_signature_enabled
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     self.school_name.text(), self.school_motto.text(), self.school_address.text(),
                     self.school_phone.text(), self.school_email.text(), self.school_website.text(),
