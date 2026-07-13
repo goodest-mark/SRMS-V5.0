@@ -1,14 +1,14 @@
 import openpyxl
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, 
-    QLabel, QLineEdit, QTableWidget, QTableWidgetItem, 
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,
+    QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QGroupBox, QAbstractItemView
 )
 
 from progress_dialog import ProgressDialog
 from PySide6.QtCore import Qt
 
-from db_utils import fetch_all, get_cursor
+from db_utils import fetch_all, fetch_one, get_cursor
 from system_state import SystemState
 from event_bus import EventBus
 from class_utils import get_classes
@@ -106,13 +106,13 @@ class RequirementsPage(QWidget):
         # EXCEL ACTIONS
         # =========================
         excel_layout = QHBoxLayout()
-        
+
         self.import_btn = QPushButton("IMPORT")
         self.import_btn.clicked.connect(self.import_excel)
-        
+
         self.export_btn = QPushButton("EXPORT")
         self.export_btn.clicked.connect(self.export_excel)
-        
+
         self.template_btn = QPushButton("TEMPLATE")
         self.template_btn.clicked.connect(self.download_template)
 
@@ -120,7 +120,7 @@ class RequirementsPage(QWidget):
         excel_layout.addWidget(self.import_btn)
         excel_layout.addWidget(self.export_btn)
         excel_layout.addWidget(self.template_btn)
-        
+
         self.layout.addLayout(excel_layout)
 
         # =========================
@@ -159,7 +159,7 @@ class RequirementsPage(QWidget):
     def refresh_classes(self):
         self.class_box.blockSignals(True)
         self.class_box.clear()
-        
+
         level = self.level_box.currentText()
         classes_map = {
             "O_LEVEL": ["Form I", "Form II", "Form III", "Form IV"],
@@ -192,9 +192,9 @@ class RequirementsPage(QWidget):
         if class_name != "-- All Classes --":
             query += " AND class_name=?"
             params.append(class_name)
-        
+
         query += " ORDER BY item_name ASC"
-        
+
         rows = fetch_all(query, tuple(params))
 
         self.table.setRowCount(len(rows))
@@ -206,7 +206,7 @@ class RequirementsPage(QWidget):
         item = self.item_name.text().strip()
         qty = self.quantity.text().strip()
         notes = self.notes.text().strip()
-        
+
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
         level = self.level_box.currentText()
@@ -217,20 +217,36 @@ class RequirementsPage(QWidget):
             return
 
         try:
+            # Validate quantity is a number
+            try:
+                qty_val = int(qty)
+            except ValueError:
+                show_error(self, "Quantity must be a whole number.")
+                return
+
             if self.selected_id is None:
+                # Check for duplicate
+                exists = fetch_one(
+                    "SELECT id FROM requirements WHERE academic_year_id=? AND term_id=? AND level=? AND class_name=? AND item_name=?",
+                    (year_id, term_id, level, class_name, item)
+                )
+                if exists:
+                    show_error(self, "This item already exists for this class/term.")
+                    return
+
                 with get_cursor(commit=True) as cur:
                     cur.execute("""
                         INSERT INTO requirements (academic_year_id, term_id, level, class_name, item_name, quantity, notes)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (year_id, term_id, level, class_name, item, qty, notes))
+                    """, (year_id, term_id, level, class_name, item, qty_val, notes))
             else:
                 with get_cursor(commit=True) as cur:
                     cur.execute("""
                         UPDATE requirements 
                         SET item_name=?, quantity=?, notes=?
                         WHERE id=?
-                    """, (item, qty, notes, self.selected_id))
-            
+                    """, (item, qty_val, notes, self.selected_id))
+
             self.clear_form()
             self.load_data()
             show_info(self, "Requirement saved.")
@@ -253,7 +269,7 @@ class RequirementsPage(QWidget):
 
     def delete_item(self):
         if not self.selected_id: return
-        
+
         reply = QMessageBox.question(self, "Confirm", "Delete this requirement?", QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.No: return
 
@@ -274,7 +290,7 @@ class RequirementsPage(QWidget):
                 "An unexpected error occurred while deleting the requirement.",
             )
             return
-        
+
         self.clear_form()
         self.load_data()
 
@@ -297,7 +313,7 @@ class RequirementsPage(QWidget):
         level = self.level_box.currentText().strip() or "SELECTED LEVEL"
         class_name = self.class_box.currentText().strip() or "SELECTED CLASS"
         excel_utils.download_template(
-            self, 
+            self,
             "requirements_template.xlsx",
             f"SCHOOL REQUIREMENTS TEMPLATE - {year} {term}",
             ["Item Name*", "Quantity*", "Notes"],
@@ -316,22 +332,22 @@ class RequirementsPage(QWidget):
         term_id = self.term_box.currentData()
         level = self.level_box.currentText()
         class_name = self.class_box.currentText()
-        
+
         if not (year_id and term_id):
             show_error(self, "Select Context first")
             return
-            
+
         query = "SELECT item_name, quantity, notes FROM requirements WHERE academic_year_id=? AND term_id=? AND level=?"
         params = [year_id, term_id, level]
         if class_name != "-- All Classes --":
             query += " AND class_name=?"
             params.append(class_name)
-            
+
         data = fetch_all(query, tuple(params))
-        
+
         excel_utils.export_to_excel(
-            self, 
-            "school_requirements.xlsx", 
+            self,
+            "school_requirements.xlsx",
             ["Item Name", "Quantity", "Notes"],
             data
         )
@@ -341,40 +357,47 @@ class RequirementsPage(QWidget):
         term_id = self.term_box.currentData()
         level = self.level_box.currentText()
         class_name = self.class_box.currentText()
-        
+
         if not (year_id and term_id) or class_name == "-- All Classes --":
             show_error(self, "Select a specific Context (Year, Term, Class) first")
             return
-            
+
         path = excel_utils.get_import_file(self)
         if not path: return
-        
+
         try:
             wb = openpyxl.load_workbook(path, data_only=True)
             sheet = wb.active
             rows = list(sheet.iter_rows(min_row=12, values_only=True))
-            
+
             imported = 0
             with get_cursor(commit=True) as cur:
                 for row in rows:
                     if not row or len(row) < 3 or not row[0]: continue
-                    
+
                     item = row[0]
                     qty = row[1]
                     notes = row[2]
-                    
+
+                    # Validate quantity
+                    try:
+                        qty_val = int(qty)
+                    except (ValueError, TypeError):
+                        print(f"[WARNING] Skipping invalid quantity for '{item}': {qty}")
+                        continue
+
                     try:
                         cur.execute("""
                             INSERT INTO requirements (academic_year_id, term_id, level, class_name, item_name, quantity, notes)
                             VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (year_id, term_id, level, class_name, str(item), str(qty), str(notes or "")))
+                        """, (year_id, term_id, level, class_name, str(item), qty_val, str(notes or "")))
                         imported += 1
                     except Exception as e:
                         print(f"[ERROR] Failed to import requirement '{item}': {e}")
                         continue
-            
+
             self.load_data()
             show_info(self, f"Imported {imported} requirement items.", title="Import Complete")
-            
+
         except Exception as e:
             QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")

@@ -43,17 +43,30 @@ def get_headteacher_remark(division):
         return "Very poor. Must repeat or seek remedial help."
     return "Result pending."
 
-def get_developmental_note(average):
-    """Generates a default developmental note."""
+def get_academic_master_remark(division):
+    """Generates a default academic master remark based on division."""
+    if division == 'I':
+        return "Outstanding academic performance. Maintain the momentum."
+    elif division == 'II':
+        return "Strong performance. Aim for Division I in the next exam."
+    elif division == 'III':
+        return "Satisfactory. More effort required to improve."
+    elif division == 'IV':
+        return "Below average. Need serious academic intervention."
+    elif division == '0':
+        return "Unsatisfactory. Please seek extra academic support."
+    return "Awaiting assessment."
+
+def get_discipline_master_remark(average):
+    """Generates a default discipline master remark based on average."""
     try:
         avg = float(average)
-    except (ValueError, TypeError):
+    except (TypeError, ValueError):
         avg = 0
-
     if avg >= 75:
-        return "Consistently demonstrates a high level of understanding and skill."
+        return "Excellent behaviour and discipline. Keep it up."
     elif avg >= 50:
-        return "Shows steady progress but needs to focus on consistency."
+        return "Good behaviour, but needs to be more consistent."
     elif avg > 0:
-        return "Requires targeted support and more practice in key areas."
-    return "Awaiting assessment results."
+        return "Requires close supervision and behavioural support."
+    return "Awaiting assessment."

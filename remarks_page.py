@@ -19,7 +19,7 @@ from db_utils import fetch_all, get_cursor
 from system_state import SystemState
 from event_bus import EventBus
 from ranking_engine import compute_student_scores
-from remarks_utils import get_default_remark, get_headteacher_remark, get_developmental_note
+from remarks_utils import get_default_remark, get_headteacher_remark, get_academic_master_remark, get_discipline_master_remark
 import combo_loaders
 
 class RemarksPage(QWidget):
@@ -46,7 +46,7 @@ class RemarksPage(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
-        self.title = QLabel("EXAM REMARKS & DEVELOPMENTAL NOTES")
+        self.title = QLabel("EXAM REMARKS & NOTES")
         self.title.setStyleSheet("font-size: 16px; font-weight: bold;")
         layout.addWidget(self.title)
 
@@ -62,13 +62,14 @@ class RemarksPage(QWidget):
         layout.addLayout(controls)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "Admission No",
             "Name",
             "Teacher Remarks",
             "Headteacher Remarks",
-            "Developmental Notes",
+            "Academic Master Remarks",
+            "Discipline Master Remarks",
             "Status"
         ])
         
@@ -82,7 +83,8 @@ class RemarksPage(QWidget):
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.Stretch)
         header.setSectionResizeMode(4, QHeaderView.Stretch)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         
         layout.addWidget(self.table)
         self.table.itemChanged.connect(self._on_item_changed)
@@ -119,7 +121,8 @@ class RemarksPage(QWidget):
                 s.full_name,
                 er.teacher_remarks,
                 er.headteacher_remarks,
-                er.developmental_notes
+                er.academic_master_remarks,
+                er.discipline_master_remarks
             FROM students s
             LEFT JOIN exam_remarks er ON s.admission_no = er.admission_no AND er.exam_id = ?
             WHERE s.class = ? AND s.level = ?
@@ -135,7 +138,7 @@ class RemarksPage(QWidget):
         self.table.setRowCount(len(rows))
         
         for i, row in enumerate(rows):
-            adm, name, t_rem, h_rem, dev = row
+            adm, name, t_rem, h_rem, a_rem, d_rem = row
             adm_str = str(adm)
             
             # Get performance data
@@ -153,27 +156,32 @@ class RemarksPage(QWidget):
             self.table.setItem(i, 1, item_name)
             
             # Determine defaults
-            is_new = not (t_rem or h_rem or dev)
+            is_new = not (t_rem or h_rem or a_rem or d_rem)
             if not t_rem:
                 t_rem = get_default_remark(avg, div, self.history_level)
             if not h_rem:
                 h_rem = get_headteacher_remark(div)
-            if not dev:
-                dev = get_developmental_note(avg)
+            if not a_rem:
+                a_rem = get_academic_master_remark(div)
+            if not d_rem:
+                d_rem = get_discipline_master_remark(avg)
             
             # Remarks (Editable)
             item_t = QTableWidgetItem(t_rem)
             item_h = QTableWidgetItem(h_rem)
-            item_d = QTableWidgetItem(dev)
+            item_a = QTableWidgetItem(a_rem)
+            item_d = QTableWidgetItem(d_rem)
             
             if is_new:
                 item_t.setForeground(Qt.gray)
                 item_h.setForeground(Qt.gray)
+                item_a.setForeground(Qt.gray)
                 item_d.setForeground(Qt.gray)
             
             self.table.setItem(i, 2, item_t)
             self.table.setItem(i, 3, item_h)
-            self.table.setItem(i, 4, item_d)
+            self.table.setItem(i, 4, item_a)
+            self.table.setItem(i, 5, item_d)
             
             # Status
             status_text = "Saved" if not is_new else "Default (Editable)"
@@ -183,7 +191,7 @@ class RemarksPage(QWidget):
                 item_status.setForeground(Qt.blue)
             else:
                 item_status.setForeground(Qt.darkGreen)
-            self.table.setItem(i, 5, item_status)
+            self.table.setItem(i, 6, item_status)
 
         self.table.setUpdatesEnabled(True)
         self.table.blockSignals(False)
@@ -200,7 +208,7 @@ class RemarksPage(QWidget):
         self.table.setFixedHeight(max(200, height))
 
     def _on_item_changed(self, item):
-        if item.column() in [2, 3, 4]:
+        if item.column() in [2, 3, 4, 5]:
             item.setForeground(Qt.black)
 
     def save_all(self):
@@ -213,16 +221,18 @@ class RemarksPage(QWidget):
                     adm = self.table.item(i, 0).text()
                     t_rem = self.table.item(i, 2).text().strip()
                     h_rem = self.table.item(i, 3).text().strip()
-                    dev = self.table.item(i, 4).text().strip()
+                    a_rem = self.table.item(i, 4).text().strip()
+                    d_rem = self.table.item(i, 5).text().strip()
                     
                     cur.execute("""
-                        INSERT INTO exam_remarks (admission_no, exam_id, teacher_remarks, headteacher_remarks, developmental_notes)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO exam_remarks (admission_no, exam_id, teacher_remarks, headteacher_remarks, academic_master_remarks, discipline_master_remarks)
+                        VALUES (?, ?, ?, ?, ?, ?)
                         ON CONFLICT(admission_no, exam_id) DO UPDATE SET
                             teacher_remarks = excluded.teacher_remarks,
                             headteacher_remarks = excluded.headteacher_remarks,
-                            developmental_notes = excluded.developmental_notes
-                    """, (adm, self.history_exam_id, t_rem, h_rem, dev))
+                            academic_master_remarks = excluded.academic_master_remarks,
+                            discipline_master_remarks = excluded.discipline_master_remarks
+                    """, (adm, self.history_exam_id, t_rem, h_rem, a_rem, d_rem))
             
             QMessageBox.information(self, "Success", "All remarks saved successfully.")
             self.load()

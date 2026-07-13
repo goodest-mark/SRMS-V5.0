@@ -53,7 +53,7 @@ Repository: `https://github.com/fizzoh/SRMSV5.0.git`
 ## Installation
 
 ```bash
-git clone https://github.com/fizzoh/SRMSV5.0.git
+git clone https://https://github.com/goodest-mark/SRMS-V5.0.git
 
 cd SRMSV5.0
 

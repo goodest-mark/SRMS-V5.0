@@ -230,7 +230,7 @@ class ResultsPage(QWidget):
 
         self.import_btn = QPushButton("IMPORT EXCEL")
         self.import_btn.clicked.connect(self.import_excel)
-        
+
         self.template_btn = QPushButton("DOWNLOAD TEMPLATE")
         self.template_btn.clicked.connect(self.download_template)
 
@@ -329,7 +329,7 @@ class ResultsPage(QWidget):
             self.subject.clear()
             self._clear_table()
             return
-            
+
         year_id, term_id = context
 
         rows = fetch_all("""
@@ -353,7 +353,8 @@ class ResultsPage(QWidget):
         self.subject.clear()
 
         for name, expected, entered in rows:
-            if entered > 0:
+            # Hide subject only if all students already have marks (100% complete)
+            if entered >= expected:
                 continue
             perc = (entered / expected * 100) if expected > 0 else 0
             display_name = f"{name} ({perc:.0f}%)"
@@ -395,7 +396,7 @@ class ResultsPage(QWidget):
         if not context:
             self._clear_table()
             return
-            
+
         year_id, term_id = context
 
         student_rows = fetch_all("""
@@ -560,7 +561,7 @@ class ResultsPage(QWidget):
         level = SystemState.get_level()
 
         excel_utils.download_template(
-            self, 
+            self,
             "marks_template.xlsx",
             f"EXAMINATION MARKS ENTRY FORM - {exam_name}",
             ["Admission No*", "Marks (0-100)*"],
@@ -577,7 +578,7 @@ class ResultsPage(QWidget):
     def import_excel(self):
         exam_id = self.exam.currentData()
         subject_name = self.subject.currentData()
-        
+
         if not (exam_id and subject_name):
             show_error(self, "Select Exam and Subject first")
             return
@@ -589,25 +590,38 @@ class ResultsPage(QWidget):
                 title="Completed Exam"
             )
             return
-            
+
+        class_name = self.class_box.currentText().strip()
+
         path = excel_utils.get_import_file(self)
-        if not path: return
-        
+        if not path:
+            return
+
         try:
             wb = openpyxl.load_workbook(path, data_only=True)
             sheet = wb.active
             rows = list(sheet.iter_rows(min_row=12, values_only=True))
-            
+
             context = get_exam_context(exam_id)
             if not context:
                 raise ValueError("Selected exam does not exist.")
             year_id, term_id = context
-            
+
             imported = 0
             with get_cursor(commit=True) as cur:
                 for row in rows:
-                    if not row or not row[0] or row[1] is None: continue
+                    if not row or not row[0] or row[1] is None:
+                        continue
                     adm, marks = row
+
+                    # Validate marks range
+                    try:
+                        marks_int = int(marks)
+                        if not (0 <= marks_int <= 100):
+                            raise ValueError("Marks must be between 0 and 100")
+                    except (ValueError, TypeError) as e:
+                        print(f"[WARNING] Skipping invalid marks for {adm}: {marks} ({e})")
+                        continue
 
                     cur.execute("""
                         SELECT 1 FROM enrollments
@@ -622,20 +636,19 @@ class ResultsPage(QWidget):
                                 ON CONFLICT(admission_no, subject_name, exam_id) DO UPDATE SET
                                     marks=excluded.marks,
                                     class_name=excluded.class_name
-                            """, (str(adm), subject_name, int(marks), exam_id, self.class_box.currentText().strip()))
+                            """, (str(adm), subject_name, marks_int, exam_id, class_name))
                             imported += 1
                         except Exception as e:
                             print(f"[ERROR] Failed to import result for '{adm}': {e}")
                             continue
-            
+
             self.load_students()
             self.load_subjects()
             EventBus.emit("RESULTS_UPDATED")
             QMessageBox.information(self, "Import Complete", f"Imported {imported} marks.")
-            
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Import failed: {e}")
-
 
     def _is_selected_exam_completed(self):
         exam_id = self.exam.currentData()

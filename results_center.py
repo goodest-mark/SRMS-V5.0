@@ -103,6 +103,7 @@ class ResultsCenter(QWidget):
         if page is None:
             return
 
+        # FIX: Try all possible refresh methods (removed break)
         for method_name in ("refresh_all", "load_data", "load"):
             method = getattr(page, method_name, None)
             if callable(method):
@@ -110,7 +111,6 @@ class ResultsCenter(QWidget):
                     method()
                 except Exception as e:
                     print(f"[ERROR] Failed to call {method_name}: {e}")
-                break
 
     def open_readiness(self):
         self._switch_page("readiness")

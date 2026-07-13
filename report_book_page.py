@@ -41,7 +41,7 @@ class ReportBookPage(QWidget):
         self.history_exam_id = None
         self.history_class_name = None
         self.history_level = None
-        
+
         title = QLabel("STUDENT REPORT BOOK ENGINE")
         self.layout.addWidget(title)
 
@@ -56,13 +56,13 @@ class ReportBookPage(QWidget):
 
         self.year_box = QComboBox()
         self.year_box.currentIndexChanged.connect(self.load_terms)
-        
+
         self.term_box = QComboBox()
         self.term_box.currentIndexChanged.connect(self.load_exams)
 
         self.exam_box = QComboBox()
         self.exam_box.currentIndexChanged.connect(self.update_summary)
-        
+
         self.class_box = QComboBox()
         self.class_box.addItems(get_classes())
         self.class_box.currentIndexChanged.connect(self.update_summary)
@@ -84,10 +84,10 @@ class ReportBookPage(QWidget):
         # =========================
         self.preview_group = QGroupBox("Class Summary Preview")
         self.preview_layout = QVBoxLayout(self.preview_group)
-        
+
         self.summary_label = QLabel("Select criteria and click Preview...")
         self.preview_layout.addWidget(self.summary_label)
-        
+
         self.layout.addWidget(self.preview_group)
 
         self.status_label = QLabel("")
@@ -103,11 +103,11 @@ class ReportBookPage(QWidget):
         # ACTIONS
         # =========================
         actions_layout = QHBoxLayout()
-        
+
         self.preview_btn = QPushButton("PREVIEW SUMMARY")
         self.preview_btn.clicked.connect(lambda: self.update_summary(manual=True))
         self.preview_btn.setFixedHeight(40)
-        
+
         self.generate_btn = QPushButton("GENERATE PDF BOOK")
         self.generate_btn.clicked.connect(self.generate_pdf)
         self.generate_btn.setFixedHeight(40)
@@ -115,7 +115,7 @@ class ReportBookPage(QWidget):
         actions_layout.addWidget(self.preview_btn)
         actions_layout.addWidget(self.generate_btn)
         actions_layout.addStretch()
-        
+
         self.layout.addLayout(actions_layout)
         self.layout.addStretch()
 
@@ -138,14 +138,12 @@ class ReportBookPage(QWidget):
         if not self.isVisible():
             self._needs_refresh = True
             return
-        
-        blockers = [QSignalBlocker(w) for w in (self.year_box, self.term_box, self.exam_box, self.class_box)]
-        try:
+
+        # FIX: Use context manager for signal blockers
+        with QSignalBlocker(self.year_box), QSignalBlocker(self.term_box), QSignalBlocker(self.exam_box), QSignalBlocker(self.class_box):
             self.load_years()
             combo_loaders.load_classes(self.class_box)
-        finally:
-            del blockers
-        
+
         self.update_summary()
 
     def load_years(self):
@@ -214,7 +212,7 @@ class ReportBookPage(QWidget):
             return
 
         ranking = compute_student_scores(level, exam_id, class_name)
-        
+
         # Filter for class in-memory (No N+1 database queries)
         class_students = [s for s in ranking if s.get('class') == class_name]
 
@@ -234,7 +232,7 @@ class ReportBookPage(QWidget):
     def generate_pdf(self):
         exam_id = self.history_exam_id or self.exam_box.currentData()
         class_name = self.history_class_name or self.class_box.currentText()
-        
+
         if not (exam_id and class_name):
             show_error(self, "Please select all context filters.")
             return

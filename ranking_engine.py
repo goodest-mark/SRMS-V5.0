@@ -6,15 +6,18 @@ from academic_rules import is_ranking_subject
 
 def compute_student_scores(level, exam_id=None, class_name=None):
     """
-    Ranking Engine V3.3
+    Ranking Engine V4.0
 
-    Positions are based on AVERAGE across all results for the selected exam.
-    Total marks remain available for display and as a tie-breaker.
-    When class_name is provided, ranking is limited to that class.
+    - All students are ranked by TOTAL MARKS (sum of all subjects they have).
+    - Average is computed from existing subjects.
+    - Every student gets a position (incomplete students included).
+    - 'READY' status means they have enough eligible subjects for division/points.
+    - 'INCOMPLETE' status means they lack required subjects; points and division are '-'.
     """
     with connect() as conn:
         cur = conn.cursor()
 
+        # If no exam_id provided, pick the latest exam for this level
         if exam_id is None:
             cur.execute("""
                 SELECT ex.id
@@ -25,12 +28,12 @@ def compute_student_scores(level, exam_id=None, class_name=None):
                 ORDER BY ex.id DESC
                 LIMIT 1
             """, (level,))
-
             exam_res = cur.fetchone()
             if not exam_res:
                 return []
             exam_id = exam_res[0]
 
+        # Get academic context (for enrollments filtering)
         cur.execute("""
             SELECT t.academic_year_id, ex.term_id
             FROM exams ex
@@ -41,6 +44,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
         academic_year_id = exam_context[0] if exam_context else None
         term_id = exam_context[1] if exam_context else None
 
+        # Load enrollment pairs if we have context
         enrolled_pairs = set()
         has_enrollments = False
         if academic_year_id is not None and term_id is not None:
@@ -63,6 +67,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
             }
             has_enrollments = bool(enrolled_pairs)
 
+        # Fetch all results for the exam and class
         query = """
             SELECT
                 s.admission_no,
@@ -90,6 +95,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
         cur.execute(query, params)
         rows = cur.fetchall()
 
+        # Load division rules
         cur.execute("""
             SELECT division, min_points, max_points
             FROM division_rules
@@ -100,6 +106,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
     if not rows:
         return []
 
+    # Organise data per student
     students_data = {}
     for row in rows:
         adm, name, gender, student_class, subject, marks, subject_type = row
@@ -134,6 +141,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
     if not students_data:
         return []
 
+    # Filter to the selected class (if provided)
     if class_name is not None:
         students_data = {
             adm: data
@@ -144,76 +152,75 @@ def compute_student_scores(level, exam_id=None, class_name=None):
     if not students_data:
         return []
 
-    ready_students = []
-    incomplete_students = []
-
     required_count = get_required_subjects(level)
     best_of = get_best_of(level)
 
+    # Build final list for all students
+    all_students = []
+
     for adm, data in students_data.items():
         subjects = data["subjects"]
-        score_subjects = subjects
-        total_marks = sum(s["marks"] for s in score_subjects)
-        subject_count = len(score_subjects)
+        # total marks and average from all subjects
+        total_marks = sum(s["marks"] for s in subjects)
+        subject_count = len(subjects)
         average = round(total_marks / subject_count, 2) if subject_count else 0
 
+        # Determine eligibility for ranking (points/division)
         eligible_subjects = [
             s for s in subjects
             if is_ranking_subject(level, s["subject_type"])
         ]
         eligible_count = len(eligible_subjects)
 
-        if eligible_count < required_count:
-            incomplete_students.append({
-                "position": "-",
-                "admission": adm,
-                "name": data["name"],
-                "gender": data["gender"],
-                "class": data["class"],
-                "subjects": f"{eligible_count}/{required_count}",
-                "total_marks": _format_number(total_marks),
-                "points": "-",
-                "average": "-",
-                "division": "-",
-                "status": "INCOMPLETE"
-            })
-            continue
+        if eligible_count >= required_count:
+            # Ready: compute points and division
+            eligible_subjects.sort(key=lambda x: x["points"])
+            best_subjects = eligible_subjects[:best_of]
+            total_points = sum(s["points"] for s in best_subjects)
 
-        eligible_subjects.sort(key=lambda x: x["points"])
-        best_subjects = eligible_subjects[:best_of]
-        total_points = sum(s["points"] for s in best_subjects)
+            division = "UNKNOWN"
+            for div_name, min_pts, max_pts in division_rules:
+                if min_pts <= total_points <= max_pts:
+                    division = div_name
+                    break
 
-        division = "UNKNOWN"
-        for div_name, min_pts, max_pts in division_rules:
-            if min_pts <= total_points <= max_pts:
-                division = div_name
-                break
+            status = "READY"
+            points_display = total_points
+            division_display = division
+        else:
+            # Incomplete: points and division are not applicable
+            status = "INCOMPLETE"
+            points_display = "-"
+            division_display = "-"
 
-        ready_students.append({
+        all_students.append({
             "admission": adm,
             "name": data["name"],
             "gender": data["gender"],
             "class": data["class"],
-            "subjects": subject_count,
+            "subjects": subject_count,          # total subjects taken
             "total_marks": _format_number(total_marks),
-            "points": total_points,
-            "average": average,
-            "division": division,
-            "status": "READY"
+            "average": average,                 # always computed
+            "points": points_display,
+            "division": division_display,
+            "status": status,
+            # position will be filled after sorting
         })
 
-    ready_students.sort(
+    # Now rank ALL students by total marks (descending), then average, then admission
+    all_students.sort(
         key=lambda x: (
+            -float(x["total_marks"]),   # convert to float for numeric sort
             -float(x["average"]),
-            -float(x["total_marks"]),
             x["admission"]
         )
     )
 
-    for pos, item in enumerate(ready_students, start=1):
-        item["position"] = pos
+    # Assign positions
+    for pos, student in enumerate(all_students, start=1):
+        student["position"] = pos
 
-    return ready_students + incomplete_students
+    return all_students
 
 
 def _format_number(value):

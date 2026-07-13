@@ -1,3 +1,7 @@
+# ------------------------------------------------------------
+# THEME ENGINE – with Button Variants
+# ------------------------------------------------------------
+
 def _theme(
     *,
     app_bg,
@@ -309,6 +313,55 @@ QPushButton:hover{{
 
 QPushButton:pressed{{
     background:#1e40af;
+}}
+
+/* =========================================
+   BUTTON VARIANTS (active / inactive)
+========================================= */
+QPushButton[variant="accent"]{{
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 #60a5fa,
+        stop:1 {tokens['primary']}
+    );
+    border: 2px solid #93c5fd;
+    color: white;
+}}
+
+QPushButton[variant="default"]{{
+    background: transparent;
+    border: 1px solid rgba(148,163,184,0.3);
+    color: {tokens['muted']};
+}}
+
+QPushButton[variant="default"]:hover{{
+    background: rgba(148,163,184,0.1);
+    border: 1px solid rgba(148,163,184,0.5);
+}}
+
+/* =========================================
+   NAV BUTTONS (explicit object name)
+========================================= */
+QPushButton#navButton[variant="accent"]{{
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 #60a5fa,
+        stop:1 #2563eb
+    );
+    border: 2px solid #93c5fd;
+    color: white;
+    font-weight: 900;
+}}
+
+QPushButton#navButton[variant="default"]{{
+    background: transparent;
+    border: 1px solid rgba(148,163,184,0.3);
+    color: #94a3b8;
+}}
+
+QPushButton#navButton[variant="default"]:hover{{
+    background: rgba(148,163,184,0.1);
+    border: 1px solid rgba(148,163,184,0.5);
 }}
 
 QTableWidget, QTableView, QListWidget, QTreeWidget{{
