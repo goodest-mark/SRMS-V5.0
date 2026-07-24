@@ -1,31 +1,52 @@
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QTableWidget,
     QTableWidgetItem,
-    QComboBox,
     QLabel,
     QHeaderView,
     QAbstractItemView,
     QScrollArea,
     QSizePolicy,
     QFrame,
+    QProgressBar,
 )
-
-from PySide6.QtCore import Qt
 
 from db_utils import fetch_one
 from system_state import SystemState
 from event_bus import EventBus
 from ranking_engine import compute_student_scores
-import combo_loaders
+
+
+# ------------------------------------------------------------------
+# Background worker for ranking data
+# ------------------------------------------------------------------
+class RankingWorker(QThread):
+    finished = Signal(list)
+
+    def __init__(self, level, exam_id, class_name):
+        super().__init__()
+        self.level = level
+        self.exam_id = exam_id
+        self.class_name = class_name
+
+    def run(self):
+        ranking = compute_student_scores(self.level, exam_id=self.exam_id, class_name=self.class_name)
+        self.finished.emit(ranking)
 
 
 class RankingPage(QWidget):
 
     def __init__(self):
         super().__init__()
+
+        self.history_exam_id = None
+        self.history_class_name = None
+        self.history_level = None
+        self._worker = None
+        self._needs_refresh = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -49,14 +70,12 @@ class RankingPage(QWidget):
         self.context_label = QLabel("")
         layout.addWidget(self.context_label)
 
-        filters = QHBoxLayout()
-        self.class_box = QComboBox()
-        combo_loaders.load_classes(self.class_box)
-        self.class_box.currentIndexChanged.connect(self.load)
-        filters.addWidget(QLabel("Class"))
-        filters.addWidget(self.class_box)
-        filters.addStretch()
-        layout.addLayout(filters)
+        # Loading progress bar (hidden by default)
+        self.loading_bar = QProgressBar()
+        self.loading_bar.setRange(0, 0)  # Indeterminate – spinning animation
+        self.loading_bar.setFormat("Loading ranking data...")
+        self.loading_bar.setVisible(False)
+        layout.addWidget(self.loading_bar)
 
         # TABLE
         self.table = QTableWidget()
@@ -89,23 +108,109 @@ class RankingPage(QWidget):
         # EVENTS
         EventBus.subscribe("RESULTS_UPDATED", self.load)
         EventBus.subscribe("STUDENTS_UPDATED", self.load)
-        EventBus.subscribe("LEVEL_CHANGED", self.refresh_classes)
+        EventBus.subscribe("LEVEL_CHANGED", self.refresh_level)
         EventBus.subscribe("SUBJECT_REQUIREMENTS_CHANGED", self.load)
         EventBus.subscribe("GRADE_RULES_CHANGED", self.load)
         EventBus.subscribe("DIVISION_RULES_CHANGED", self.load)
 
-        self.history_exam_id = None
-        self.history_class_name = None
-        self.history_level = None
-
+        # Load initially (will show empty because no context yet)
         self.load()
 
-    def refresh_classes(self):
-        current_class = self.class_box.currentText().strip()
-        combo_loaders.load_classes(self.class_box)
-        index = self.class_box.findText(current_class)
-        if index >= 0:
-            self.class_box.setCurrentIndex(index)
+    # ------------------------------------------------------------------
+    # Background loading
+    # ------------------------------------------------------------------
+    def start_background_load(self):
+        """Start loading ranking data in the background with a loading bar."""
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.quit()
+            self._worker.wait()
+
+        self.loading_bar.setVisible(True)
+        self.table.setRowCount(0)
+        self.table.setVisible(False)
+
+        level = self.history_level or SystemState.get_level()
+        class_name = self.history_class_name
+        exam_id = self.history_exam_id
+
+        # If no context, just show empty
+        if not exam_id or not class_name:
+            self.loading_bar.setVisible(False)
+            self.table.setVisible(True)
+            self.table.setRowCount(0)
+            self._update_table_height()
+            return
+
+        self._worker = RankingWorker(level, exam_id, class_name)
+        self._worker.finished.connect(self.on_data_loaded)
+        self._worker.start()
+
+    def on_data_loaded(self, ranking):
+        """Callback when ranking data is ready."""
+        self.loading_bar.setVisible(False)
+        self.table.setVisible(True)
+        self._populate_table(ranking)
+        self._update_table_height()
+
+    # ------------------------------------------------------------------
+    # Table population
+    # ------------------------------------------------------------------
+    def _populate_table(self, ranking):
+        self.table.setUpdatesEnabled(False)
+        try:
+            self.table.setRowCount(len(ranking))
+
+            for row, item in enumerate(ranking):
+                values = [
+                    item.get("position", "-"),
+                    item.get("admission", ""),
+                    item.get("name", ""),
+                    item.get("subjects", 0),
+                    item.get("total_marks", "-"),
+                    item.get("average", "-"),
+                    item.get("points", "-"),
+                    item.get("division", "-"),
+                    item.get("status", "UNKNOWN")
+                ]
+
+                for col, value in enumerate(values):
+                    table_item = QTableWidgetItem(str(value))
+                    table_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+
+                    if col in [0, 3, 4, 5, 6, 7, 8]:
+                        table_item.setTextAlignment(Qt.AlignCenter)
+
+                    if item.get("status") == "INCOMPLETE":
+                        table_item.setForeground(Qt.gray)
+                    elif item.get("status") == "READY":
+                        if col == 8:
+                            table_item.setForeground(Qt.darkGreen)
+                            font = table_item.font()
+                            font.setBold(True)
+                            table_item.setFont(font)
+
+                    self.table.setItem(row, col, table_item)
+
+        finally:
+            self.table.setUpdatesEnabled(True)
+
+    def _update_table_height(self):
+        self.table.resizeColumnsToContents()
+        self.table.resizeRowsToContents()
+        table_height = (
+            self.table.horizontalHeader().height()
+            + self.table.frameWidth() * 2
+            + self.table.verticalHeader().length()
+            + 4
+        )
+        self.table.setMinimumHeight(table_height)
+        self.table.setMaximumHeight(table_height)
+
+    # ------------------------------------------------------------------
+    # Public methods / event handlers
+    # ------------------------------------------------------------------
+    def refresh_level(self):
+        self.history_level = SystemState.get_level()
         self.load()
 
     def set_history_context(self, exam_id, class_name, level=None):
@@ -129,9 +234,6 @@ class RankingPage(QWidget):
         else:
             self.context_label.setText(f"History context: Exam #{exam_id} - {class_name}")
 
-        index = self.class_box.findText(class_name)
-        if index >= 0:
-            self.class_box.setCurrentIndex(index)
         self.load()
 
     def clear_history_context(self):
@@ -143,7 +245,7 @@ class RankingPage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if getattr(self, "_needs_refresh", False):
+        if self._needs_refresh:
             self._needs_refresh = False
             self.load()
 
@@ -151,61 +253,4 @@ class RankingPage(QWidget):
         if not self.isVisible():
             self._needs_refresh = True
             return
-
-        level = self.history_level or SystemState.get_level()
-        class_name = self.history_class_name or self.class_box.currentText().strip()
-        exam_id = self.history_exam_id
-        ranking = compute_student_scores(level, exam_id=exam_id, class_name=class_name)
-
-        self.table.setUpdatesEnabled(False)
-        try:
-            self.table.setRowCount(len(ranking))
-
-            for row, item in enumerate(ranking):
-                values = [
-                    item.get("position", "-"),
-                    item.get("admission", ""),
-                    item.get("name", ""),
-                    item.get("subjects", 0),
-                    item.get("total_marks", "-"),
-                    item.get("average", "-"),
-                    item.get("points", "-"),
-                    item.get("division", "-"),
-                    item.get("status", "UNKNOWN")
-                ]
-
-                for col, value in enumerate(values):
-                    table_item = QTableWidgetItem(str(value))
-                    
-                    # Ensure items are read-only but still allow selection and copying
-                    table_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-                    
-                    # Center align metrics
-                    if col in [0, 3, 4, 5, 6, 7, 8]:
-                        table_item.setTextAlignment(Qt.AlignCenter)
-
-                    # Styling based on status
-                    if item.get("status") == "INCOMPLETE":
-                        table_item.setForeground(Qt.gray)
-                    elif item.get("status") == "READY":
-                        if col == 8: # Status column
-                            table_item.setForeground(Qt.darkGreen)
-                            font = table_item.font()
-                            font.setBold(True)
-                            table_item.setFont(font)
-                    
-                    self.table.setItem(row, col, table_item)
-
-        finally:
-            self.table.setUpdatesEnabled(True)
-
-        self.table.resizeColumnsToContents()
-        self.table.resizeRowsToContents()
-        table_height = (
-            self.table.horizontalHeader().height()
-            + self.table.frameWidth() * 2
-            + self.table.verticalHeader().length()
-            + 4
-        )
-        self.table.setMinimumHeight(table_height)
-        self.table.setMaximumHeight(table_height)
+        self.start_background_load()

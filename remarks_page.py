@@ -4,7 +4,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QTableWidget,
     QTableWidgetItem,
-    QComboBox,
     QLabel,
     QHeaderView,
     QAbstractItemView,
@@ -20,7 +19,7 @@ from system_state import SystemState
 from event_bus import EventBus
 from ranking_engine import compute_student_scores
 from remarks_utils import get_default_remark, get_headteacher_remark, get_academic_master_remark, get_discipline_master_remark
-import combo_loaders
+
 
 class RemarksPage(QWidget):
     def __init__(self):
@@ -53,6 +52,9 @@ class RemarksPage(QWidget):
         self.context_label = QLabel("Select an exam and class to enter remarks.")
         layout.addWidget(self.context_label)
 
+        # =========================
+        # SAVE BUTTON
+        # =========================
         controls = QHBoxLayout()
         self.save_all_btn = QPushButton("SAVE ALL REMARKS")
         self.save_all_btn.setStyleSheet("background-color: #2E7D32; color: white; padding: 8px;")
@@ -72,11 +74,11 @@ class RemarksPage(QWidget):
             "Discipline Master Remarks",
             "Status"
         ])
-        
+
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        
+
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -85,36 +87,76 @@ class RemarksPage(QWidget):
         header.setSectionResizeMode(4, QHeaderView.Stretch)
         header.setSectionResizeMode(5, QHeaderView.Stretch)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        
+
         layout.addWidget(self.table)
         self.table.itemChanged.connect(self._on_item_changed)
 
-        EventBus.subscribe("LEVEL_CHANGED", self.load)
+        EventBus.subscribe("LEVEL_CHANGED", self.refresh_level)
 
+        # Load initially (will show empty)
+        self.load()
+
+    def refresh_level(self):
+        self.history_level = SystemState.get_level()
+        self.load()
+
+    # ------------------------------------------------------------------
+    # Public context setters (called by central filter)
+    # ------------------------------------------------------------------
     def set_history_context(self, exam_id, class_name, level=None):
         self.history_exam_id = exam_id
         self.history_class_name = class_name
         self.history_level = level or SystemState.get_level()
-        self.context_label.setText(f"Exam: #{exam_id} | Class: {class_name}")
+
+        # Get exam details for label
+        from db_utils import fetch_one
+        row = fetch_one("""
+            SELECT e.exam_name, t.term_name, y.year_name
+            FROM exams e
+            JOIN terms t ON t.id = e.term_id
+            JOIN academic_years y ON y.id = t.academic_year_id
+            WHERE e.id = ?
+        """, (exam_id,))
+        if row:
+            exam_name, term_name, year_name = row
+            self.context_label.setText(
+                f"Context: {exam_name} - {term_name} - {year_name} - {class_name}"
+            )
+        else:
+            self.context_label.setText(f"Context: Exam #{exam_id} - {class_name}")
+
         self.load()
+
+    def clear_history_context(self):
+        self.history_exam_id = None
+        self.history_class_name = None
+        self.history_level = None
+        self.context_label.setText("Select an exam and class to enter remarks.")
+        self.table.setRowCount(0)
 
     def showEvent(self, event):
         super().showEvent(event)
-        if getattr(self, "_needs_refresh", False):
+        if self._needs_refresh:
             self._needs_refresh = False
             self.load()
 
+    # ------------------------------------------------------------------
+    # Data loading
+    # ------------------------------------------------------------------
     def load(self):
         if not self.isVisible():
             self._needs_refresh = True
             return
-            
-        if not self.history_exam_id or not self.history_class_name:
+
+        exam_id = self.history_exam_id
+        class_name = self.history_class_name
+        level = self.history_level or SystemState.get_level()
+
+        if not exam_id or not class_name:
             self.table.setRowCount(0)
             return
 
         self.table.blockSignals(True)
-        # Fetch students and existing remarks
         query = """
             SELECT 
                 s.admission_no, 
@@ -128,62 +170,57 @@ class RemarksPage(QWidget):
             WHERE s.class = ? AND s.level = ?
             ORDER BY s.full_name
         """
-        rows = fetch_all(query, (self.history_exam_id, self.history_class_name, self.history_level))
+        rows = fetch_all(query, (exam_id, class_name, level))
 
         # Fetch performance data for defaults
-        scores = compute_student_scores(self.history_level, self.history_exam_id, self.history_class_name)
+        scores = compute_student_scores(level, exam_id, class_name)
         score_map = {str(s["admission"]): s for s in scores}
 
         self.table.setUpdatesEnabled(False)
         self.table.setRowCount(len(rows))
-        
+
         for i, row in enumerate(rows):
             adm, name, t_rem, h_rem, a_rem, d_rem = row
             adm_str = str(adm)
-            
-            # Get performance data
+
             stats = score_map.get(adm_str, {})
             avg = stats.get("average", 0)
             div = stats.get("division", "-")
-            
-            # Adm & Name (Read-only)
+
             item_adm = QTableWidgetItem(adm_str)
             item_adm.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             self.table.setItem(i, 0, item_adm)
-            
+
             item_name = QTableWidgetItem(str(name))
             item_name.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             self.table.setItem(i, 1, item_name)
-            
-            # Determine defaults
+
             is_new = not (t_rem or h_rem or a_rem or d_rem)
             if not t_rem:
-                t_rem = get_default_remark(avg, div, self.history_level)
+                t_rem = get_default_remark(avg, div, level)
             if not h_rem:
                 h_rem = get_headteacher_remark(div)
             if not a_rem:
                 a_rem = get_academic_master_remark(div)
             if not d_rem:
                 d_rem = get_discipline_master_remark(avg)
-            
-            # Remarks (Editable)
+
             item_t = QTableWidgetItem(t_rem)
             item_h = QTableWidgetItem(h_rem)
             item_a = QTableWidgetItem(a_rem)
             item_d = QTableWidgetItem(d_rem)
-            
+
             if is_new:
                 item_t.setForeground(Qt.gray)
                 item_h.setForeground(Qt.gray)
                 item_a.setForeground(Qt.gray)
                 item_d.setForeground(Qt.gray)
-            
+
             self.table.setItem(i, 2, item_t)
             self.table.setItem(i, 3, item_h)
             self.table.setItem(i, 4, item_a)
             self.table.setItem(i, 5, item_d)
-            
-            # Status
+
             status_text = "Saved" if not is_new else "Default (Editable)"
             item_status = QTableWidgetItem(status_text)
             item_status.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
@@ -212,7 +249,9 @@ class RemarksPage(QWidget):
             item.setForeground(Qt.black)
 
     def save_all(self):
-        if not self.history_exam_id:
+        exam_id = self.history_exam_id
+        if not exam_id:
+            QMessageBox.warning(self, "Missing Context", "No exam selected.")
             return
 
         try:
@@ -223,7 +262,7 @@ class RemarksPage(QWidget):
                     h_rem = self.table.item(i, 3).text().strip()
                     a_rem = self.table.item(i, 4).text().strip()
                     d_rem = self.table.item(i, 5).text().strip()
-                    
+
                     cur.execute("""
                         INSERT INTO exam_remarks (admission_no, exam_id, teacher_remarks, headteacher_remarks, academic_master_remarks, discipline_master_remarks)
                         VALUES (?, ?, ?, ?, ?, ?)
@@ -232,8 +271,8 @@ class RemarksPage(QWidget):
                             headteacher_remarks = excluded.headteacher_remarks,
                             academic_master_remarks = excluded.academic_master_remarks,
                             discipline_master_remarks = excluded.discipline_master_remarks
-                    """, (adm, self.history_exam_id, t_rem, h_rem, a_rem, d_rem))
-            
+                    """, (adm, exam_id, t_rem, h_rem, a_rem, d_rem))
+
             QMessageBox.information(self, "Success", "All remarks saved successfully.")
             self.load()
         except Exception as e:

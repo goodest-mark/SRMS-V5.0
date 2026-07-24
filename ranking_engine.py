@@ -2,6 +2,7 @@ from database import connect
 from grade_utils import get_grade, get_points
 from grading_config import get_required_subjects, get_best_of
 from academic_rules import is_ranking_subject
+from cache_utils import ranking_cache
 
 
 def compute_student_scores(level, exam_id=None, class_name=None):
@@ -13,7 +14,16 @@ def compute_student_scores(level, exam_id=None, class_name=None):
     - Every student gets a position (incomplete students included).
     - 'READY' status means they have enough eligible subjects for division/points.
     - 'INCOMPLETE' status means they lack required subjects; points and division are '-'.
+
+    Results are cached for 60 seconds to reduce repeated DB queries.
     """
+    # Build cache key
+    cache_key = (level, exam_id, class_name)
+    cached = ranking_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # Not in cache – compute fresh
     with connect() as conn:
         cur = conn.cursor()
 
@@ -104,6 +114,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
         division_rules = cur.fetchall()
 
     if not rows:
+        ranking_cache.set(cache_key, [])
         return []
 
     # Organise data per student
@@ -139,6 +150,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
         })
 
     if not students_data:
+        ranking_cache.set(cache_key, [])
         return []
 
     # Filter to the selected class (if provided)
@@ -150,6 +162,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
         }
 
     if not students_data:
+        ranking_cache.set(cache_key, [])
         return []
 
     required_count = get_required_subjects(level)
@@ -220,6 +233,8 @@ def compute_student_scores(level, exam_id=None, class_name=None):
     for pos, student in enumerate(all_students, start=1):
         student["position"] = pos
 
+    # Store in cache
+    ranking_cache.set(cache_key, all_students)
     return all_students
 
 

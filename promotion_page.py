@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from backup_utils import create_pre_operation_backup
 from class_utils import get_classes
-from db_utils import fetch_all, get_cursor
+from db_utils import fetch_all, fetch_one, get_cursor
 from event_bus import EventBus
 from ranking_engine import compute_student_scores
 from security_settings import authorize_action
@@ -219,6 +219,37 @@ class PromotionPage(QWidget):
                 admissions.append(admission_item.text())
         return admissions
 
+    # ------------------------------------------------------------------
+    # Helper: copy enrollments for a single student
+    # ------------------------------------------------------------------
+    def _copy_enrollments(self, admission_no, old_class, new_class, year_id, term_id):
+        """Copy all subject enrollments from old_class to new_class for a student."""
+        with get_cursor(commit=True) as cur:
+            # Get subjects the student is enrolled in for old_class, year, term
+            cur.execute("""
+                SELECT subject_name
+                FROM enrollments
+                WHERE admission_no = ?
+                  AND class_name = ?
+                  AND academic_year_id = ?
+                  AND term_id = ?
+            """, (admission_no, old_class, year_id, term_id))
+            subjects = [row[0] for row in cur.fetchall()]
+
+            if not subjects:
+                return  # nothing to copy
+
+            # Insert them with the new class (ignore duplicates)
+            for subject in subjects:
+                cur.execute("""
+                    INSERT OR IGNORE INTO enrollments
+                        (admission_no, subject_name, class_name, academic_year_id, term_id)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (admission_no, subject, new_class, year_id, term_id))
+
+    # ------------------------------------------------------------------
+    # Apply promotion
+    # ------------------------------------------------------------------
     def apply_promotion(self):
         source_class = self.class_box.currentText().strip()
         target_class = PROMOTION_MAP.get(source_class)
@@ -231,10 +262,25 @@ class PromotionPage(QWidget):
             show_error(self, "Select at least one student to promote.")
             return
 
+        # Get active term and its academic year
+        active_term = fetch_one("SELECT id, academic_year_id FROM terms WHERE is_active=1 LIMIT 1")
+        if not active_term:
+            show_error(
+                self,
+                "No active term found. Enrollments cannot be copied.\n"
+                "Please set an active term in Academics > Terms and try again.",
+                title="Missing Active Term"
+            )
+            return
+        term_id, year_id = active_term
+
+        # Show warning about enrollment copying
         reply = QMessageBox.question(
             self,
             "Apply Promotion",
-            f"Promote {len(admissions)} student(s) from {source_class} to {target_class}?",
+            f"Promote {len(admissions)} student(s) from {source_class} to {target_class}?\n\n"
+            "Their subject enrollments will be automatically copied to the new class "
+            "for the active term and academic year.",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -256,6 +302,7 @@ class PromotionPage(QWidget):
 
         try:
             with get_cursor(commit=True) as cur:
+                # Update student classes
                 cur.executemany(
                     """
                     UPDATE students
@@ -267,6 +314,11 @@ class PromotionPage(QWidget):
                         for admission_no in admissions
                     ],
                 )
+
+            # Copy enrollments for each promoted student
+            for admission_no in admissions:
+                self._copy_enrollments(admission_no, source_class, target_class, year_id, term_id)
+
         except Exception as error:
             show_error(self, f"Promotion failed:\n{error}")
             return
@@ -274,7 +326,8 @@ class PromotionPage(QWidget):
         EventBus.emit("STUDENTS_UPDATED")
         show_info(
             self,
-            f"Promoted {len(admissions)} student(s).\nBackup: {backup_path}",
+            f"Promoted {len(admissions)} student(s) and copied their enrollments.\n"
+            f"Backup: {backup_path}",
             title="Promotion Complete",
         )
         self.preview()

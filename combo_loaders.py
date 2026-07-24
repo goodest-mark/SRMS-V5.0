@@ -1,8 +1,7 @@
 """Shared combo-box data loaders for academic-context filters.
 
-Many pages (broadsheet, report book, requirements, enrollment, readiness,
-results dashboard, excel import) need identical year/term/exam/class combo
-loading logic.  This module eliminates that duplication.
+All loaders now show ALL years and terms (active and inactive).
+Inactive items are shown with a [ARCHIVED] suffix.
 """
 
 from db_utils import fetch_all
@@ -11,43 +10,34 @@ from system_state import SystemState
 
 
 def load_years(combo):
-    """Populate a year combo box, preserving the current selection."""
+    """Populate a year combo box with all years (active + inactive)."""
     current = combo.currentData()
     combo.blockSignals(True)
     combo.clear()
-    for row in fetch_all(
-        "SELECT id, year_name FROM academic_years ORDER BY year_name DESC"
-    ):
-        combo.addItem(row[1], row[0])
+    for row in fetch_all("SELECT id, year_name, is_active FROM academic_years ORDER BY year_name DESC"):
+        year_id, year_name, is_active = row
+        label = f"{year_name} [ARCHIVED]" if not is_active else year_name
+        combo.addItem(label, year_id)
     _restore_by_data(combo, current)
     combo.blockSignals(False)
 
 
 def load_terms(combo, year_id):
-    """Populate a term combo box for the given *year_id*."""
+    """Populate a term combo box for the given *year_id* (all terms)."""
     current = combo.currentData()
     combo.blockSignals(True)
     combo.clear()
     if year_id:
-        for row in fetch_all(
-            "SELECT id, term_name FROM terms WHERE academic_year_id=? ORDER BY term_name",
-            (year_id,),
-        ):
-            combo.addItem(row[1], row[0])
+        for row in fetch_all("SELECT id, term_name, is_active FROM terms WHERE academic_year_id=? ORDER BY term_name", (year_id,)):
+            term_id, term_name, is_active = row
+            label = f"{term_name} [ARCHIVED]" if not is_active else term_name
+            combo.addItem(label, term_id)
     _restore_by_data(combo, current)
     combo.blockSignals(False)
 
 
 def load_exams(combo, term_id, level=None, *, status_filter=None):
-    """Populate an exam combo box for the given *term_id*.
-
-    Args:
-        combo: QComboBox to populate.
-        term_id: term foreign-key value (may be ``None``).
-        level: education level string; defaults to ``SystemState.get_level()``.
-        status_filter: optional exam status string (e.g. ``'OPEN'``).
-            When ``None`` all statuses are included.
-    """
+    """Populate an exam combo box for the given *term_id*."""
     current = combo.currentData()
     combo.blockSignals(True)
     combo.clear()
@@ -67,12 +57,7 @@ def load_exams(combo, term_id, level=None, *, status_filter=None):
 
 
 def load_classes(combo, *, placeholder=None):
-    """Reload a class combo box, preserving the current selection.
-
-    Args:
-        combo: QComboBox to populate.
-        placeholder: optional first entry (e.g. ``'-- Select Class --'``).
-    """
+    """Reload a class combo box, preserving the current selection."""
     current = combo.currentText()
     combo.blockSignals(True)
     combo.clear()
@@ -84,12 +69,7 @@ def load_classes(combo, *, placeholder=None):
 
 
 def load_open_exams(combo, level=None):
-    """Populate an exam combo box with OPEN exams for the given *level*.
-
-    This variant queries exams directly by level and status without
-    requiring a term_id, matching the pattern used by results_page,
-    results_dashboard, and readiness_page.
-    """
+    """Populate an exam combo box with OPEN exams for the given *level*."""
     current = combo.currentData()
     if level is None:
         level = SystemState.get_level()
@@ -105,11 +85,7 @@ def load_open_exams(combo, level=None):
 
 
 def load_results_exams(combo, level=None):
-    """Populate exams usable in Results Entry.
-
-    OPEN exams are editable. COMPLETED exams are visible for read-only review.
-    CLOSED exams remain hidden because they are inactive drafts/history slots.
-    """
+    """Populate exams usable in Results Entry."""
     current = combo.currentData()
     if level is None:
         level = SystemState.get_level()
@@ -134,13 +110,7 @@ def load_results_exams(combo, level=None):
 
 
 def load_completed_exams(combo, year_id=None, term_id=None, level=None, search_text=""):
-    """Populate an exam combo box with COMPLETED exams for historical review.
-
-    The history view is anchored to the selected academic year. If a term is
-    selected, it is used as the primary filter, but the loader falls back to
-    the full year so completed exams are still visible when the selected term
-    would otherwise hide them.
-    """
+    """Populate an exam combo box with COMPLETED exams for historical review."""
     current = combo.currentData()
     if level is None:
         level = SystemState.get_level()
@@ -198,6 +168,40 @@ def load_all_exams(combo, level=None):
         (level,),
     ):
         combo.addItem(row[1], row[0])
+    _restore_by_data(combo, current)
+    combo.blockSignals(False)
+
+
+def load_all_exams_for_report(combo, year_id=None, term_id=None, level=None, search_text=""):
+    """Load ALL exams (OPEN, CLOSED, COMPLETED) for the Report Book dropdown.
+    Shows status in the label.
+    """
+    current = combo.currentData()
+    if level is None:
+        level = SystemState.get_level()
+    combo.blockSignals(True)
+    combo.clear()
+    query = """
+        SELECT e.id, e.exam_name, e.status
+        FROM exams e
+        JOIN terms t ON e.term_id = t.id
+        WHERE e.level=?
+    """
+    params = [level]
+    if year_id:
+        query += " AND t.academic_year_id=?"
+        params.append(year_id)
+    if term_id:
+        query += " AND term_id=?"
+        params.append(term_id)
+    if search_text:
+        query += " AND e.exam_name LIKE ?"
+        params.append(f"%{search_text}%")
+    query += " ORDER BY e.status, e.exam_name, e.id DESC"
+    rows = fetch_all(query, tuple(params))
+    for exam_id, exam_name, status in rows:
+        label = f"{exam_name} [{status}]"
+        combo.addItem(label, exam_id)
     _restore_by_data(combo, current)
     combo.blockSignals(False)
 
