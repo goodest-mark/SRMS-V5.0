@@ -89,7 +89,7 @@ class _ImagePicker(QWidget):
         self.preview.setText("No Image")
 
 
-class _SignatureSlot(QWidget):
+class _SignaturePicker(QWidget):
     def __init__(self, title, button_text):
         super().__init__()
         self.enabled = False
@@ -150,7 +150,7 @@ class StaffPage(QWidget):
         self.class_master = QLineEdit()
         self.class_master.setPlaceholderText("Optional. Leave blank if class masters vary by class.")
 
-        layout.addRow("Head Teacher / Head Mistress", self.head_teacher)
+        layout.addRow("Head Master / Mistress", self.head_teacher)   # Changed label
         layout.addRow("Academic Master / Mistress", self.academic_master)
         layout.addRow("Discipline Master / Mistress", self.discipline_master)
         layout.addRow("Class Master / Mistress", self.class_master)
@@ -182,23 +182,21 @@ class SignaturesPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
 
-        self.head = _SignatureSlot("Select Head Teacher Signature", "Upload Signature")
+        # Only head master signature with checkbox
+        self.head_sig = _SignaturePicker("Select Head Master Signature", "Upload Signature")  # Changed label
 
-        for title, widget in [
-            ("Head Teacher / Head Mistress", self.head),
-        ]:
-            row = QFrame()
-            row_layout = QVBoxLayout(row)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-            row_layout.setSpacing(6)
-            label = QLabel(title)
-            label.setProperty("variant", "accent")
-            row_layout.addWidget(label)
-            row_layout.addWidget(widget)
-            layout.addWidget(row)
+        row = QFrame()
+        row_layout = QVBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(6)
+        label = QLabel("Head Master / Mistress Signature")  # Changed label
+        label.setProperty("variant", "accent")
+        row_layout.addWidget(label)
+        row_layout.addWidget(self.head_sig)
+        layout.addWidget(row)
 
         note_label = QLabel(
-            "Academic Master, Discipline Master, and Class Master signatures are handled physically on paper."
+            "Upload a digital signature for the Head Master. Use the checkbox to enable/disable it."
         )
         note_label.setWordWrap(True)
         note_label.setProperty("variant", "muted")
@@ -399,9 +397,9 @@ class InitialSetupWizard(QWidget):
                         self.staff_page.class_master.text().strip(),
                         self.branding_page.logo_picker.path,
                         self.branding_page.stamp_picker.path,
-                        self.signatures_page.head.picker.path if self.signatures_page.head.enabled else "",
+                        self.signatures_page.head_sig.picker.path if self.signatures_page.head_sig.enabled else "",
                         "CONFIDENTIAL",
-                        1 if self.signatures_page.head.enabled else 0,
+                        1 if self.signatures_page.head_sig.enabled else 0,
                     ),
                 )
 

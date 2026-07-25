@@ -13,9 +13,10 @@ from theme import apply_theme, normalize_theme_name
 
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller."""
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
+    if getattr(sys, 'frozen', False):
+        # When bundled, use the directory of the executable
+        base_path = os.path.dirname(sys.executable)
+    else:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
@@ -23,7 +24,7 @@ def resource_path(relative_path):
 def start_app():
     # Use resource_path to locate the database in both dev and bundled modes
     db_path = resource_path("database.db")
-    init_db(db_path)  # Make sure init_db() accepts a db_path argument (see note below)
+    init_db(db_path)  # init_db now accepts a path
 
     app = QApplication(sys.argv)
     app_icon_path = icon_path("icon.ico")
