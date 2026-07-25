@@ -26,7 +26,7 @@ jobs:
           pyinstaller --onefile --windowed --name "SRMS" --add-data "ui;ui" --add-data "database.db;." app.py
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4        # <-- updated to v4
         with:
           name: SRMS-Windows
           path: dist/SRMS.exe
