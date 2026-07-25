@@ -10,11 +10,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
-        # v6 runs on Node.js 24[reference:0]
 
       - name: Set up Python
         uses: actions/setup-python@v6
-        # v6 runs on Node.js 24[reference:1]
+        with:
+          python-version: '3.10'          # <-- THIS MUST BE PRESENT
 
       - name: Install dependencies
         run: |
