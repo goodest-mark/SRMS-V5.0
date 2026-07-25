@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -23,10 +23,10 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --name "SRMS" --add-data "ui;ui" --add-data "database.db;." app.py
+          pyinstaller --onefile --windowed --name "SRMS" --add-data "ui;ui" app.py
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SRMS-Windows
           path: dist/SRMS.exe
