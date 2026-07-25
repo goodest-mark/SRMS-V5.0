@@ -6,6 +6,7 @@ import secrets
 from app_paths import DATABASE_FILE
 from academic_rules import default_subject_type, validate_subject_type
 
+# Default database path (can be overridden by init_db)
 DB_NAME = str(DATABASE_FILE)
 
 # Whitelist pattern for identifiers used in migrations
@@ -27,8 +28,17 @@ def _validate_definition(defn):
     return defn
 
 
-def connect():
-    conn = sqlite3.connect(DB_NAME)
+def connect(db_path=None):
+    """
+    Establish a database connection.
+    If db_path is provided, use it; otherwise use the global DB_NAME.
+    """
+    if db_path is not None:
+        path = db_path
+    else:
+        path = DB_NAME
+
+    conn = sqlite3.connect(path)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
@@ -36,8 +46,18 @@ def connect():
     return conn
 
 
-def init_db():
-    conn = connect()
+def init_db(db_path=None):
+    """
+    Initialize the database.
+    If db_path is provided, the global DB_NAME is updated so all future
+    connections use this path (important for bundled executables).
+    """
+    global DB_NAME
+
+    if db_path is not None:
+        DB_NAME = db_path
+
+    conn = connect()  # will use the updated DB_NAME
     cur = conn.cursor()
     try:
         _init_db_inner(conn, cur)
@@ -50,7 +70,6 @@ def init_db():
 
 
 def _init_db_inner(conn, cur):
-
     # =========================
     # STUDENTS
     # =========================
@@ -67,12 +86,10 @@ def _init_db_inner(conn, cur):
         comments TEXT
     )
     """)
-    
-        # =========================
-        # # =========================
+
+    # =========================
     # TEACHERS
     # =========================
-    
     cur.execute("""
     CREATE TABLE IF NOT EXISTS teachers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,48 +102,32 @@ def _init_db_inner(conn, cur):
         level TEXT
     )
     """)
-    
+
     # =========================
     # TEACHER SUBJECTS
     # =========================
-    
     cur.execute("""
     CREATE TABLE IF NOT EXISTS teacher_subjects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         teacher_id INTEGER,
         subject_name TEXT,
-    
-        UNIQUE(
-            teacher_id,
-            subject_name
-        ),
-    
-        FOREIGN KEY(teacher_id)
-        REFERENCES teachers(id)
-        ON DELETE CASCADE
+        UNIQUE(teacher_id, subject_name),
+        FOREIGN KEY(teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
     )
     """)
-    
+
     # =========================
     # TEACHER CLASSES
     # =========================
-    
     cur.execute("""
     CREATE TABLE IF NOT EXISTS teacher_classes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    teacher_id INTEGER,
-    class_name TEXT,
-
-    UNIQUE(
-        teacher_id,
-        class_name
-    ),
-
-    FOREIGN KEY(teacher_id)
-    REFERENCES teachers(id)
-    ON DELETE CASCADE
-)
-""")
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        teacher_id INTEGER,
+        class_name TEXT,
+        UNIQUE(teacher_id, class_name),
+        FOREIGN KEY(teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+    )
+    """)
 
     # =========================
     # EXAM REMARKS (Manual Comments)
@@ -170,13 +171,7 @@ def _init_db_inner(conn, cur):
         class_name TEXT,
         academic_year_id INTEGER,
         term_id INTEGER,
-        UNIQUE(
-            admission_no,
-            subject_name,
-            class_name,
-            academic_year_id,
-            term_id
-        ),
+        UNIQUE(admission_no, subject_name, class_name, academic_year_id, term_id),
         FOREIGN KEY (admission_no) REFERENCES students(admission_no) ON DELETE CASCADE,
         FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE,
         FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE CASCADE
@@ -201,8 +196,6 @@ def _init_db_inner(conn, cur):
     )
     """)
 
-  
-
     # =========================
     # ACADEMIC YEARS
     # =========================
@@ -223,10 +216,7 @@ def _init_db_inner(conn, cur):
         term_name TEXT,
         academic_year_id INTEGER,
         is_active INTEGER DEFAULT 0,
-
-        FOREIGN KEY (academic_year_id)
-        REFERENCES academic_years(id)
-        ON DELETE CASCADE
+        FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE
     )
     """)
 
@@ -243,10 +233,7 @@ def _init_db_inner(conn, cur):
         opening_date TEXT,
         closing_date TEXT,
         status TEXT DEFAULT 'OPEN',
-
-        FOREIGN KEY (term_id)
-        REFERENCES terms(id)
-        ON DELETE CASCADE
+        FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE CASCADE
     )
     """)
 
@@ -262,14 +249,8 @@ def _init_db_inner(conn, cur):
         exam_id INTEGER,
         class_name TEXT,
         UNIQUE(admission_no, subject_name, exam_id),
-
-        FOREIGN KEY (admission_no)
-        REFERENCES students(admission_no)
-        ON DELETE CASCADE,
-
-        FOREIGN KEY (exam_id)
-        REFERENCES exams(id)
-        ON DELETE CASCADE
+        FOREIGN KEY (admission_no) REFERENCES students(admission_no) ON DELETE CASCADE,
+        FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
     )
     """)
 
@@ -286,6 +267,7 @@ def _init_db_inner(conn, cur):
         UNIQUE(level, division)
     )
     """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS grade_rules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -298,6 +280,7 @@ def _init_db_inner(conn, cur):
         UNIQUE(level, grade)
     )
     """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS subject_requirements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -311,12 +294,8 @@ def _init_db_inner(conn, cur):
     cur.execute("SELECT COUNT(*) FROM subject_requirements")
     if cur.fetchone()[0] == 0:
         cur.executemany("""
-            INSERT INTO subject_requirements (
-                level,
-                required_subjects,
-                best_of,
-                compulsory_passes
-            ) VALUES (?, ?, ?, ?)
+            INSERT INTO subject_requirements (level, required_subjects, best_of, compulsory_passes)
+            VALUES (?, ?, ?, ?)
         """, [
             ("O_LEVEL", 7, 7, 0),
             ("A_LEVEL", 3, 3, 0),
@@ -327,29 +306,24 @@ def _init_db_inner(conn, cur):
     # =========================
     # DEFAULT DATA
     # =========================
-
     cur.execute("SELECT COUNT(*) FROM academic_years")
     if cur.fetchone()[0] == 0:
-
         cur.execute("""
         INSERT INTO academic_years(year_name, is_active)
         VALUES ('2026', 1)
         """)
-
         year_id = cur.lastrowid
 
         cur.execute("""
         INSERT INTO terms(term_name, academic_year_id, is_active)
         VALUES ('Term I', ?, 1)
         """, (year_id,))
-
         term1 = cur.lastrowid
 
         cur.execute("""
         INSERT INTO terms(term_name, academic_year_id, is_active)
         VALUES ('Term II', ?, 0)
         """, (year_id,))
-
         term2 = cur.lastrowid
 
     # Default Division Rules (Tanzania Standard Example)
@@ -369,43 +343,31 @@ def _init_db_inner(conn, cur):
             ("A_LEVEL", "IV", 18, 19),
             ("A_LEVEL", "0", 20, 21)
         ]
+        cur.executemany("""
+            INSERT INTO division_rules (level, division, min_points, max_points)
+            VALUES (?, ?, ?, ?)
+        """, rules)
 
-        cur.execute("SELECT COUNT(*) FROM grade_rules")
-
-        if cur.fetchone()[0] == 0:
-
-            grades = [
-        
-                ("O_LEVEL","A",75,100,1,1),
-                ("O_LEVEL","B",65,74,2,2),
-                ("O_LEVEL","C",45,64,3,3),
-                ("O_LEVEL","D",30,44,4,4),
-                ("O_LEVEL","F",0,29,5,5),
-        
-                ("A_LEVEL","A",80,100,1,1),
-                ("A_LEVEL","B",70,79,2,2),
-                ("A_LEVEL","C",60,69,3,3),
-                ("A_LEVEL","D",50,59,4,4),
-                ("A_LEVEL","E",40,49,5,5),
-                ("A_LEVEL","S",35,39,6,6),
-                ("A_LEVEL","F",0,34,7,7),
-        
-            ]
-        
-            cur.executemany("""
-        
-                INSERT INTO grade_rules
-        
-                (level,grade,min_mark,max_mark,points,sort_order)
-        
-                VALUES(?,?,?,?,?,?)
-        
+    cur.execute("SELECT COUNT(*) FROM grade_rules")
+    if cur.fetchone()[0] == 0:
+        grades = [
+            ("O_LEVEL","A",75,100,1,1),
+            ("O_LEVEL","B",65,74,2,2),
+            ("O_LEVEL","C",45,64,3,3),
+            ("O_LEVEL","D",30,44,4,4),
+            ("O_LEVEL","F",0,29,5,5),
+            ("A_LEVEL","A",80,100,1,1),
+            ("A_LEVEL","B",70,79,2,2),
+            ("A_LEVEL","C",60,69,3,3),
+            ("A_LEVEL","D",50,59,4,4),
+            ("A_LEVEL","E",40,49,5,5),
+            ("A_LEVEL","S",35,39,6,6),
+            ("A_LEVEL","F",0,34,7,7),
+        ]
+        cur.executemany("""
+            INSERT INTO grade_rules (level, grade, min_mark, max_mark, points, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, grades)
-        
-            cur.executemany("""
-                    INSERT INTO division_rules (level, division, min_points, max_points)
-                    VALUES (?, ?, ?, ?)
-        """,rules)
 
     # =========================
     # SYSTEM SETTINGS
@@ -456,7 +418,7 @@ def _init_db_inner(conn, cur):
     print("[DATABASE] Running School Profile migration check...")
     cur.execute("PRAGMA table_info(school_profile)")
     columns = [row[1] for row in cur.fetchall()]
-    
+
     v5_columns = [
         ('school_motto', 'TEXT'), ('school_address', 'TEXT'), ('school_phone', 'TEXT'),
         ('school_email', 'TEXT'), ('school_website', 'TEXT'), ('head_teacher', 'TEXT'),
@@ -478,7 +440,7 @@ def _init_db_inner(conn, cur):
         'email': 'school_email', 'headmaster': 'head_teacher'
     }
 
-    # 1. Ensure all new columns exist (validate identifiers to prevent SQL injection)
+    # 1. Ensure all new columns exist
     for col, definition in v5_columns:
         if col not in columns:
             _validate_identifier(col)
@@ -486,7 +448,7 @@ def _init_db_inner(conn, cur):
             print(f"[MIGRATION] Adding missing column: {col}")
             cur.execute(f"ALTER TABLE school_profile ADD COLUMN {col} {definition}")
 
-    # 2. Map legacy data if legacy columns exist (validate identifiers)
+    # 2. Map legacy data if legacy columns exist
     for old_col, new_col in legacy_map.items():
         if old_col in columns:
             _validate_identifier(old_col)
@@ -494,7 +456,6 @@ def _init_db_inner(conn, cur):
             print(f"[MIGRATION] Moving legacy data: {old_col} -> {new_col}")
             cur.execute(f"UPDATE school_profile SET {new_col} = {old_col} WHERE {new_col} IS NULL OR {new_col} = ''")
 
-    
     # =========================
     # SUBJECTS MIGRATION
     # =========================
@@ -503,10 +464,7 @@ def _init_db_inner(conn, cur):
 
     if "subject_short_name" not in subject_columns:
         print("[MIGRATION] Adding subject_short_name...")
-        cur.execute("""
-            ALTER TABLE subjects
-            ADD COLUMN subject_short_name TEXT
-        """)
+        cur.execute("ALTER TABLE subjects ADD COLUMN subject_short_name TEXT")
 
     cur.execute("SELECT id, level, subject_type FROM subjects")
     for subject_id, level, subject_type in cur.fetchall():
@@ -518,7 +476,6 @@ def _init_db_inner(conn, cur):
                     "UPDATE subjects SET subject_type=? WHERE id=?",
                     (normalized, subject_id),
                 )
-
 
     print("[DATABASE] School profile migration check complete.")
 
@@ -697,10 +654,10 @@ def _init_db_inner(conn, cur):
             ('backup_folder', './backups'),
             ('auto_backup', '0'),
             ('setup_complete', '0'),
-            ('schema_version', '2')  # Version 2 = migrated schema with new column names
+            ('schema_version', '2')
         ]
         cur.executemany("INSERT INTO system_settings VALUES (?, ?)", defaults)
-    
+
     # Ensure schema_version is set for existing databases
     cur.execute("SELECT COUNT(*) FROM system_settings WHERE setting_key='schema_version'")
     if cur.fetchone()[0] == 0:
