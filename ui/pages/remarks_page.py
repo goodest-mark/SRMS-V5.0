@@ -277,10 +277,18 @@ class RemarksPage(QWidget):
             QMessageBox.warning(self, "Missing Context", "No exam selected.")
             return
 
-        if self.table.rowCount() == 1 and self.table.item(0, 0).text() in [
+        # If no rows or only placeholder, skip
+        if self.table.rowCount() == 0:
+            QMessageBox.information(self, "Info", "No data to save.")
+            return
+
+        # Check if the first row is a placeholder
+        first_item = self.table.item(0, 0)
+        if first_item and first_item.text() in [
             "Select a valid exam and class.",
             "Loading remarks...",
-            "No students found for this exam and class."
+            "No students found for this exam and class.",
+            "Error:"
         ]:
             QMessageBox.information(self, "Info", "No data to save.")
             return
@@ -288,11 +296,24 @@ class RemarksPage(QWidget):
         try:
             with get_cursor(commit=True) as cur:
                 for i in range(self.table.rowCount()):
-                    adm = self.table.item(i, 0).text()
-                    t_rem = self.table.item(i, 2).text().strip()
-                    h_rem = self.table.item(i, 3).text().strip()
-                    a_rem = self.table.item(i, 4).text().strip()
-                    d_rem = self.table.item(i, 5).text().strip()
+                    # Get admission number item – if None, skip this row
+                    adm_item = self.table.item(i, 0)
+                    if adm_item is None:
+                        continue
+                    adm = adm_item.text().strip()
+                    if not adm:
+                        continue  # empty admission number, skip
+
+                    # Get remark items safely
+                    t_rem_item = self.table.item(i, 2)
+                    h_rem_item = self.table.item(i, 3)
+                    a_rem_item = self.table.item(i, 4)
+                    d_rem_item = self.table.item(i, 5)
+
+                    t_rem = t_rem_item.text().strip() if t_rem_item else ""
+                    h_rem = h_rem_item.text().strip() if h_rem_item else ""
+                    a_rem = a_rem_item.text().strip() if a_rem_item else ""
+                    d_rem = d_rem_item.text().strip() if d_rem_item else ""
 
                     cur.execute("""
                         INSERT INTO exam_remarks (admission_no, exam_id, teacher_remarks, headteacher_remarks, academic_master_remarks, discipline_master_remarks)

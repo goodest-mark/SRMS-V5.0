@@ -150,7 +150,7 @@ class StaffPage(QWidget):
         self.class_master = QLineEdit()
         self.class_master.setPlaceholderText("Optional. Leave blank if class masters vary by class.")
 
-        layout.addRow("Head Master / Mistress", self.head_teacher)   # Changed label
+        layout.addRow("Head Master / Mistress", self.head_teacher)
         layout.addRow("Academic Master / Mistress", self.academic_master)
         layout.addRow("Discipline Master / Mistress", self.discipline_master)
         layout.addRow("Class Master / Mistress", self.class_master)
@@ -183,13 +183,13 @@ class SignaturesPage(QWidget):
         layout.setSpacing(14)
 
         # Only head master signature with checkbox
-        self.head_sig = _SignaturePicker("Select Head Master Signature", "Upload Signature")  # Changed label
+        self.head_sig = _SignaturePicker("Select Head Master Signature", "Upload Signature")
 
         row = QFrame()
         row_layout = QVBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.setSpacing(6)
-        label = QLabel("Head Master / Mistress Signature")  # Changed label
+        label = QLabel("Head Master / Mistress Signature")
         label.setProperty("variant", "accent")
         row_layout.addWidget(label)
         row_layout.addWidget(self.head_sig)
