@@ -22,9 +22,13 @@ def test_broadsheet_page_preserves_historical_class_subjects(tmp_db):
     conn = sqlite3.connect(tmp_db)
     cur = conn.cursor()
 
-    # Basic exam context
-    cur.execute("SELECT id FROM exams WHERE level='O_LEVEL' AND status='OPEN' LIMIT 1")
-    exam_id = cur.fetchone()[0]
+    # Explicit exam context for this isolated scenario.
+    term_id = cur.execute("SELECT id FROM terms WHERE is_active=1 LIMIT 1").fetchone()[0]
+    cur.execute(
+        "INSERT INTO exams (exam_name, term_id, level, status) VALUES (?, ?, ?, ?)",
+        ("Broadsheet Test", term_id, "O_LEVEL", "OPEN"),
+    )
+    exam_id = cur.lastrowid
 
     # Create subjects
     cur.execute(
@@ -58,9 +62,13 @@ def test_broadsheet_page_preserves_historical_class_subjects(tmp_db):
 
     app = QApplication.instance() or QApplication([])
     page = BroadsheetPage()
-    page.set_history_context(exam_id, "Form I", level="O_LEVEL")
-
-    data = page.get_broadsheet_data()
+    data = page._service.fetch_data(
+        exam_id=exam_id,
+        class_name="Form I",
+        year_id=year_id,
+        term_id=year_term,
+        level="O_LEVEL",
+    ).to_dict()
     assert data is not None
     assert data['rows']
     assert "Mathematics" in data['subjects']

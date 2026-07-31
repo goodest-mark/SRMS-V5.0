@@ -43,20 +43,15 @@ TECHNOLOGY STACK
   Pandas – Data manipulation and Excel export
   OpenPyXL – Excel file generation
   ReportLab – PDF generation
-  Flask – (Optional) For potential web extensions
 
 
 REQUIREMENTS
 ===============================================================================
 
   PySide6
-  Flask>=3.0.0
-  flask-cors
-  python-dotenv
   pandas>=2.2.0
   openpyxl
   reportlab
-  gunicorn
   pytest
   pypdf
 
@@ -83,17 +78,11 @@ INSTALLATION & SETUP
 BUILDING A STANDALONE EXECUTABLE
 ===============================================================================
 
-Windows (.exe):
-   pip install pyinstaller
-   pyinstaller --onefile --windowed --name "SRMS" --add-data "ui;ui" --add-data "database.db;." app.py
-   The executable will be in dist/SRMS.exe
-
-Linux:
-   pip install pyinstaller
-   pyinstaller --onefile --windowed --name "SRMS" --add-data "ui:ui" --add-data "database.db:." app.py
-
-Note: If you use custom resources (images, icons), add them with --add-data and handle
-paths using the resource_path helper in your code.
+Windows release packaging is intentionally kept separate from school data. The
+installed app stores its SQLite database under the current user's application
+data folder, while a source checkout uses `srms.db` in the repository. Do not
+ship a live school database, backups, virtual environments, or development
+files to users.
 
 
 PROJECT STRUCTURE
@@ -111,10 +100,9 @@ SRMS-V5.0/
 │   ├── main_window.py
 │   ├── cards.py
 │   └── ...
-├── database.db                # SQLite database
+├── srms.db                    # Local development/sample SQLite database
 ├── requirements.txt
-├── README.md
-└── LICENSE
+└── README.txt
 
 
 TESTING
@@ -137,7 +125,7 @@ CONTRIBUTING
 LICENSE
 ===============================================================================
 
-This project is licensed under the MIT License – see the LICENSE file for details.
+Add a project license before publishing or distributing the application.
 
 
 DEVELOPER

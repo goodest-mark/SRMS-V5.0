@@ -1,3 +1,4 @@
+import database
 from database import connect
 from grade_utils import get_grade, get_points
 from grading_config import get_required_subjects, get_best_of
@@ -18,7 +19,9 @@ def compute_student_scores(level, exam_id=None, class_name=None):
     Results are cached for 60 seconds to reduce repeated DB queries.
     """
     # Build cache key
-    cache_key = (level, exam_id, class_name)
+    # Include the active database.  Tests, backup restores, and database
+    # switches must not reuse rankings calculated for another SQLite file.
+    cache_key = (database.DB_NAME, level, exam_id, class_name)
     cached = ranking_cache.get(cache_key)
     if cached is not None:
         return cached

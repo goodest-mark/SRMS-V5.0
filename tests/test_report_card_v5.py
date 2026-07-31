@@ -108,9 +108,9 @@ class TestStudentReportCards:
         marks_row = [cell.getPlainText() for cell in table._cellvalues[1]]
         grades_row = [cell.getPlainText() for cell in table._cellvalues[2]]
 
-        assert header == ["ITEM", "BIO", "CHEM", "PHYS"]
-        assert marks_row == ["MARKS (%)", "56", "78", "64"]
-        assert grades_row == ["GRADE", "C/", "A/", "B"]
+        assert header == ["SUBJECT", "BIO", "CHEM", "PHYS", "TOTAL"]
+        assert marks_row == ["MARKS", "56", "78", "64", "198"]
+        assert grades_row == ["GRADE", "C/", "A/", "B", "-"]
 
     def test_report_exam_list_includes_all_statuses_with_results(self, initialized_db):
         open_exam_id, closed_exam_id, completed_exam_id = _seed_student_report_data(

@@ -11,7 +11,9 @@ DB_NAME = str(DATABASE_FILE)
 
 # Whitelist pattern for identifiers used in migrations
 _SAFE_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-_SAFE_DEFINITION = re.compile(r'^[a-zA-Z0-9_ "\(\)]+$')
+_SAFE_DEFINITION = re.compile(
+    r"^(?:TEXT|INTEGER)(?: DEFAULT (?:0|1|CURRENT_TIMESTAMP|\"[A-Za-z0-9 _-]*\"|'[A-Za-z0-9 _-]*'))?$"
+)
 
 
 def _validate_identifier(name):
@@ -278,6 +280,13 @@ def _init_db_inner(conn, cur):
     )
     """)
 
+    # Repair legacy subject types to the valid type for their education level.
+    cur.execute("SELECT id, level, subject_type FROM subjects")
+    for subject_id, level, subject_type in cur.fetchall():
+        normalized = default_subject_type(level) if not validate_subject_type(level, subject_type) else subject_type
+        if normalized != subject_type:
+            cur.execute("UPDATE subjects SET subject_type=? WHERE id=?", (normalized, subject_id))
+
     cur.execute("SELECT COUNT(*) FROM subject_requirements")
     if cur.fetchone()[0] == 0:
         cur.executemany("""
@@ -336,7 +345,7 @@ def _init_db_inner(conn, cur):
     """)
 
     # =========================
-    # SCHOOL PROFILE (Only Head Teacher signature)
+    # SCHOOL PROFILE
     # =========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS school_profile (
@@ -354,11 +363,17 @@ def _init_db_inner(conn, cur):
         school_logo TEXT,
         school_stamp TEXT,
         head_teacher_signature TEXT,
+        academic_master_signature TEXT,
+        discipline_master_signature TEXT,
+        class_master_signature TEXT,
         login_background TEXT,
         dashboard_background TEXT,
         watermark_text TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        head_teacher_signature_enabled INTEGER DEFAULT 0
+        head_teacher_signature_enabled INTEGER DEFAULT 0,
+        academic_master_signature_enabled INTEGER DEFAULT 0,
+        discipline_master_signature_enabled INTEGER DEFAULT 0,
+        class_master_signature_enabled INTEGER DEFAULT 0
     )
     """)
 
@@ -369,17 +384,24 @@ def _init_db_inner(conn, cur):
     cur.execute("PRAGMA table_info(school_profile)")
     columns = [row[1] for row in cur.fetchall()]
 
-    # Only these columns are needed now
+    # Keep this list aligned with report_card_v5's profile query.  New
+    # installations and upgraded databases must have the same report schema.
     needed_columns = [
         ('school_motto', 'TEXT'), ('school_address', 'TEXT'), ('school_phone', 'TEXT'),
         ('school_email', 'TEXT'), ('school_website', 'TEXT'), ('head_teacher', 'TEXT'),
         ('academic_master', 'TEXT'), ('discipline_master', 'TEXT'), ('class_master', 'TEXT'),
         ('school_logo', 'TEXT'), ('school_stamp', 'TEXT'),
         ('head_teacher_signature', 'TEXT'),
+        ('academic_master_signature', 'TEXT'),
+        ('discipline_master_signature', 'TEXT'),
+        ('class_master_signature', 'TEXT'),
         ('login_background', 'TEXT'), ('dashboard_background', 'TEXT'),
         ('watermark_text', 'TEXT DEFAULT "CONFIDENTIAL"'),
         ('created_at', 'TEXT DEFAULT CURRENT_TIMESTAMP'),
-        ('head_teacher_signature_enabled', 'INTEGER DEFAULT 0')
+        ('head_teacher_signature_enabled', 'INTEGER DEFAULT 0'),
+        ('academic_master_signature_enabled', 'INTEGER DEFAULT 0'),
+        ('discipline_master_signature_enabled', 'INTEGER DEFAULT 0'),
+        ('class_master_signature_enabled', 'INTEGER DEFAULT 0'),
     ]
 
     legacy_map = {
@@ -516,13 +538,15 @@ def _init_db_inner(conn, cur):
             ('show_requirements', '1'), ('auto_promotion', '0'),
             ('confirm_promotion', '1'), ('theme', 'Blue'),
             ('default_level', 'O_LEVEL'), ('backup_folder', './backups'),
-            ('auto_backup', '0'), ('setup_complete', '0'), ('schema_version', '2')
+            ('auto_backup', '0'), ('setup_complete', '0'), ('schema_version', '3')
         ]
         cur.executemany("INSERT INTO system_settings VALUES (?, ?)", defaults)
 
     cur.execute("SELECT COUNT(*) FROM system_settings WHERE setting_key='schema_version'")
     if cur.fetchone()[0] == 0:
-        cur.execute("INSERT INTO system_settings (setting_key, setting_value) VALUES ('schema_version', '2')")
+        cur.execute("INSERT INTO system_settings (setting_key, setting_value) VALUES ('schema_version', '3')")
+    else:
+        cur.execute("UPDATE system_settings SET setting_value='3' WHERE setting_key='schema_version'")
 
     cur.execute("SELECT COUNT(*) FROM system_settings WHERE setting_key='setup_complete'")
     if cur.fetchone()[0] == 0:

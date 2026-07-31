@@ -195,7 +195,7 @@ def to_excel(parent, data):
 
         subjects = data['subjects']
         subject_headers = data.get('subject_headers', [get_subject_short_name(s) for s in subjects])
-        headers = ["Pos", "Adm No", "Name", "Sex"] + subject_headers + ["Tot", "Avg", "Pts", "Div"]
+        headers = ["Position", "Admission No", "Student Name", "Gender"] + subject_headers + ["Total", "Average", "Points", "Division"]
 
         ws.append([])
         ws.append(headers)
@@ -210,7 +210,7 @@ def to_excel(parent, data):
             gender_display = _format_gender(r['Gender'])
             row_vals = [r['Position'], r['Admission No'], r['Student Name'], gender_display]
             for s in subjects:
-                row_vals.append(r['marks'][s])
+                row_vals.append(r['marks'].get(s, "-"))
             row_vals += [r['Total'], r['Average'], r['Points'], r['Division']]
             ws.append(row_vals)
             percent = 10 + int((row_index / max(len(rows_data), 1)) * 70)

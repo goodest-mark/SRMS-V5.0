@@ -1,5 +1,4 @@
 import sys
-import os
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -11,20 +10,9 @@ from settings_page import get_setting
 from theme import apply_theme, normalize_theme_name
 
 
-def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller."""
-    if getattr(sys, 'frozen', False):
-        # When bundled, use the directory of the executable
-        base_path = os.path.dirname(sys.executable)
-    else:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
-
-
 def start_app():
-    # Use resource_path to locate the database in both dev and bundled modes
-    db_path = resource_path("database.db")
-    init_db(db_path)  # init_db now accepts a path
+    # ``init_db`` uses the single writable database location from app_paths.
+    init_db()
 
     app = QApplication(sys.argv)
     app_icon_path = icon_path("icon.ico")

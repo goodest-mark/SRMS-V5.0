@@ -284,6 +284,7 @@ class BroadsheetWorker(QObject):
 class BroadsheetPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.history_level = None
         self.context = None
         self.data: Optional[BroadsheetData] = None
         self._service = BroadsheetService(
@@ -458,6 +459,7 @@ class BroadsheetPage(QWidget):
 
     # ─── Context setters ─────────────────────────────────────────────
     def set_history_context(self, exam_id, class_name, level=None):
+        self.history_level = level
         if not exam_id or not class_name:
             self.footer.setText("Invalid context.")
             return
@@ -483,6 +485,7 @@ class BroadsheetPage(QWidget):
         self._load_data()
 
     def clear_history_context(self):
+        self.history_level = None
         self.context = None
         self.context_label.setText("No context set.")
         self.data = None
@@ -535,6 +538,10 @@ class BroadsheetPage(QWidget):
         self._thread.started.connect(self._worker.run)
         self._worker.data_ready.connect(self._on_data_ready)
         self._worker.error.connect(self._on_error)
+        # The worker performs one fetch. Always stop its thread afterwards so
+        # page changes or application shutdown cannot destroy a live QThread.
+        self._worker.data_ready.connect(self._thread.quit)
+        self._worker.error.connect(self._thread.quit)
         self._worker.data_ready.connect(self._worker.deleteLater)
         self._worker.error.connect(self._worker.deleteLater)
         self._thread.finished.connect(self._thread.deleteLater)

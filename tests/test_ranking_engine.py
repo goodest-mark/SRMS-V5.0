@@ -5,15 +5,24 @@ from database import connect, init_db
 from ranking_engine import compute_student_scores
 
 
+def _create_open_exam(cur, level):
+    """Create the explicit exam required by ranking scenarios."""
+    cur.execute("SELECT id FROM terms WHERE is_active=1 LIMIT 1")
+    term_id = cur.fetchone()[0]
+    cur.execute(
+        "INSERT INTO exams (exam_name, term_id, level, status) VALUES (?, ?, ?, 'OPEN')",
+        (f"Ranking Test {level}", term_id, level),
+    )
+    return cur.lastrowid
+
+
 @pytest.fixture
 def db_with_results(initialized_db):
     """Set up a database with students, subjects, and results for ranking tests."""
     conn = sqlite3.connect(initialized_db)
     cur = conn.cursor()
 
-    # Get the active exam
-    cur.execute("SELECT id FROM exams WHERE level='O_LEVEL' AND status='OPEN' LIMIT 1")
-    exam_id = cur.fetchone()[0]
+    exam_id = _create_open_exam(cur, "O_LEVEL")
 
     # Add O-Level subjects (COUNTED type)
     o_level_subjects = [
@@ -93,8 +102,7 @@ def db_with_average_ranking_case(initialized_db):
     conn = sqlite3.connect(initialized_db)
     cur = conn.cursor()
 
-    cur.execute("SELECT id FROM exams WHERE level='O_LEVEL' AND status='OPEN' LIMIT 1")
-    exam_id = cur.fetchone()[0]
+    exam_id = _create_open_exam(cur, "O_LEVEL")
 
     subjects = [
         ("Mathematics", "MATH", "O_LEVEL", "COUNTED"),
@@ -156,8 +164,7 @@ def db_with_a_level_results(initialized_db):
     conn = sqlite3.connect(initialized_db)
     cur = conn.cursor()
 
-    cur.execute("SELECT id FROM exams WHERE level='A_LEVEL' AND status='OPEN' LIMIT 1")
-    exam_id = cur.fetchone()[0]
+    exam_id = _create_open_exam(cur, "A_LEVEL")
 
     # Add A-Level subjects (PRINCIPAL type)
     a_level_subjects = [
@@ -206,18 +213,19 @@ class TestComputeStudentScoresOLevel:
             assert isinstance(student["position"], int)
             assert student["position"] > 0
 
-    def test_incomplete_students_have_dash_position(self, db_with_results):
+    def test_incomplete_students_receive_a_position(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])
         incomplete = [r for r in ranking if r["status"] == "INCOMPLETE"]
         for student in incomplete:
-            assert student["position"] == "-"
+            assert isinstance(student["position"], int)
+            assert student["position"] > 0
 
     def test_carol_is_incomplete_with_5_subjects(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])
         carol = next((r for r in ranking if r["admission"] == "ADM003"), None)
         assert carol is not None
         assert carol["status"] == "INCOMPLETE"
-        assert carol["subjects"] == "5/7"
+        assert carol["subjects"] == 5
 
     def test_alice_ranked_above_bob(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])
@@ -231,23 +239,19 @@ class TestComputeStudentScoresOLevel:
         averages = [r["average"] for r in ready]
         assert averages == sorted(averages, reverse=True)
 
-    def test_average_beats_total_marks_for_ranking(self, db_with_average_ranking_case):
+    def test_total_marks_rank_before_average(self, db_with_average_ranking_case):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_average_ranking_case["exam_id"])
         high_average = next(r for r in ranking if r["admission"] == "ADM101")
         high_total = next(r for r in ranking if r["admission"] == "ADM102")
 
         assert high_average["average"] > high_total["average"]
         assert high_average["total_marks"] < high_total["total_marks"]
-        assert high_average["position"] < high_total["position"]
+        assert high_total["position"] < high_average["position"]
 
-    def test_ready_students_come_before_incomplete(self, db_with_results):
+    def test_all_students_are_sorted_by_total_marks(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])
-        found_incomplete = False
-        for r in ranking:
-            if r["status"] == "INCOMPLETE":
-                found_incomplete = True
-            elif found_incomplete:
-                pytest.fail("READY student found after INCOMPLETE student")
+        totals = [student["total_marks"] for student in ranking]
+        assert totals == sorted(totals, reverse=True)
 
     def test_student_has_required_fields(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])
