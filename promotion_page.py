@@ -55,8 +55,10 @@ class PromotionPage(QWidget):
         self.target_label = QLabel("-")
         self.target_label.setProperty("variant", "success")
 
-        self.preview_btn = QPushButton("PREVIEW")
-        self.apply_btn = QPushButton("APPLY PROMOTION")
+        self.preview_btn = QPushButton("Preview")
+        self.preview_btn.setObjectName("workflowSecondary")
+        self.apply_btn = QPushButton("Apply Promotion")
+        self.apply_btn.setObjectName("workflowPrimary")
         self.apply_btn.setEnabled(False)
 
         filters_layout.addWidget(QLabel("Completed Exam"), 0, 0)

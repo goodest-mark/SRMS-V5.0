@@ -75,18 +75,21 @@ class EnrollmentPage(QWidget):
         filters_layout.addWidget(QLabel("Class:"))
         filters_layout.addWidget(self.class_box)
         
-        self.import_btn = QPushButton("IMPORT")
+        self.import_btn = QPushButton("Import Excel")
+        self.import_btn.setObjectName("workflowSecondary")
         self.import_btn.clicked.connect(self.import_excel)
-        
-        self.export_btn = QPushButton("EXPORT")
+
+        self.export_btn = QPushButton("Export Excel")
+        self.export_btn.setObjectName("workflowSecondary")
         self.export_btn.clicked.connect(self.export_excel)
-        
-        self.template_btn = QPushButton("TEMPLATE")
+
+        self.template_btn = QPushButton("Download Template")
+        self.template_btn.setObjectName("workflowSecondary")
         self.template_btn.clicked.connect(self.download_template)
-        
+
+        filters_layout.addWidget(self.template_btn)
         filters_layout.addWidget(self.import_btn)
         filters_layout.addWidget(self.export_btn)
-        filters_layout.addWidget(self.template_btn)
         
         filters_layout.addStretch()
 
@@ -132,11 +135,13 @@ class EnrollmentPage(QWidget):
         action_row = QHBoxLayout()
         action_row.addStretch()
 
-        self.enroll_all_btn = QPushButton("ENROLL ALL")
+        self.enroll_all_btn = QPushButton("Enroll All")
+        self.enroll_all_btn.setObjectName("workflowWarning")
         self.enroll_all_btn.setFixedHeight(40)
         self.enroll_all_btn.clicked.connect(self.enroll_all)
 
-        self.save_btn = QPushButton("SAVE ENROLLMENTS")
+        self.save_btn = QPushButton("Save Enrollments")
+        self.save_btn.setObjectName("workflowPrimary")
         self.save_btn.setFixedHeight(40)
         self.save_btn.clicked.connect(self.save_enrollments)
 
@@ -173,6 +178,8 @@ class EnrollmentPage(QWidget):
         )
 
         self.save_btn.setEnabled(enabled)
+        self.import_btn.setEnabled(enabled)
+        self.enroll_all_btn.setEnabled(enabled)
         self.enrollment_table.setEnabled(enabled)
 
     # =========================
@@ -365,7 +372,7 @@ class EnrollmentPage(QWidget):
         import excel_utils
         year = self.year_box.currentText().strip() or "SELECTED YEAR"
         term = self.term_box.currentText().strip() or "SELECTED TERM"
-        level = self.level_box.currentText().strip() or SystemState.get_level()
+        level = SystemState.get_level()
         excel_utils.download_template(
             self, 
             "enrollment_template.xlsx",
@@ -376,7 +383,8 @@ class EnrollmentPage(QWidget):
                 "2. Do not modify the column headers in Row 10.",
                 "3. Start data entry from Row 12.",
                 "4. Admission No must already exist in the system.",
-                "5. Subject Name must match the learner's enrolled subject list.",
+                "5. Admission numbers must belong to the selected class and level.",
+                "6. Subject Name must match a subject configured for the selected level.",
             ],
             samples=["2024/001", "Mathematics"]
         )
@@ -408,49 +416,131 @@ class EnrollmentPage(QWidget):
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
         class_name = self.class_box.currentText()
-        if not (year_id and term_id):
-            show_error(self, "Select Year and Term first")
+        level = SystemState.get_level()
+
+        if not self.enrollment_mode_checkbox.isChecked():
+            show_error(self, "Enable Enrollment Mode before importing enrollments.")
             return
-            
+
+        if not (year_id and term_id and class_name and class_name != "-- Select Class --"):
+            show_error(self, "Select Year, Term, and Class before importing enrollments.")
+            return
+
         path = excel_utils.get_import_file(self)
-        if not path: return
-        
+        if not path:
+            return
+
         try:
             wb = openpyxl.load_workbook(path, data_only=True)
             sheet = wb.active
             rows = list(sheet.iter_rows(min_row=12, values_only=True))
-            
-            imported = 0
+
+            students = {
+                str(admission).strip(): str(name)
+                for admission, name in fetch_all(
+                    """
+                    SELECT admission_no, full_name
+                    FROM students
+                    WHERE class=? AND level=?
+                    """,
+                    (class_name, level),
+                )
+            }
+            subjects = {
+                str(subject).strip().casefold(): str(subject).strip()
+                for (subject,) in fetch_all(
+                    "SELECT subject_name FROM subjects WHERE level=?",
+                    (level,),
+                )
+            }
+            existing = {
+                (str(admission).strip(), str(subject).strip())
+                for admission, subject in fetch_all(
+                    """
+                    SELECT admission_no, subject_name
+                    FROM enrollments
+                    WHERE academic_year_id=? AND term_id=? AND class_name=?
+                    """,
+                    (year_id, term_id, class_name),
+                )
+            }
+
+            new_enrollments = []
+            seen = set()
+            invalid_students = []
+            invalid_subjects = []
+            duplicate_rows = 0
+            existing_rows = 0
+
+            for row_number, row in enumerate(rows, start=12):
+                if not row or len(row) < 2 or row[0] in (None, "") or row[1] in (None, ""):
+                    continue
+
+                admission_no = str(row[0]).strip()
+                subject_key = str(row[1]).strip().casefold()
+                subject_name = subjects.get(subject_key)
+
+                if admission_no not in students:
+                    invalid_students.append(f"Row {row_number}: {admission_no}")
+                    continue
+                if not subject_name:
+                    invalid_subjects.append(f"Row {row_number}: {row[1]}")
+                    continue
+
+                enrollment = (admission_no, subject_name)
+                if enrollment in seen:
+                    duplicate_rows += 1
+                    continue
+                seen.add(enrollment)
+
+                if enrollment in existing:
+                    existing_rows += 1
+                    continue
+                new_enrollments.append(enrollment)
+
+            summary = [
+                f"New enrollments to add: {len(new_enrollments)}",
+                f"Existing enrollments kept unchanged: {existing_rows}",
+                f"Duplicate spreadsheet rows skipped: {duplicate_rows}",
+                f"Invalid student rows: {len(invalid_students)}",
+                f"Invalid subject rows: {len(invalid_subjects)}",
+            ]
+            problems = invalid_students[:3] + invalid_subjects[:3]
+            if problems:
+                summary.append("\nExamples requiring correction:\n" + "\n".join(problems))
+
+            if not new_enrollments:
+                show_info(self, "No new enrollments were found.\n\n" + "\n".join(summary), title="Import Preview")
+                return
+
+            reply = QMessageBox.question(
+                self,
+                "Confirm Enrollment Import",
+                "\n".join(summary) + "\n\nAdd the valid new enrollments?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
             with get_cursor(commit=True) as cur:
-                for row in rows:
-                    if not row or len(row) < 2 or not row[0] or not row[1]: continue
-                    
-                    adm = str(row[0]).strip()
-                    subject = str(row[1]).strip()
-                    
-                    try:
-                        cur.execute("SELECT level FROM students WHERE admission_no=?", (adm,))
-                        student_res = cur.fetchone()
-                        if not student_res:
-                            continue
+                cur.executemany(
+                    """
+                    INSERT INTO enrollments (admission_no, subject_name, class_name, academic_year_id, term_id)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (admission_no, subject_name, class_name, year_id, term_id)
+                        for admission_no, subject_name in new_enrollments
+                    ],
+                )
 
-                        student_level = student_res[0]
-
-                        cur.execute("SELECT 1 FROM subjects WHERE subject_name=? AND level=?", (subject, student_level))
-                        if not cur.fetchone():
-                            continue
-
-                        cur.execute("""
-                            INSERT OR REPLACE INTO enrollments (admission_no, subject_name, class_name, academic_year_id, term_id)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (adm, subject, class_name, year_id, term_id))
-                        imported += 1
-                    except Exception as e:
-                        print(f"[ERROR] Failed to import enrollment for '{adm}' in '{subject}': {e}")
-                        continue
-            
             self.load_enrollment_data()
-            show_info(self, f"Imported {imported} enrollment records.", title="Import Complete")
-            
+            show_info(
+                self,
+                f"Imported {len(new_enrollments)} new enrollment record(s).\n\n"
+                + "\n".join(summary[1:]),
+                title="Import Complete",
+            )
+
         except Exception as e:
-            QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")
+            QMessageBox.critical(self, "Error", f"Import failed: {e}")

@@ -113,7 +113,7 @@ class BroadsheetService:
             year_id, term_id = row[0], row[1]
 
         admissions = [s['admission'] for s in ranking_summary]
-        subjects = self._fetch_subjects(admissions, year_id, term_id)
+        subjects = self._fetch_subjects(admissions, year_id, term_id, class_name)
         subject_headers = [get_subject_short_name(sub) for sub in subjects]
         marks_map = self._fetch_marks(exam_id)
         rows = self._build_rows(ranking_summary, subjects, marks_map)
@@ -129,9 +129,22 @@ class BroadsheetService:
         max_avg = subject_ranking[0][1]['average'] if subject_ranking else 0.0
         min_avg = subject_ranking[-1][1]['average'] if subject_ranking else 0.0
 
+        context_row = self._fetch_one(
+            """
+            SELECT e.exam_name, t.term_name, y.year_name
+            FROM exams e
+            JOIN terms t ON t.id = e.term_id
+            JOIN academic_years y ON y.id = t.academic_year_id
+            WHERE e.id = ?
+            """,
+            (exam_id,),
+        )
+        exam_name, term_name, year_name = context_row or (
+            f"Exam #{exam_id}", "-", "-"
+        )
         school_profile = self._get_school_profile()
         meta = {
-            'year': '', 'term': '', 'exam': '',
+            'year': year_name, 'term': term_name, 'exam': exam_name,
             'class': class_name, 'level': level,
             'school_profile': school_profile,
             'generated_date': datetime.now().strftime("%A, %d %B %Y %I:%M %p")
@@ -161,14 +174,22 @@ class BroadsheetService:
             s['class_position'] = idx
         return sorted_students
 
-    def _fetch_subjects(self, admissions, year_id, term_id):
+    def _fetch_subjects(self, admissions, year_id, term_id, class_name):
         if not admissions:
             return []
         placeholders = ",".join("?" for _ in admissions)
         params = tuple(admissions + [year_id, term_id])
         rows = self._fetch_all(
-            f"SELECT DISTINCT subject_name FROM enrollments WHERE admission_no IN ({placeholders}) AND academic_year_id = ? AND term_id = ? ORDER BY subject_name",
-            params)
+            f"""
+            SELECT DISTINCT subject_name
+            FROM enrollments
+            WHERE admission_no IN ({placeholders})
+              AND academic_year_id = ?
+              AND term_id = ?
+              AND (class_name = ? OR class_name IS NULL OR class_name = '')
+            ORDER BY subject_name
+            """,
+            tuple(admissions + [year_id, term_id, class_name]))
         return [row[0] for row in rows]
 
     def _fetch_marks(self, exam_id):
@@ -375,6 +396,8 @@ class BroadsheetPage(QWidget):
         self.gender_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.gender_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         gender_layout.addWidget(self.gender_table)
+        gender_group.setMinimumWidth(220)
+        gender_group.setMaximumWidth(280)
         summary_panels.addWidget(gender_group)
 
         # Division
@@ -386,6 +409,8 @@ class BroadsheetPage(QWidget):
         self.division_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.division_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         div_layout.addWidget(self.division_table)
+        div_group.setMinimumWidth(220)
+        div_group.setMaximumWidth(280)
         summary_panels.addWidget(div_group)
 
         # Performance stats
@@ -399,7 +424,9 @@ class BroadsheetPage(QWidget):
         perf_layout.addWidget(self.p_avg, 0, 1)
         perf_layout.addWidget(self.p_high, 1, 0)
         perf_layout.addWidget(self.p_low, 1, 1)
-        summary_panels.addWidget(perf_group)
+        perf_group.setMinimumWidth(340)
+        perf_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        summary_panels.addWidget(perf_group, 1)
 
         self.main_layout.addLayout(summary_panels)
 
@@ -507,6 +534,10 @@ class BroadsheetPage(QWidget):
     def _set_placeholder(self, table: QTableWidget):
         """Show a placeholder row when table is empty."""
         if table.rowCount() == 0:
+            # The full broadsheet has no headers until a context is loaded.
+            # A QTableView span must cover at least one column.
+            if table.columnCount() == 0:
+                table.setColumnCount(1)
             table.setRowCount(1)
             item = QTableWidgetItem("No data available.")
             item.setTextAlignment(Qt.AlignCenter)
@@ -544,7 +575,10 @@ class BroadsheetPage(QWidget):
         self._worker.error.connect(self._thread.quit)
         self._worker.data_ready.connect(self._worker.deleteLater)
         self._worker.error.connect(self._worker.deleteLater)
-        self._thread.finished.connect(self._thread.deleteLater)
+        # Keep the QThread wrapper alive while it remains in self._thread.
+        # The next reload (or page teardown) releases it after it has stopped.
+        # Calling deleteLater here leaves a stale Python reference and causes
+        # "Internal C++ object ... already deleted" on a subsequent reload.
         self._thread.start()
 
     @Slot(BroadsheetData)

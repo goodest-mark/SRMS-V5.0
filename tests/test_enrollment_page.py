@@ -19,6 +19,8 @@ def test_enrollment_page_preview_mode_disables_edits(tmp_db):
     page.set_enrollment_mode(False)
 
     assert not page.save_btn.isEnabled()
+    assert not page.import_btn.isEnabled()
+    assert not page.enroll_all_btn.isEnabled()
     assert not page.enrollment_table.isEnabled()
     assert "Preview" in page.preview_label.text()
 

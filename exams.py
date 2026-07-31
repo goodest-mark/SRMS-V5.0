@@ -27,41 +27,36 @@ class ExamsWindow(QWidget):
 
         top = QHBoxLayout()
 
-        self.add_btn = QPushButton(
-            "ADD EXAM"
-        )
+        self.add_btn = QPushButton("Add Exam")
+        self.add_btn.setObjectName("workflowPrimary")
 
         self.add_btn.clicked.connect(
             self.open_add
         )
 
-        self.edit_btn = QPushButton(
-            "EDIT EXAM"
-        )
+        self.edit_btn = QPushButton("Edit Selected")
+        self.edit_btn.setObjectName("workflowSecondary")
 
         self.edit_btn.clicked.connect(
             self.open_edit
         )
 
-        self.delete_btn = QPushButton(
-            "DELETE EXAM"
-        )
+        self.delete_btn = QPushButton("Delete Selected")
+        self.delete_btn.setObjectName("workflowDanger")
 
         self.delete_btn.clicked.connect(
             self.delete_exam
         )
 
-        self.status_btn = QPushButton(
-            "OPEN / CLOSE"
-        )
+        self.status_btn = QPushButton("Open / Close")
+        self.status_btn.setObjectName("workflowSecondary")
 
         self.status_btn.clicked.connect(
             self.toggle_status
         )
 
-        self.complete_btn = QPushButton(
-            "COMPLETE EXAM"
-        )
+        self.complete_btn = QPushButton("Complete Selected")
+        self.complete_btn.setObjectName("workflowWarning")
 
         self.complete_btn.clicked.connect(
             self.complete_exam
@@ -69,9 +64,10 @@ class ExamsWindow(QWidget):
 
         top.addWidget(self.add_btn)
         top.addWidget(self.edit_btn)
-        top.addWidget(self.delete_btn)
         top.addWidget(self.status_btn)
         top.addWidget(self.complete_btn)
+        top.addStretch()
+        top.addWidget(self.delete_btn)
 
         self.table = QTableWidget()
         setup_table(self.table, ["ID", "Exam", "Term", "Year", "Level", "Status"])
@@ -80,6 +76,8 @@ class ExamsWindow(QWidget):
         layout.addWidget(self.table)
 
         self.setLayout(layout)
+
+        self.table.itemSelectionChanged.connect(self._update_action_state)
 
         EventBus.subscribe(
             "EXAMS_UPDATED",
@@ -91,6 +89,7 @@ class ExamsWindow(QWidget):
         )
 
         self.load_data()
+        self._update_action_state()
 
     def open_add(self):
 
@@ -129,6 +128,25 @@ class ExamsWindow(QWidget):
         """, (level,))
 
         populate_table(self.table, rows)
+        self._update_action_state()
+
+    def _update_action_state(self):
+        """Keep actions aligned with the selected exam's lifecycle state."""
+        row = self.table.currentRow()
+        has_selection = row >= 0 and self.table.item(row, 5) is not None
+        status = self.table.item(row, 5).text() if has_selection else None
+
+        self.edit_btn.setEnabled(has_selection)
+        self.delete_btn.setEnabled(has_selection)
+        self.status_btn.setEnabled(has_selection and status != "COMPLETED")
+        self.complete_btn.setEnabled(has_selection and status != "COMPLETED")
+
+        if status == "OPEN":
+            self.status_btn.setText("Close Selected")
+        elif status == "CLOSED":
+            self.status_btn.setText("Reopen Selected")
+        else:
+            self.status_btn.setText("Open / Close")
 
     def delete_exam(self):
 

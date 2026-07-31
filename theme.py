@@ -364,6 +364,82 @@ QPushButton#navButton[variant="default"]:hover{{
     border: 1px solid rgba(148,163,184,0.5);
 }}
 
+/* =========================================
+   WORKFLOW BUTTONS (page actions and tabs)
+========================================= */
+QPushButton#workflowPrimary, QPushButton#workflowSecondary,
+QPushButton#workflowWarning, QPushButton#workflowDanger,
+QPushButton#workflowTab{{
+    background: transparent;
+    border-radius: 10px;
+    font-weight: 800;
+    min-height: 28px;
+}}
+
+QPushButton#workflowPrimary{{
+    border: 1px solid {tokens['primary_2']};
+    color: #93c5fd;
+}}
+
+QPushButton#workflowPrimary:hover{{
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 #60a5fa,
+        stop:1 {tokens['primary']}
+    );
+    border-color: #93c5fd;
+    color: white;
+}}
+
+QPushButton#workflowSecondary, QPushButton#workflowTab{{
+    border: 1px solid rgba(148,163,184,0.45);
+    color: {tokens['text_soft']};
+}}
+
+QPushButton#workflowSecondary:hover, QPushButton#workflowTab:hover{{
+    background: rgba(96,165,250,0.12);
+    border-color: {tokens['primary_2']};
+    color: white;
+}}
+
+QPushButton#workflowWarning{{
+    border: 1px solid #fbbf24;
+    color: #fcd34d;
+}}
+
+QPushButton#workflowWarning:hover{{
+    background: #d97706;
+    color: white;
+}}
+
+QPushButton#workflowDanger{{
+    border: 1px solid #fca5a5;
+    color: #fca5a5;
+}}
+
+QPushButton#workflowDanger:hover{{
+    background: #dc2626;
+    color: white;
+}}
+
+QPushButton#workflowPrimary:disabled, QPushButton#workflowSecondary:disabled,
+QPushButton#workflowWarning:disabled, QPushButton#workflowDanger:disabled,
+QPushButton#workflowTab:disabled{{
+    background: transparent;
+    border-color: rgba(148,163,184,0.2);
+    color: rgba(148,163,184,0.4);
+}}
+
+QPushButton#workflowTab:checked{{
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 #60a5fa,
+        stop:1 {tokens['primary']}
+    );
+    border: 2px solid #93c5fd;
+    color: white;
+}}
+
 QTableWidget, QTableView, QListWidget, QTreeWidget{{
     background:qlineargradient(
         x1:0,y1:0,x2:1,y2:1,

@@ -1,7 +1,7 @@
 from PySide6.QtCore import Qt, Signal, QSignalBlocker
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QStackedWidget,
-    QComboBox, QLabel, QSizePolicy
+    QButtonGroup, QComboBox, QLabel, QSizePolicy
 )
 from system_state import SystemState
 from event_bus import EventBus
@@ -70,6 +70,14 @@ class HistoricalResultsPage(QWidget):
         self.btn_broadsheet.setCheckable(True)
         self.btn_remarks.setCheckable(True)
         self.btn_reports.setCheckable(True)
+        for button in (self.btn_broadsheet, self.btn_remarks, self.btn_reports):
+            button.setObjectName("workflowTab")
+
+        self.page_button_group = QButtonGroup(self)
+        self.page_button_group.setExclusive(True)
+        self.page_button_group.addButton(self.btn_broadsheet, 0)
+        self.page_button_group.addButton(self.btn_remarks, 1)
+        self.page_button_group.addButton(self.btn_reports, 2)
 
         self.btn_broadsheet.clicked.connect(lambda: self._switch_page(0))
         self.btn_remarks.clicked.connect(lambda: self._switch_page(1))

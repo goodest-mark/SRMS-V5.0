@@ -13,7 +13,9 @@ import traceback
 
 
 class RemarksWorker(QThread):
-    finished = Signal(list, dict)
+    # Include the level used to calculate scores so the UI applies defaults
+    # against the same context the worker queried.
+    finished = Signal(list, dict, str)
     error = Signal(str)
 
     def __init__(self, exam_id, class_name, level):
@@ -40,7 +42,7 @@ class RemarksWorker(QThread):
             rows = fetch_all(query, (self.exam_id, self.class_name, self.level))
             scores = compute_student_scores(self.level, self.exam_id, self.class_name)
             score_map = {str(s["admission"]): s for s in scores}
-            self.finished.emit(rows, score_map)
+            self.finished.emit(rows, score_map, self.level)
         except Exception as e:
             self.error.emit(f"Failed to load remarks: {e}\n{traceback.format_exc()}")
 
@@ -92,11 +94,11 @@ class RemarksPage(QWidget):
         layout.addLayout(controls)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
             "Admission No", "Name", "Teacher Remarks",
             "Headteacher Remarks", "Academic Master Remarks",
-            "Discipline Master Remarks", "Status"
+            "Discipline Master Remarks"
         ])
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -108,7 +110,6 @@ class RemarksPage(QWidget):
         header.setSectionResizeMode(3, QHeaderView.Stretch)
         header.setSectionResizeMode(4, QHeaderView.Stretch)
         header.setSectionResizeMode(5, QHeaderView.Stretch)
-        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
 
         layout.addWidget(self.table)
         self.table.itemChanged.connect(self._on_item_changed)
@@ -152,7 +153,7 @@ class RemarksPage(QWidget):
     def _show_placeholder(self, message):
         self.table.clearContents()
         self.table.setRowCount(1)
-        self.table.setSpan(0, 0, 1, 7)
+        self.table.setSpan(0, 0, 1, 6)
         item = QTableWidgetItem(message)
         item.setTextAlignment(Qt.AlignCenter)
         item.setFlags(Qt.NoItemFlags)
@@ -200,7 +201,7 @@ class RemarksPage(QWidget):
         self._worker.error.connect(self._on_error)
         self._worker.start()
 
-    def _on_data_loaded(self, rows, score_map):
+    def _on_data_loaded(self, rows, score_map, level):
         self.loading_bar.setVisible(False)
         self.table.clearSpans()
 
@@ -209,7 +210,7 @@ class RemarksPage(QWidget):
             return
 
         self.table.setRowCount(len(rows))
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(6)
 
         self.table.blockSignals(True)
         for i, row in enumerate(rows):
@@ -242,12 +243,6 @@ class RemarksPage(QWidget):
                 if is_new:
                     item.setForeground(Qt.gray)
                 self.table.setItem(i, col, item)
-
-            status_text = "Saved" if not is_new else "Default (Editable)"
-            item = QTableWidgetItem(status_text)
-            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-            item.setForeground(Qt.darkGreen if not is_new else Qt.blue)
-            self.table.setItem(i, 6, item)
 
         self.table.blockSignals(False)
         self._update_table_height()
