@@ -40,6 +40,14 @@ def icon_path(name):
     return ICONS_DIR / filename
 
 
+def find_icon_path(*candidates):
+    for candidate in candidates:
+        path = icon_path(candidate)
+        if path.exists():
+            return path
+    return None
+
+
 def resolve_path(value):
     if value in (None, ""):
         return None

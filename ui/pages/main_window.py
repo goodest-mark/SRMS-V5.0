@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QSizePolicy
 )
 
-from app_paths import icon_path
+from app_paths import find_icon_path
 from ui.pages.initial_setup_wizard import InitialSetupWizard, needs_initial_setup
 
 
@@ -137,10 +137,10 @@ from system_state import SystemState
 from theme import normalize_theme_name, apply_theme as apply_app_theme
 
 
-def _icon(name):
+def _icon(*names):
     """Return a QIcon using the shared assets/icons path."""
-    path = icon_path(name)
-    return QIcon(str(path)) if path.exists() else QIcon()
+    path = find_icon_path(*names)
+    return QIcon(str(path)) if path is not None else QIcon()
 
 
 class MainWindow(QMainWindow):
@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
         self._setup_mode = needs_initial_setup()
 
         self.setWindowTitle("SRMS V5")
-        self.setWindowIcon(_icon("icon.ico"))
+        self.setWindowIcon(_icon("icon.ico", "icon.png", "icon.jpg", "app_icon.ico", "app_icon.png", "app_icon.jpg"))
 
         root = QWidget()
         self.setCentralWidget(root)
