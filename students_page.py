@@ -70,6 +70,8 @@ class StudentsPage(QWidget):
         self.btn_registration.setObjectName("navButton")
         self.btn_reports = QPushButton("REPORTS")
         self.btn_reports.setObjectName("navButton")
+        for btn in (self.btn_students, self.btn_registration, self.btn_reports):
+            btn.setCheckable(True)
         self.btn_students.setProperty("variant", "accent")
         self.btn_registration.setProperty("variant", "default")
         self.btn_reports.setProperty("variant", "default")
@@ -319,12 +321,16 @@ class StudentsPage(QWidget):
         self.stacked_widget.setCurrentIndex(index)
         for btn in (self.btn_students, self.btn_registration, self.btn_reports):
             btn.setProperty("variant", "default")
+            btn.setChecked(False)
         if index == 0:
             self.btn_students.setProperty("variant", "accent")
+            self.btn_students.setChecked(True)
         elif index == 1:
             self.btn_registration.setProperty("variant", "accent")
+            self.btn_registration.setChecked(True)
         else:
             self.btn_reports.setProperty("variant", "accent")
+            self.btn_reports.setChecked(True)
         for btn in (self.btn_students, self.btn_registration, self.btn_reports):
             btn.style().unpolish(btn)
             btn.style().polish(btn)

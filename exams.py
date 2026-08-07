@@ -29,6 +29,7 @@ class ExamsWindow(QWidget):
 
         self.add_btn = QPushButton("Add Exam")
         self.add_btn.setObjectName("workflowPrimary")
+        self.add_btn.setCheckable(True)
 
         self.add_btn.clicked.connect(
             self.open_add
@@ -36,6 +37,7 @@ class ExamsWindow(QWidget):
 
         self.edit_btn = QPushButton("Edit Selected")
         self.edit_btn.setObjectName("workflowSecondary")
+        self.edit_btn.setCheckable(True)
 
         self.edit_btn.clicked.connect(
             self.open_edit
@@ -43,6 +45,7 @@ class ExamsWindow(QWidget):
 
         self.delete_btn = QPushButton("Delete Selected")
         self.delete_btn.setObjectName("workflowDanger")
+        self.delete_btn.setCheckable(True)
 
         self.delete_btn.clicked.connect(
             self.delete_exam
@@ -50,6 +53,7 @@ class ExamsWindow(QWidget):
 
         self.status_btn = QPushButton("Open / Close")
         self.status_btn.setObjectName("workflowSecondary")
+        self.status_btn.setCheckable(True)
 
         self.status_btn.clicked.connect(
             self.toggle_status
@@ -57,6 +61,7 @@ class ExamsWindow(QWidget):
 
         self.complete_btn = QPushButton("Complete Selected")
         self.complete_btn.setObjectName("workflowWarning")
+        self.complete_btn.setCheckable(True)
 
         self.complete_btn.clicked.connect(
             self.complete_exam

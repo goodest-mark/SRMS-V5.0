@@ -63,15 +63,34 @@ class HistoricalResultsPage(QWidget):
         button_layout.setSpacing(15)
         button_layout.setAlignment(Qt.AlignCenter)
 
-        self.btn_broadsheet = QPushButton("📋 Broadsheet")
-        self.btn_remarks = QPushButton("✏️ Remarks")
-        self.btn_reports = QPushButton("📄 Reports")
+        self.btn_broadsheet = QPushButton("Broadsheet")
+        self.btn_remarks = QPushButton("Remarks")
+        self.btn_reports = QPushButton("Reports")
 
         self.btn_broadsheet.setCheckable(True)
         self.btn_remarks.setCheckable(True)
         self.btn_reports.setCheckable(True)
         for button in (self.btn_broadsheet, self.btn_remarks, self.btn_reports):
             button.setObjectName("workflowTab")
+            button.setStyleSheet("""
+                QPushButton#workflowTab {
+                    background: #0F172A;
+                    color: #E2E8F0;
+                    border: 1px solid #334155;
+                    border-radius: 10px;
+                    padding: 8px 16px;
+                    font-weight: 700;
+                }
+                QPushButton#workflowTab:hover {
+                    background: #1E293B;
+                    border: 1px solid #60A5FA;
+                }
+                QPushButton#workflowTab:checked {
+                    background: #2563EB;
+                    color: #FFFFFF;
+                    border: 1px solid #93C5FD;
+                }
+            """)
 
         self.page_button_group = QButtonGroup(self)
         self.page_button_group.setExclusive(True)

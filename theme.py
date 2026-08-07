@@ -374,6 +374,7 @@ QPushButton#workflowTab{{
     border-radius: 10px;
     font-weight: 800;
     min-height: 28px;
+    padding: 7px 12px;
 }}
 
 QPushButton#workflowPrimary{{
@@ -399,6 +400,18 @@ QPushButton#workflowSecondary, QPushButton#workflowTab{{
 QPushButton#workflowSecondary:hover, QPushButton#workflowTab:hover{{
     background: rgba(96,165,250,0.12);
     border-color: {tokens['primary_2']};
+    color: white;
+}}
+
+QPushButton#workflowPrimary:checked, QPushButton#workflowSecondary:checked,
+QPushButton#workflowWarning:checked, QPushButton#workflowDanger:checked,
+QPushButton#workflowTab:checked{{
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 #60a5fa,
+        stop:1 {tokens['primary']}
+    );
+    border: 2px solid #93c5fd;
     color: white;
 }}
 

@@ -166,68 +166,68 @@ def _get_styles():
     if _styles_cache:
         return _styles_cache
     _styles_cache['title'] = ParagraphStyle(
-        'rc_title', fontName='Helvetica-Bold', fontSize=15,
-        alignment=TA_CENTER, leading=18, textColor=NAVY)
+        'rc_title', fontName='Helvetica-Bold', fontSize=16,
+        alignment=TA_CENTER, leading=20, textColor=NAVY)
     _styles_cache['motto'] = ParagraphStyle(
-        'rc_motto', fontName='Helvetica-Oblique', fontSize=8,
-        alignment=TA_CENTER, leading=11, textColor=NAVY)
+        'rc_motto', fontName='Helvetica-Oblique', fontSize=8.5,
+        alignment=TA_CENTER, leading=12, textColor=NAVY)
     _styles_cache['section_hdr'] = ParagraphStyle(
-        'rc_section_hdr', fontName='Helvetica-Bold', fontSize=8,
-        alignment=TA_CENTER, textColor=NAVY, leading=11)
+        'rc_section_hdr', fontName='Helvetica-Bold', fontSize=9,
+        alignment=TA_CENTER, textColor=NAVY, leading=12)
     _styles_cache['section_left'] = ParagraphStyle(
-        'rc_section_left', fontName='Helvetica-Bold', fontSize=8,
-        alignment=TA_LEFT, textColor=NAVY, leading=11)
+        'rc_section_left', fontName='Helvetica-Bold', fontSize=9,
+        alignment=TA_LEFT, textColor=NAVY, leading=12)
     _styles_cache['label'] = ParagraphStyle(
-        'rc_label', fontName='Helvetica-Bold', fontSize=7.5,
-        alignment=TA_LEFT, leading=10)
+        'rc_label', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_LEFT, leading=10.5)
     _styles_cache['value'] = ParagraphStyle(
-        'rc_value', fontName='Helvetica', fontSize=7.5,
-        alignment=TA_LEFT, leading=10)
+        'rc_value', fontName='Helvetica', fontSize=8,
+        alignment=TA_LEFT, leading=10.5)
     _styles_cache['small'] = ParagraphStyle(
-        'rc_small', fontName='Helvetica', fontSize=7,
-        alignment=TA_LEFT, leading=9)
+        'rc_small', fontName='Helvetica', fontSize=7.5,
+        alignment=TA_LEFT, leading=10)
     _styles_cache['small_c'] = ParagraphStyle(
-        'rc_small_c', fontName='Helvetica', fontSize=7,
-        alignment=TA_CENTER, leading=9)
+        'rc_small_c', fontName='Helvetica', fontSize=7.5,
+        alignment=TA_CENTER, leading=10)
     _styles_cache['small_b'] = ParagraphStyle(
-        'rc_small_b', fontName='Helvetica-Bold', fontSize=7,
-        alignment=TA_CENTER, leading=9)
+        'rc_small_b', fontName='Helvetica-Bold', fontSize=7.5,
+        alignment=TA_CENTER, leading=10)
     _styles_cache['small_b_left'] = ParagraphStyle(
-        'rc_small_b_left', fontName='Helvetica-Bold', fontSize=7,
-        alignment=TA_LEFT, leading=9)
+        'rc_small_b_left', fontName='Helvetica-Bold', fontSize=7.5,
+        alignment=TA_LEFT, leading=10)
     _styles_cache['center'] = ParagraphStyle(
-        'rc_center', fontName='Helvetica', fontSize=7.5,
-        alignment=TA_CENTER, leading=10)
+        'rc_center', fontName='Helvetica', fontSize=8,
+        alignment=TA_CENTER, leading=10.5)
     _styles_cache['center_b'] = ParagraphStyle(
-        'rc_center_b', fontName='Helvetica-Bold', fontSize=7.5,
-        alignment=TA_CENTER, leading=10)
+        'rc_center_b', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_CENTER, leading=10.5)
     _styles_cache['right_b'] = ParagraphStyle(
-        'rc_right_b', fontName='Helvetica-Bold', fontSize=7.5,
-        alignment=TA_RIGHT, leading=10)
+        'rc_right_b', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_RIGHT, leading=10.5)
     _styles_cache['note'] = ParagraphStyle(
-        'rc_note', fontName='Helvetica-Oblique', fontSize=7,
-        alignment=TA_CENTER, leading=10, textColor=NAVY)
+        'rc_note', fontName='Helvetica-Oblique', fontSize=7.5,
+        alignment=TA_CENTER, leading=10.5, textColor=NAVY)
     _styles_cache['sig'] = ParagraphStyle(
-        'rc_sig', fontName='Helvetica', fontSize=7,
-        alignment=TA_LEFT, leading=11)
+        'rc_sig', fontName='Helvetica', fontSize=7.5,
+        alignment=TA_LEFT, leading=11.5)
     _styles_cache['sig_hdr'] = ParagraphStyle(
-        'rc_sig_hdr', fontName='Helvetica-Bold', fontSize=7.5,
-        alignment=TA_CENTER, leading=10, textColor=NAVY)
+        'rc_sig_hdr', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_CENTER, leading=10.5, textColor=NAVY)
     _styles_cache['tiny'] = ParagraphStyle(
-        'rc_tiny', fontName='Helvetica', fontSize=6,
-        alignment=TA_CENTER, leading=8)
+        'rc_tiny', fontName='Helvetica', fontSize=6.5,
+        alignment=TA_CENTER, leading=8.5)
     _styles_cache['tiny_b'] = ParagraphStyle(
-        'rc_tiny_b', fontName='Helvetica-Bold', fontSize=6,
-        alignment=TA_LEFT, leading=8)
+        'rc_tiny_b', fontName='Helvetica-Bold', fontSize=6.5,
+        alignment=TA_LEFT, leading=8.5)
     _styles_cache['contact_hdr'] = ParagraphStyle(
-        'rc_contact_hdr', fontName='Helvetica-Bold', fontSize=8,
-        alignment=TA_LEFT, leading=11, textColor=NAVY)
+        'rc_contact_hdr', fontName='Helvetica-Bold', fontSize=8.5,
+        alignment=TA_LEFT, leading=11.5, textColor=NAVY)
     _styles_cache['acad_hdr'] = ParagraphStyle(
-        'rc_acad_hdr', fontName='Helvetica-Bold', fontSize=8,
-        alignment=TA_LEFT, leading=11, textColor=NAVY)
+        'rc_acad_hdr', fontName='Helvetica-Bold', fontSize=8.5,
+        alignment=TA_LEFT, leading=11.5, textColor=NAVY)
     _styles_cache['comment_body'] = ParagraphStyle(
-        'rc_comment_body', fontName='Helvetica', fontSize=7,
-        alignment=TA_LEFT, leading=14)
+        'rc_comment_body', fontName='Helvetica', fontSize=7.5,
+        alignment=TA_LEFT, leading=14.5)
     return _styles_cache
 
 
@@ -236,60 +236,60 @@ def _get_student_styles():
         return _student_styles_cache
 
     _student_styles_cache['title'] = ParagraphStyle(
-        'student_title', fontName='Helvetica-Bold', fontSize=18,
-        alignment=TA_CENTER, leading=20, textColor=NAVY)
+        'student_title', fontName='Helvetica-Bold', fontSize=19,
+        alignment=TA_CENTER, leading=22, textColor=NAVY)
     _student_styles_cache['motto'] = ParagraphStyle(
-        'student_motto', fontName='Helvetica-BoldOblique', fontSize=8,
-        alignment=TA_CENTER, leading=9, textColor=NAVY)
+        'student_motto', fontName='Helvetica-BoldOblique', fontSize=8.5,
+        alignment=TA_CENTER, leading=10, textColor=NAVY)
     _student_styles_cache['contact'] = ParagraphStyle(
-        'student_contact', fontName='Helvetica', fontSize=7,
-        alignment=TA_CENTER, leading=9)
+        'student_contact', fontName='Helvetica', fontSize=7.5,
+        alignment=TA_CENTER, leading=9.5)
     _student_styles_cache['section_hdr'] = ParagraphStyle(
-        'student_section_hdr', fontName='Helvetica-Bold', fontSize=7.5,
-        alignment=TA_LEFT, leading=9, textColor=WHITE)
+        'student_section_hdr', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_LEFT, leading=9.5, textColor=WHITE)
     _student_styles_cache['label'] = ParagraphStyle(
-        'student_label', fontName='Helvetica-Bold', fontSize=6.8,
-        alignment=TA_LEFT, leading=8, textColor=NAVY)
+        'student_label', fontName='Helvetica-Bold', fontSize=7.2,
+        alignment=TA_LEFT, leading=8.5, textColor=NAVY)
     _student_styles_cache['value'] = ParagraphStyle(
-        'student_value', fontName='Helvetica', fontSize=6.8,
-        alignment=TA_LEFT, leading=8)
+        'student_value', fontName='Helvetica', fontSize=7.2,
+        alignment=TA_LEFT, leading=8.5)
     _student_styles_cache['tiny'] = ParagraphStyle(
-        'student_tiny', fontName='Helvetica', fontSize=6,
-        alignment=TA_CENTER, leading=7)
+        'student_tiny', fontName='Helvetica', fontSize=6.5,
+        alignment=TA_CENTER, leading=7.5)
     _student_styles_cache['tiny_left'] = ParagraphStyle(
-        'student_tiny_left', fontName='Helvetica', fontSize=6,
-        alignment=TA_LEFT, leading=7)
+        'student_tiny_left', fontName='Helvetica', fontSize=6.5,
+        alignment=TA_LEFT, leading=7.5)
     _student_styles_cache['tiny_b'] = ParagraphStyle(
-        'student_tiny_b', fontName='Helvetica-Bold', fontSize=6,
-        alignment=TA_CENTER, leading=7)
+        'student_tiny_b', fontName='Helvetica-Bold', fontSize=6.5,
+        alignment=TA_CENTER, leading=7.5)
     _student_styles_cache['contact_value'] = ParagraphStyle(
         'contact_value', parent=_student_styles_cache['tiny'],
-        fontSize=6, leading=7, wordWrap='CJK'
+        fontSize=6.5, leading=7.5, wordWrap='CJK'
     )
     _student_styles_cache['summary_label'] = ParagraphStyle(
-        'student_summary_label', fontName='Helvetica-Bold', fontSize=6.5,
-        alignment=TA_CENTER, leading=7.5, textColor=NAVY)
+        'student_summary_label', fontName='Helvetica-Bold', fontSize=7,
+        alignment=TA_CENTER, leading=8, textColor=NAVY)
     _student_styles_cache['summary_value'] = ParagraphStyle(
-        'student_summary_value', fontName='Helvetica-Bold', fontSize=11,
-        alignment=TA_CENTER, leading=12)
+        'student_summary_value', fontName='Helvetica-Bold', fontSize=11.5,
+        alignment=TA_CENTER, leading=12.5)
     _student_styles_cache['summary_small'] = ParagraphStyle(
-        'student_summary_small', fontName='Helvetica', fontSize=6.5,
-        alignment=TA_CENTER, leading=7.5)
-    _student_styles_cache['table_head'] = ParagraphStyle(
-        'student_table_head', fontName='Helvetica-Bold', fontSize=6.8,
+        'student_summary_small', fontName='Helvetica', fontSize=7,
         alignment=TA_CENTER, leading=8)
+    _student_styles_cache['table_head'] = ParagraphStyle(
+        'student_table_head', fontName='Helvetica-Bold', fontSize=7.2,
+        alignment=TA_CENTER, leading=8.5)
     _student_styles_cache['table_body'] = ParagraphStyle(
-        'student_table_body', fontName='Helvetica', fontSize=6.2,
-        alignment=TA_CENTER, leading=6.8)
+        'student_table_body', fontName='Helvetica', fontSize=6.6,
+        alignment=TA_CENTER, leading=7.2)
     _student_styles_cache['table_body_left'] = ParagraphStyle(
-        'student_table_body_left', fontName='Helvetica', fontSize=6.2,
-        alignment=TA_LEFT, leading=6.8)
+        'student_table_body_left', fontName='Helvetica', fontSize=6.6,
+        alignment=TA_LEFT, leading=7.2)
     _student_styles_cache['note'] = ParagraphStyle(
-        'student_note', fontName='Helvetica-Oblique', fontSize=6.5,
-        alignment=TA_CENTER, leading=7.5, textColor=NAVY)
+        'student_note', fontName='Helvetica-Oblique', fontSize=7.2,
+        alignment=TA_CENTER, leading=8.2, textColor=NAVY)
     _student_styles_cache['student_comment'] = ParagraphStyle(
-        'student_comment', fontName='Helvetica', fontSize=6.5,
-        alignment=TA_LEFT, leading=8)
+        'student_comment', fontName='Helvetica', fontSize=7.2,
+        alignment=TA_LEFT, leading=8.6)
     _student_styles_cache['comment'] = _student_styles_cache['student_comment']
     return _student_styles_cache
 
@@ -950,11 +950,11 @@ def _build_student_page_metrics(ST, position, total_students, division, points, 
 def _build_student_page_results(ST, short_names, marks, grades):
     n = len(short_names)
     if n <= 8:
-        fs_head, fs_body, rh = 7.0, 6.2, 10
+        fs_head, fs_body, rh = 7.2, 6.5, 10.5
     elif n <= 12:
-        fs_head, fs_body, rh = 6.2, 5.5, 9
+        fs_head, fs_body, rh = 6.4, 5.8, 9.5
     else:
-        fs_head, fs_body, rh = 5.5, 4.8, 8
+        fs_head, fs_body, rh = 5.8, 5.2, 8.5
 
     table_head = ParagraphStyle(
         'dynamic_table_head', parent=ST['table_head'],

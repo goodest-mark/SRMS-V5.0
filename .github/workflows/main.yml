@@ -22,7 +22,7 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --name "SRMS" --add-data "ui;ui" --add-data "database.db;." app.py
+          pyinstaller --onefile --windowed --name "SRMS" --add-data "ui;ui" --add-data "assets;assets" --add-data "themes;themes" --add-data "srms.db;." app.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

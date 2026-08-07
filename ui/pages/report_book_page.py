@@ -85,7 +85,7 @@ class ReportBookPage(QWidget):
         self.history_exam_id = exam_id
         self.history_class_name = class_name
         self.history_level = level or SystemState.get_level()
-        self.context_label.setText(f"📌 {class_name} – Exam #{exam_id}")
+        self.context_label.setText(f"{class_name} – Exam #{exam_id}")
         self.update_summary()
 
     def clear_history_context(self):
