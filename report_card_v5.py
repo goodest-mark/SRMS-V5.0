@@ -1281,7 +1281,7 @@ def _build_signatures(
     if head_signature is None:
         head_signature = Paragraph('Signature: __________', sig_style)
     head_block = labeled_block(
-        'HEAD TEACHER / HEADMASTER',
+        'HEADMASTER/MISTRESS',
         head_signature,
         f'Name: {head_teacher}' if head_teacher else 'Name: __________',
     )
