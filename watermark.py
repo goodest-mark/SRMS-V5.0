@@ -1,7 +1,7 @@
 from reportlab.lib import colors
 
 def draw_watermark(canvas, doc, school_name="SRMS V5", year="", watermark_text="CONFIDENTIAL"):
-    """Renders a diagonal, semi-transparent watermark on the PDF page."""
+    """Renders a diagonal, transparent watermark on the PDF page."""
     canvas.saveState()
     canvas.setFont('Helvetica-Bold', 60)
     canvas.setFillAlpha(0.1)  # Low opacity

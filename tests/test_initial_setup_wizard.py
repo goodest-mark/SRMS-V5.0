@@ -15,15 +15,15 @@ def test_needs_initial_setup_false_after_profile_completed(initialized_db):
         INSERT INTO school_profile (
             school_name, school_motto, school_address, school_phone,
             school_email, school_website, head_teacher, academic_master,
-            discipline_master, class_master, school_logo, school_stamp,
+            discipline_master, school_logo, school_stamp,
             head_teacher_signature, academic_master_signature,
-            discipline_master_signature, class_master_signature,
+            discipline_master_signature,
             login_background, dashboard_background, watermark_text
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            "Test School", "", "", "", "", "", "", "", "", "", "", "",
-            "", "", "", "", "", "", "CONFIDENTIAL",
+            "Test School", "", "", "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "CONFIDENTIAL",
         ),
     )
     cur.execute(

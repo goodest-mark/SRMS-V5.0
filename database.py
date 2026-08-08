@@ -359,21 +359,18 @@ def _init_db_inner(conn, cur):
         head_teacher TEXT,
         academic_master TEXT,
         discipline_master TEXT,
-        class_master TEXT,
         school_logo TEXT,
         school_stamp TEXT,
         head_teacher_signature TEXT,
         academic_master_signature TEXT,
         discipline_master_signature TEXT,
-        class_master_signature TEXT,
         login_background TEXT,
         dashboard_background TEXT,
         watermark_text TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         head_teacher_signature_enabled INTEGER DEFAULT 0,
         academic_master_signature_enabled INTEGER DEFAULT 0,
-        discipline_master_signature_enabled INTEGER DEFAULT 0,
-        class_master_signature_enabled INTEGER DEFAULT 0
+        discipline_master_signature_enabled INTEGER DEFAULT 0
     )
     """)
 
@@ -389,19 +386,17 @@ def _init_db_inner(conn, cur):
     needed_columns = [
         ('school_motto', 'TEXT'), ('school_address', 'TEXT'), ('school_phone', 'TEXT'),
         ('school_email', 'TEXT'), ('school_website', 'TEXT'), ('head_teacher', 'TEXT'),
-        ('academic_master', 'TEXT'), ('discipline_master', 'TEXT'), ('class_master', 'TEXT'),
+        ('academic_master', 'TEXT'), ('discipline_master', 'TEXT'),
         ('school_logo', 'TEXT'), ('school_stamp', 'TEXT'),
         ('head_teacher_signature', 'TEXT'),
         ('academic_master_signature', 'TEXT'),
         ('discipline_master_signature', 'TEXT'),
-        ('class_master_signature', 'TEXT'),
         ('login_background', 'TEXT'), ('dashboard_background', 'TEXT'),
         ('watermark_text', 'TEXT DEFAULT "CONFIDENTIAL"'),
         ('created_at', 'TEXT DEFAULT CURRENT_TIMESTAMP'),
         ('head_teacher_signature_enabled', 'INTEGER DEFAULT 0'),
         ('academic_master_signature_enabled', 'INTEGER DEFAULT 0'),
         ('discipline_master_signature_enabled', 'INTEGER DEFAULT 0'),
-        ('class_master_signature_enabled', 'INTEGER DEFAULT 0'),
     ]
 
     legacy_map = {

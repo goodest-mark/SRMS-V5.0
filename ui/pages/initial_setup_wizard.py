@@ -147,13 +147,10 @@ class StaffPage(QWidget):
         self.head_teacher = QLineEdit()
         self.academic_master = QLineEdit()
         self.discipline_master = QLineEdit()
-        self.class_master = QLineEdit()
-        self.class_master.setPlaceholderText("Optional. Leave blank if class masters vary by class.")
 
-        layout.addRow("Head Teacher / Head Mistress", self.head_teacher)
+        layout.addRow("Headmaster / Headmistress", self.head_teacher)
         layout.addRow("Academic Master / Mistress", self.academic_master)
         layout.addRow("Discipline Master / Mistress", self.discipline_master)
-        layout.addRow("Class Master / Mistress", self.class_master)
 
 
 class BrandingPage(QWidget):
@@ -182,31 +179,24 @@ class SignaturesPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
 
-        self.head = _SignatureSlot("Select Head Teacher Signature", "Upload Signature")
-        self.academic = _SignatureSlot("Select Academic Master Signature", "Upload Signature")
-        self.discipline = _SignatureSlot("Select Discipline Master Signature", "Upload Signature")
+        self.head = _SignatureSlot("Select Headmaster / Headmistress Signature", "Upload Signature")
 
-        for title, widget in [
-            ("Head Teacher / Head Mistress", self.head),
-            ("Academic Master / Mistress", self.academic),
-            ("Discipline Master / Mistress", self.discipline),
-        ]:
-            row = QFrame()
-            row_layout = QVBoxLayout(row)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-            row_layout.setSpacing(6)
-            label = QLabel(title)
-            label.setProperty("variant", "accent")
-            row_layout.addWidget(label)
-            row_layout.addWidget(widget)
-            layout.addWidget(row)
+        row = QFrame()
+        row_layout = QVBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(6)
+        label = QLabel("Headmaster / Headmistress")
+        label.setProperty("variant", "accent")
+        row_layout.addWidget(label)
+        row_layout.addWidget(self.head)
+        layout.addWidget(row)
 
-        class_note = QLabel(
-            "Class Master / Mistress is signed physically on the paper report."
+        note = QLabel(
+            "Only the Headmaster / Headmistress signature is configured here; other report signatures are handled physically."
         )
-        class_note.setWordWrap(True)
-        class_note.setProperty("variant", "muted")
-        layout.addWidget(class_note)
+        note.setWordWrap(True)
+        note.setProperty("variant", "muted")
+        layout.addWidget(note)
 
         layout.addStretch(1)
 
@@ -384,13 +374,11 @@ class InitialSetupWizard(QWidget):
                     INSERT INTO school_profile (
                         school_name, school_motto, school_address, school_phone,
                         school_email, school_website, head_teacher, academic_master,
-                        discipline_master, class_master, school_logo, school_stamp,
-                        head_teacher_signature, academic_master_signature,
-                        discipline_master_signature, class_master_signature,
+                        discipline_master, school_logo, school_stamp,
+                        head_teacher_signature,
                         login_background, dashboard_background, watermark_text,
-                        head_teacher_signature_enabled, academic_master_signature_enabled,
-                        discipline_master_signature_enabled, class_master_signature_enabled
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        head_teacher_signature_enabled
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         school_name,
@@ -402,20 +390,13 @@ class InitialSetupWizard(QWidget):
                         self.staff_page.head_teacher.text().strip(),
                         self.staff_page.academic_master.text().strip(),
                         self.staff_page.discipline_master.text().strip(),
-                        self.staff_page.class_master.text().strip(),
                         self.branding_page.logo_picker.path,
                         self.branding_page.stamp_picker.path,
                         self.signatures_page.head.picker.path if self.signatures_page.head.enabled else "",
-                        self.signatures_page.academic.picker.path if self.signatures_page.academic.enabled else "",
-                        self.signatures_page.discipline.picker.path if self.signatures_page.discipline.enabled else "",
-                        "",
                         "",
                         "",
                         "CONFIDENTIAL",
                         1 if self.signatures_page.head.enabled else 0,
-                        1 if self.signatures_page.academic.enabled else 0,
-                        1 if self.signatures_page.discipline.enabled else 0,
-                        0,
                     ),
                 )
 

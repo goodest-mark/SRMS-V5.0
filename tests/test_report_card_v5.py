@@ -233,11 +233,9 @@ class TestStudentReportCards:
             head_teacher="Head Teacher Name",
             academic_master="Academic Master Name",
             discipline_master="Discipline Master Name",
-            class_master="Class Master Name",
             head_teacher_signature=None,
             academic_master_signature=None,
             discipline_master_signature=None,
-            class_master_signature=None,
             stamp_path=None,
         )
 

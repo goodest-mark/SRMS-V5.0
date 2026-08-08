@@ -138,6 +138,7 @@ class HistoricalResultsPage(QWidget):
     # ─── Filter Logic ────────────────────────────────────────────────
     def _load_initial_filters(self):
         combo_loaders.load_years(self.year_box)
+        combo_loaders.load_classes(self.class_box)
         self._on_year_changed()
 
     def _on_year_changed(self):
@@ -192,6 +193,7 @@ class HistoricalResultsPage(QWidget):
             return
         with QSignalBlocker(self.year_box), QSignalBlocker(self.term_box), QSignalBlocker(self.exam_box):
             combo_loaders.load_years(self.year_box)
+            combo_loaders.load_classes(self.class_box)
             self._on_year_changed()
         self._update_current_page()
 

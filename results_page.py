@@ -38,6 +38,7 @@ def _subject_name_matches(candidate, target):
     def normalize(value):
         text = str(value).strip().lower()
         text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\s*\(\d+%\)\s*$", "", text)
         text = re.sub(r"\s*\([^)]+\)$", "", text)
         text = re.sub(r"\s*\[[^\]]+\]$", "", text)
         return text
@@ -240,9 +241,9 @@ class ResultsPage(QWidget):
         layout.addLayout(buttons)
 
         # Connect events
-        self.exam.currentIndexChanged.connect(self.load_subjects)
-        self.class_box.currentIndexChanged.connect(self.load_subjects)
-        self.subject.currentIndexChanged.connect(self.load_students)
+        self.exam.currentIndexChanged.connect(lambda _: self.load_subjects())
+        self.class_box.currentIndexChanged.connect(lambda _: self.load_subjects())
+        self.subject.currentIndexChanged.connect(lambda _: self.load_students())
 
         EventBus.subscribe("LEVEL_CHANGED", self.on_level_changed)
         EventBus.subscribe("STUDENTS_UPDATED", self.refresh_all)
@@ -312,6 +313,7 @@ class ResultsPage(QWidget):
         combo_loaders.load_classes(self.class_box)
 
     def load_subjects(self, load_table=True):
+        load_table = bool(load_table)
         exam_id = self.exam.currentData()
         class_name = self.class_box.currentText().strip()
         level = SystemState.get_level()
@@ -322,7 +324,7 @@ class ResultsPage(QWidget):
             return
 
         current_subject_full = self.subject.currentText()
-        current_subject_base = current_subject_full.split(" (")[0]
+        current_subject_base = re.sub(r"\s*\(\d+%\)\s*$", "", current_subject_full)
 
         context = get_exam_context(exam_id)
         if not context:
@@ -378,11 +380,14 @@ class ResultsPage(QWidget):
     def load_students(self, subject_name=None):
         exam_id = self.exam.currentData()
         class_name = self.class_box.currentText().strip()
+        if isinstance(subject_name, int):
+            subject_name = None
+
         subject_name = (
             subject_name
             or self._dashboard_subject_name
             or self.subject.currentData()
-            or self.subject.currentText().split(" (")[0].strip()
+            or re.sub(r"\s*\(\d+%\)\s*$", "", self.subject.currentText()).strip()
         )
         level = SystemState.get_level()
 

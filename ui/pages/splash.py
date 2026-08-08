@@ -450,14 +450,15 @@ class SplashScreen(QWidget):
         self.progress.setValue(100)
         self.loading.setText("Launching SRMS V5")
 
-        # --- Fade out with scale effect ---
+        QTimer.singleShot(5000, self._start_exit_animation)
+
+    def _start_exit_animation(self):
         fade_out = QPropertyAnimation(self, b"windowOpacity", self)
         fade_out.setDuration(300)
         fade_out.setStartValue(1.0)
         fade_out.setEndValue(0.0)
         fade_out.setEasingCurve(QEasingCurve.Type.InCubic)
 
-        # Also animate a slight scale down (using a transform on shell)
         shell = self.findChild(QFrame, "SplashShell")
         scale_anim = QPropertyAnimation(shell, b"scale", self)
         scale_anim.setDuration(300)

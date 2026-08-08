@@ -83,11 +83,9 @@ class SchoolProfilePage(QWidget):
         self.head_teacher = QLineEdit()
         self.academic_master = QLineEdit()
         self.discipline_master = QLineEdit()
-        self.class_master = QLineEdit()
         form3.addRow("Head Teacher:", self.head_teacher)
         form3.addRow("Academic Master:", self.academic_master)
         form3.addRow("Discipline Master:", self.discipline_master)
-        form3.addRow("Class Master / Mistress:", self.class_master)
 
         # SECTION 4: BRANDING
         sec4 = QGroupBox("SECTION 4: BRANDING")
@@ -201,7 +199,7 @@ class SchoolProfilePage(QWidget):
             row = fetch_one("""
                 SELECT school_name, school_motto, school_address, school_phone,
                        school_email, school_website, head_teacher, academic_master,
-                       discipline_master, class_master, school_logo, school_stamp,
+                       discipline_master, school_logo, school_stamp,
                        head_teacher_signature,
                        watermark_text,
                        head_teacher_signature_enabled
@@ -218,12 +216,11 @@ class SchoolProfilePage(QWidget):
                 self.head_teacher.setText(row[6] or "")
                 self.academic_master.setText(row[7] or "")
                 self.discipline_master.setText(row[8] or "")
-                self.class_master.setText(row[9] or "")
-                self.logo_path = row[10] or ""
-                self.stamp_path = row[11] or ""
-                self.head_teacher_signature_path = row[12] or ""
-                self.watermark_text.setText(row[13] or "CONFIDENTIAL")
-                self.head_teacher_signature_enabled.setChecked(bool(row[14]))
+                self.logo_path = row[9] or ""
+                self.stamp_path = row[10] or ""
+                self.head_teacher_signature_path = row[11] or ""
+                self.watermark_text.setText(row[12] or "CONFIDENTIAL")
+                self.head_teacher_signature_enabled.setChecked(bool(row[13]))
 
                 if self.logo_path: self.show_preview(self.logo_preview, self.logo_path)
                 if self.stamp_path: self.show_preview(self.stamp_preview, self.stamp_path)
@@ -244,11 +241,11 @@ class SchoolProfilePage(QWidget):
                     INSERT INTO school_profile (
                         school_name, school_motto, school_address, school_phone,
                         school_email, school_website, head_teacher, academic_master,
-                        discipline_master, class_master, school_logo, school_stamp,
+                        discipline_master, school_logo, school_stamp,
                         head_teacher_signature,
                         watermark_text,
                         head_teacher_signature_enabled
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     self.school_name.text(),
                     self.school_motto.text(),
@@ -259,7 +256,6 @@ class SchoolProfilePage(QWidget):
                     self.head_teacher.text(),
                     self.academic_master.text(),
                     self.discipline_master.text(),
-                    self.class_master.text(),
                     self.logo_path,
                     self.stamp_path,
                     self.head_teacher_signature_path if self.head_teacher_signature_enabled.isChecked() else "",
@@ -284,7 +280,6 @@ class SchoolProfilePage(QWidget):
         self.head_teacher.clear()
         self.academic_master.clear()
         self.discipline_master.clear()
-        self.class_master.clear()
         self.logo_path = ""
         self.stamp_path = ""
         self.head_teacher_signature_path = ""

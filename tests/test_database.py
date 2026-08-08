@@ -101,7 +101,6 @@ class TestInitDb:
             "head_teacher_signature",
             "academic_master_signature",
             "discipline_master_signature",
-            "class_master_signature",
         } <= columns
 
     def test_creates_enrollments_table(self, initialized_db):
