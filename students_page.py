@@ -381,17 +381,20 @@ class StudentsPage(QWidget):
                 SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
                 FROM students
                 WHERE level=?
+                  AND class<>?
                   AND (
                       admission_no LIKE ? OR COALESCE(exam_no, '') LIKE ?
                       OR full_name LIKE ? OR class LIKE ? OR COALESCE(stream, '') LIKE ?
                   )
                 ORDER BY id DESC
-            """, (level, pattern, pattern, pattern, pattern, pattern))
+            """, (level, "Graduated", pattern, pattern, pattern, pattern, pattern))
         else:
             rows = fetch_all("""
                 SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
-                FROM students WHERE level=? ORDER BY id DESC
-            """, (level,))
+                FROM students
+                WHERE level=? AND class<>?
+                ORDER BY id DESC
+            """, (level, "Graduated"))
         self.table.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
             for column, value in enumerate(row):

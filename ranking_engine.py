@@ -223,11 +223,10 @@ def compute_student_scores(level, exam_id=None, class_name=None):
             # position will be filled after sorting
         })
 
-    # Now rank ALL students by total marks (descending), then average, then admission
+    # Now rank ALL students by total marks (descending), then admission
     all_students.sort(
         key=lambda x: (
             -float(x["total_marks"]),   # convert to float for numeric sort
-            -float(x["average"]),
             x["admission"]
         )
     )

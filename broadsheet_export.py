@@ -66,6 +66,21 @@ def _format_gender(gender):
             return "F"
     return gender or "-"
 
+def _filter_active_subjects(rows, subjects):
+    """
+    Keep only subjects that at least one student actually has a mark for.
+    Subjects where every row is None/'-'/'' (nobody sat the exam) are dropped
+    so they don't waste columns / rows in the report.
+    """
+    active = []
+    for s in subjects:
+        for r in rows:
+            mark = r['marks'].get(s)
+            if mark is not None and mark != '-' and mark != '':
+                active.append(s)
+                break
+    return active
+
 def _get_grade_point(grade, level):
     """
     Return the grade point for a given grade and level.
@@ -148,12 +163,13 @@ def to_excel(parent, data):
         meta = data['meta']
         school_profile = meta['school_profile']
         palette = _report_palette()
-        last_col = len(data['subjects']) + 8
+        subjects = _filter_active_subjects(data['rows'], data['subjects'])
+        last_col = len(subjects) + 8
         level = meta['level']
 
         school_name = school_profile.get('school_name', 'SCHOOL MANAGEMENT SYSTEM').upper()
         motto = school_profile.get('school_motto') or school_profile.get('motto') or ''
-        address = school_profile.get('school_address') or school_profile.get('school_address', '-') or '-'
+        address = school_profile.get('school_address') or school_profile.get('address', '-') or '-'
         phone = school_profile.get('school_phone') or school_profile.get('phone') or '-'
         email = school_profile.get('school_email') or school_profile.get('email') or '-'
         website = school_profile.get('school_website') or ''
@@ -193,8 +209,7 @@ def to_excel(parent, data):
             cell.alignment = Alignment(horizontal="center", vertical="center")
             ws.row_dimensions[row_no].height = 24 if size >= 14 else 19
 
-        subjects = data['subjects']
-        subject_headers = data.get('subject_headers', [get_subject_short_name(s) for s in subjects])
+        subject_headers = [get_subject_short_name(s) for s in subjects]
         headers = ["Position", "Admission No", "Student Name", "Gender"] + subject_headers + ["Total", "Average", "Points", "Division"]
 
         ws.append([])
@@ -275,9 +290,11 @@ def to_excel(parent, data):
 
         best_sub = None
         worst_sub = None
-        max_gpa = 999
-        min_gpa = -1
+        min_gpa = 999
+        max_gpa = -1
         for sub_name, stats in data['subject_performance'].items():
+            if sub_name not in subjects:
+                continue
             display_name = get_subject_short_name(sub_name)
             # Compute GPA using grade points (level‑aware)
             gpa = _compute_subject_gpa(rows_data, sub_name, level)
@@ -289,10 +306,10 @@ def to_excel(parent, data):
 
             # Track best/worst for summary (only if GPA is a number)
             if isinstance(gpa, (int, float)):
-                if gpa < min_gpa or min_gpa == -1:
+                if gpa < min_gpa or min_gpa == 999:
                     min_gpa = gpa
                     best_sub = display_name
-                if gpa > max_gpa or max_gpa == 999:
+                if gpa > max_gpa or max_gpa == -1:
                     max_gpa = gpa
                     worst_sub = display_name
 
@@ -344,11 +361,14 @@ def to_pdf(parent, data):
         styles = getSampleStyleSheet()
 
         # Custom styles – compact and clear
-        styles.add(ParagraphStyle(name='BrandTitle', alignment=TA_CENTER, fontSize=20, fontName='Helvetica-Bold', leading=22, textColor=colors.white))
-        styles.add(ParagraphStyle(name='BrandMotto', alignment=TA_CENTER, fontSize=9, fontName='Helvetica-Oblique', leading=10, textColor=colors.white))
-        styles.add(ParagraphStyle(name='BrandContact', alignment=TA_CENTER, fontSize=7, fontName='Helvetica', leading=9, textColor=colors.white))
-        styles.add(ParagraphStyle(name='BrandSmallLeft', alignment=TA_LEFT, fontSize=6.5, fontName='Helvetica', leading=8, textColor=colors.white))
-        styles.add(ParagraphStyle(name='BrandSmallRight', alignment=TA_RIGHT, fontSize=6.5, fontName='Helvetica', leading=8, textColor=colors.white))
+        muted_white = colors.HexColor('#B8C7DB')
+        styles.add(ParagraphStyle(name='BrandTitle', alignment=TA_CENTER, fontSize=21, fontName='Helvetica-Bold', leading=23, textColor=colors.white))
+        styles.add(ParagraphStyle(name='BrandMotto', alignment=TA_CENTER, fontSize=9, fontName='Helvetica-Oblique', leading=10, textColor=muted_white))
+        styles.add(ParagraphStyle(name='BrandContact', alignment=TA_CENTER, fontSize=8, fontName='Helvetica', leading=10, textColor=muted_white))
+        styles.add(ParagraphStyle(name='BrandSmallLeft', alignment=TA_LEFT, fontSize=8.5, fontName='Helvetica', leading=11, textColor=colors.white))
+        styles.add(ParagraphStyle(name='BrandSmallLeftSub', alignment=TA_LEFT, fontSize=8, fontName='Helvetica', leading=10, textColor=muted_white))
+        styles.add(ParagraphStyle(name='BrandSmallRight', alignment=TA_RIGHT, fontSize=8.5, fontName='Helvetica', leading=11, textColor=colors.white))
+        styles.add(ParagraphStyle(name='BrandSmallRightSub', alignment=TA_RIGHT, fontSize=8, fontName='Helvetica', leading=10, textColor=muted_white))
         styles.add(ParagraphStyle(name='SectionHeader', alignment=TA_LEFT, fontSize=11, fontName='Helvetica-Bold', leading=13, spaceBefore=10, spaceAfter=5))
         styles.add(ParagraphStyle(name='SigHeader', alignment=TA_CENTER, fontSize=9, fontName='Helvetica-Bold', leading=11))
 
@@ -382,11 +402,31 @@ def to_pdf(parent, data):
             email = school_profile.get('school_email') or '-'
             website = school_profile.get('school_website') or ''
 
+            # Outer header cells carry 8pt padding on each side (16pt total);
+            # the nested tables below must be sized to fit inside that, or
+            # their content overflows past the page's printable edge.
+            cell_pad = 16
+            left_w = doc.width * 0.18 - cell_pad
+            center_w = doc.width * 0.50 - cell_pad
+            right_w = doc.width * 0.32 - cell_pad
+
             center_parts = []
             if settings['show_logo'] and school_profile.get('school_logo') and os.path.exists(school_profile['school_logo']):
                 try:
-                    logo = Image(school_profile['school_logo'], width=0.6 * inch, height=0.6 * inch)
-                    center_parts.append([logo])
+                    logo_size = 0.68 * inch
+                    logo = Image(school_profile['school_logo'], width=logo_size, height=logo_size)
+                    logo_plate = Table([[logo]], colWidths=[logo_size + 8])
+                    logo_plate.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+                        ('BOX', (0, 0), (-1, -1), 1, accent),
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('TOPPADDING', (0, 0), (-1, -1), 4),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                    ]))
+                    center_parts.append([logo_plate])
                 except Exception as e:
                     print(f"[WARNING] Could not load PDF logo: {e}")
 
@@ -396,7 +436,7 @@ def to_pdf(parent, data):
             contact_info = f"{address} | Tel: {phone} | Email: {email} | {website}".strip(' |')
             center_parts.append([Paragraph(contact_info, styles['BrandContact'])])
 
-            center_table = Table(center_parts, colWidths=[doc.width * 0.5])
+            center_table = Table(center_parts, colWidths=[center_w])
             center_table.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -406,26 +446,24 @@ def to_pdf(parent, data):
 
             left_info = [
                 [Paragraph('<b>REPORT TYPE</b>', styles['BrandSmallLeft'])],
-                [Paragraph('CLASS BROADSHEET', styles['BrandSmallLeft'])],
-                [Paragraph('Academic Summary', styles['BrandSmallLeft'])],
+                [Paragraph('CLASS BROADSHEET', styles['BrandSmallLeftSub'])],
+                [Paragraph('Academic Summary', styles['BrandSmallLeftSub'])],
             ]
-            left = Table(left_info, colWidths=[doc.width * 0.18])
+            left = Table(left_info, colWidths=[left_w])
             left.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('TEXTCOLOR', (0, 0), (-1, -1), colors.white),
             ]))
 
             right_info = [
                 [Paragraph('<b>ACADEMIC CONTEXT</b>', styles['BrandSmallRight'])],
-                [Paragraph(f"Class: {meta['class']} ({meta['level']})", styles['BrandSmallRight'])],
-                [Paragraph(f"{meta['exam']} | {meta['term']} - {meta['year']}", styles['BrandSmallRight'])],
+                [Paragraph(f"Class: {meta['class']} ({meta['level']})", styles['BrandSmallRightSub'])],
+                [Paragraph(f"{meta['exam']} | {meta['term']} - {meta['year']}", styles['BrandSmallRightSub'])],
             ]
-            right = Table(right_info, colWidths=[doc.width * 0.32])
+            right = Table(right_info, colWidths=[right_w])
             right.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-                ('TEXTCOLOR', (0, 0), (-1, -1), colors.white),
             ]))
 
             header = Table(
@@ -440,10 +478,22 @@ def to_pdf(parent, data):
                 ('RIGHTPADDING', (0, 0), (-1, -1), 8),
                 ('TOPPADDING', (0, 0), (-1, -1), 2),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                ('LINEBELOW', (0, 0), (-1, -1), 2, accent),
+                ('LINEBELOW', (0, 0), (-1, -1), 2.5, accent),
             ]))
 
             header_frame.addFromList([header], canvas)
+
+            # Divider lines between the three header zones — kept bright enough
+            # (mid-tone accent, not a near-navy shade) to still separate cleanly
+            # if this is printed or photocopied in black and white.
+            band_top = doc.height + doc.topMargin
+            band_bottom = band_top - 1.5 * inch + 0.1 * inch
+            divider_x1 = doc.leftMargin + doc.width * 0.18
+            divider_x2 = doc.leftMargin + doc.width * 0.68
+            canvas.setStrokeColor(accent)
+            canvas.setLineWidth(0.75)
+            canvas.line(divider_x1, band_bottom, divider_x1, band_top - 0.12 * inch)
+            canvas.line(divider_x2, band_bottom, divider_x2, band_top - 0.12 * inch)
 
             canvas.setFont('Helvetica', 7)
             canvas.setFillColor(colors.HexColor('#64748B'))
@@ -471,8 +521,8 @@ def to_pdf(parent, data):
         _set_progress(progress, 20, "Building broadsheet table")
 
         # ----- Main student table -----
-        subjects_full = data['subjects']
-        subject_headers = data.get('subject_headers', [get_subject_short_name(s) for s in subjects_full])
+        subjects_full = _filter_active_subjects(data['rows'], data['subjects'])
+        subject_headers = [get_subject_short_name(s) for s in subjects_full]
         headers = ["Pos", "Adm No", "Name", "Sex"] + subject_headers + ["Tot", "Avg", "Pts", "Div"]
 
         table_data = [headers]
@@ -633,6 +683,8 @@ def to_pdf(parent, data):
         min_gpa = 999
         max_gpa = -1
         for sub_name, stats in sub_perf.items():
+            if sub_name not in subjects_full:
+                continue
             display_name = get_subject_short_name(sub_name)
             gpa = _compute_subject_gpa(rows_data, sub_name, level)
             avg_mark = stats['average']
@@ -667,7 +719,11 @@ def to_pdf(parent, data):
             sub_ranking = data['subject_ranking']
             elements.append(Paragraph("SUBJECT RANKING (by Average Score)", styles['SectionHeader']))
             sub_ranking_data = [["Rank", "Subject"]]
-            for rank, (sub_name, stats) in enumerate(sub_ranking, 1):
+            rank = 0
+            for sub_name, stats in sub_ranking:
+                if sub_name not in subjects_full:
+                    continue
+                rank += 1
                 display_name = get_subject_short_name(sub_name)
                 sub_ranking_data.append([rank, f"{display_name} (Avg: {stats['average']})"])
             sub_ranking_table = Table(sub_ranking_data, colWidths=[1*inch, 3*inch])

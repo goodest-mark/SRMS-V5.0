@@ -1,7 +1,9 @@
 from system_state import SystemState
 
+GRADUATED_CLASS = "Graduated"
 
-def get_classes():
+
+def get_classes(include_graduated=False):
     level = SystemState.get_level()
 
     classes_map = {
@@ -18,7 +20,10 @@ def get_classes():
         ]
     }
 
-    return classes_map.get(level, [])
+    classes = classes_map.get(level, [])
+    if include_graduated:
+        classes = classes + [GRADUATED_CLASS]
+    return classes
 
 
 def get_level_for_class(class_name):

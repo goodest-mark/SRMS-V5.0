@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from backup_utils import create_pre_operation_backup
-from class_utils import get_classes
+from class_utils import GRADUATED_CLASS, get_classes
 from db_utils import fetch_all, fetch_one, get_cursor
 from event_bus import EventBus
 from ranking_engine import compute_student_scores
@@ -24,12 +24,13 @@ from system_state import SystemState
 from ui_helpers import show_error, show_info
 import combo_loaders
 
-
 PROMOTION_MAP = {
     "Form I": "Form II",
     "Form II": "Form III",
     "Form III": "Form IV",
+    "Form IV": GRADUATED_CLASS,
     "Form V": "Form VI",
+    "Form VI": GRADUATED_CLASS,
 }
 
 
@@ -264,32 +265,48 @@ class PromotionPage(QWidget):
             show_error(self, "Select at least one student to promote.")
             return
 
-        # Get active term and its academic year
-        active_term = fetch_one("SELECT id, academic_year_id FROM terms WHERE is_active=1 LIMIT 1")
-        if not active_term:
-            show_error(
-                self,
-                "No active term found. Enrollments cannot be copied.\n"
-                "Please set an active term in Academics > Terms and try again.",
-                title="Missing Active Term"
-            )
-            return
-        term_id, year_id = active_term
+        is_graduation = target_class == GRADUATED_CLASS
+        term_id = year_id = None
+        if not is_graduation:
+            # Get active term and its academic year for enrollment copying
+            active_term = fetch_one("SELECT id, academic_year_id FROM terms WHERE is_active=1 LIMIT 1")
+            if not active_term:
+                show_error(
+                    self,
+                    "No active term found. Enrollments cannot be copied.\n"
+                    "Please set an active term in Academics > Terms and try again.",
+                    title="Missing Active Term"
+                )
+                return
+            term_id, year_id = active_term
 
-        # Show warning about enrollment copying
+        # Show warning about promotion or graduation
+        if is_graduation:
+            message = (
+                f"Graduate {len(admissions)} student(s) from {source_class}?\n\n"
+                "Graduated students will be moved to the Graduated class and "
+                "their current enrollments will not be copied."
+            )
+            dialog_title = "Apply Graduation"
+        else:
+            message = (
+                f"Promote {len(admissions)} student(s) from {source_class} to {target_class}?\n\n"
+                "Their subject enrollments will be automatically copied to the new class "
+                "for the active term and academic year."
+            )
+            dialog_title = "Apply Promotion"
+
         reply = QMessageBox.question(
             self,
-            "Apply Promotion",
-            f"Promote {len(admissions)} student(s) from {source_class} to {target_class}?\n\n"
-            "Their subject enrollments will be automatically copied to the new class "
-            "for the active term and academic year.",
+            dialog_title,
+            message,
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
 
-        if not authorize_action(self, "Apply Promotion"):
+        if not authorize_action(self, dialog_title):
             return
 
         try:
@@ -317,19 +334,28 @@ class PromotionPage(QWidget):
                     ],
                 )
 
-            # Copy enrollments for each promoted student
-            for admission_no in admissions:
-                self._copy_enrollments(admission_no, source_class, target_class, year_id, term_id)
+            if not is_graduation:
+                # Copy enrollments for each promoted student
+                for admission_no in admissions:
+                    self._copy_enrollments(admission_no, source_class, target_class, year_id, term_id)
 
         except Exception as error:
             show_error(self, f"Promotion failed:\n{error}")
             return
 
         EventBus.emit("STUDENTS_UPDATED")
-        show_info(
-            self,
-            f"Promoted {len(admissions)} student(s) and copied their enrollments.\n"
-            f"Backup: {backup_path}",
-            title="Promotion Complete",
-        )
+        if is_graduation:
+            show_info(
+                self,
+                f"Graduated {len(admissions)} student(s).\n"
+                f"Backup: {backup_path}",
+                title="Graduation Complete",
+            )
+        else:
+            show_info(
+                self,
+                f"Promoted {len(admissions)} student(s) and copied their enrollments.\n"
+                f"Backup: {backup_path}",
+                title="Promotion Complete",
+            )
         self.preview()

@@ -38,7 +38,7 @@ class HistoricalResultsPage(QWidget):
         self.term_box = QComboBox()
         self.exam_box = QComboBox()
         self.class_box = QComboBox()
-        self.class_box.addItems(get_classes())
+        self.class_box.addItems(get_classes(include_graduated=True))
 
         self.year_box.currentIndexChanged.connect(self._on_year_changed)
         self.term_box.currentIndexChanged.connect(self._on_term_changed)

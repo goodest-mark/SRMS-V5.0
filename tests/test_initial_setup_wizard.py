@@ -19,7 +19,7 @@ def test_needs_initial_setup_false_after_profile_completed(initialized_db):
             head_teacher_signature, academic_master_signature,
             discipline_master_signature,
             login_background, dashboard_background, watermark_text
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "Test School", "", "", "", "", "", "", "", "", "", "",

@@ -246,6 +246,12 @@ def _get_student_styles():
     _student_styles_cache['req_item'] = ParagraphStyle(
         'req_item', fontName='Helvetica', fontSize=11,
         alignment=TA_LEFT, leading=13)
+    _student_styles_cache['sig_label'] = ParagraphStyle(
+        'sig_label', fontName='Helvetica-Bold', fontSize=11,
+        alignment=TA_CENTER, leading=13, textColor=NAVY)
+    _student_styles_cache['sig_text'] = ParagraphStyle(
+        'sig_text', fontName='Helvetica', fontSize=11,
+        alignment=TA_LEFT, leading=13)
     _student_styles_cache['tiny_b'] = ParagraphStyle(
         'student_tiny_b', fontName='Helvetica-Bold', fontSize=6.5,
         alignment=TA_CENTER, leading=7.5)
@@ -937,11 +943,12 @@ def _build_student_page_results(ST, short_names, marks, grades):
         ]
         table = Table(rows, colWidths=[label_w, USABLE_WIDTH - label_w])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), NAVY),
-            ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-            ('BACKGROUND', (0, 1), (-1, 1), NAVY_LIGHT),
-            ('BACKGROUND', (0, 2), (0, 2), NAVY),
-            ('TEXTCOLOR', (0, 2), (0, 2), WHITE),
+            ('BACKGROUND', (0, 0), (-1, 0), NAVY_LIGHT),
+            ('TEXTCOLOR', (0, 0), (-1, 0), NAVY),
+            ('LINEBELOW', (0, 0), (-1, 0), 1.2, NAVY),
+            ('BACKGROUND', (0, 1), (0, 1), NAVY_LIGHT),
+            ('BACKGROUND', (0, 2), (0, 2), NAVY_LIGHT),
+            ('TEXTCOLOR', (0, 2), (0, 2), NAVY),
             ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
             ('GRID', (0, 0), (-1, -1), 0.3, GRID_COLOR),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -976,19 +983,20 @@ def _build_student_page_results(ST, short_names, marks, grades):
         col_widths = [label_w] + [subject_w] * col_count
         table = Table([subject_row, marks_row, grade_cells], colWidths=col_widths)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), NAVY),
-            ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-            ('BACKGROUND', (0, 1), (-1, 1), NAVY_LIGHT),
-            ('BACKGROUND', (0, 2), (0, 2), NAVY),
-            ('TEXTCOLOR', (0, 2), (0, 2), WHITE),
+            ('BACKGROUND', (0, 0), (-1, 0), NAVY_LIGHT),
+            ('TEXTCOLOR', (0, 0), (-1, 0), NAVY),
+            ('LINEBELOW', (0, 0), (-1, 0), 1.2, NAVY),
+            ('BACKGROUND', (0, 1), (0, 1), NAVY_LIGHT),
+            ('BACKGROUND', (0, 2), (0, 2), NAVY_LIGHT),
+            ('TEXTCOLOR', (0, 2), (0, 2), NAVY),
             ('BOX', (0, 0), (-1, -1), 0.5, NAVY),
             ('GRID', (0, 0), (-1, -1), 0.3, GRID_COLOR),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LEFTPADDING', (0, 0), (-1, -1), 3),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         ]))
         flowables.append(table)
         if ci < len(chunks) - 1:
@@ -1041,7 +1049,7 @@ def _build_requirements_block(ST, requirements_data, opening_date, closing_date,
         style_cmds.append(('BACKGROUND', (0, r), (-1, r), LIGHT_BG))
     body.setStyle(TableStyle(style_cmds))
 
-    return Table([[title], [Spacer(1, 3)], [dates], [Spacer(1, 3)], [body]], colWidths=[width])
+    return Table([[title], [Spacer(1, 6)], [dates], [Spacer(1, 6)], [body]], colWidths=[width])
 
 
 def _build_comments_block(ST, discipline_remarks, teacher_remarks, academic_remarks, width):
@@ -1078,7 +1086,7 @@ def _build_comments_block(ST, discipline_remarks, teacher_remarks, academic_rema
             ('BOTTOMPADDING', (0, 0), (0, 0), 2),
         ]))
         rows.append([block])
-        rows.append([Spacer(1, 6)])
+        rows.append([Spacer(1, 10)])
 
     return Table(rows, colWidths=[width])
 
@@ -1187,17 +1195,18 @@ def _build_student_report_content(
             year_name, term_name, exam_name, level, class_name,
             student_stream, generated_date
         ),
+        Spacer(1, 5),
         _build_student_name_banner(
             ST, student_name, student_adm, class_name, level, student_gender, student_status
         ),
-        Spacer(1, 5),
+        Spacer(1, 15),
         _build_student_page_metrics(
             ST, class_position, total_students, division, points, average, student_status
         ),
-        Spacer(1, 3),
+        Spacer(1, 13),
     ]
     content.extend(_build_student_page_results(ST, short_names, marks_vals, grades_vals))
-    content.append(Spacer(1, 5))
+    content.append(Spacer(1, 20))
     content.append(
         _build_lower_section(
             ST, requirements_data, use_req, opening_date, closing_date,
@@ -1207,7 +1216,7 @@ def _build_student_report_content(
             discipline_remarks=discipline_remarks,
         )
     )
-    content.append(Spacer(1, 5))
+    content.append(Spacer(1, 22))
     content.append(
         _build_signatures(
             ST,
@@ -1222,19 +1231,18 @@ def _build_student_report_content(
             exam_name=exam_name,
         )
     )
-    content.append(Spacer(1, 3))
+    content.append(Spacer(1, 12))
     content.append(_build_student_page_footer(ST))
-    content.append(Spacer(1, 2))
+    content.append(Spacer(1, 5))
     content.append(Paragraph(
         '<b>Note:</b> This report is computer generated and requires only the head teacher signature.',
         ST['note']
     ))
     contacts_line = _build_footer_contacts(ST, school_addr, school_phone, school_email, school_website)
     if contacts_line is not None:
-        content.append(Spacer(1, 4))
+        content.append(Spacer(1, 8))
         content.append(contacts_line)
-    content.append(Spacer(1, 2))
-    content.append(_build_srms_tag(ST, school_name, year_name))
+    content.append(Spacer(1, 3))
     if include_page_break:
         content.append(PageBreak())
     return content
@@ -1254,8 +1262,8 @@ def _build_signatures(
 ):
     GAP = 8
     col_w = (USABLE_WIDTH - GAP * 3) / 4
-    sig_style = ST.get('tiny_left') or ST.get('sig')
-    sig_hdr_style = ST.get('tiny_b') or ST.get('sig_hdr')
+    sig_style = ST['sig_text']
+    sig_hdr_style = ST['sig_label']
 
     def labeled_block(title, body_flowable, caption_text):
         tbl = Table(
@@ -1265,7 +1273,7 @@ def _build_signatures(
                 [Paragraph(caption_text, sig_style)],
             ],
             colWidths=[col_w],
-            rowHeights=[0.22 * inch, 0.42 * inch, 0.24 * inch],
+            rowHeights=[0.44 * inch, 0.42 * inch, 0.34 * inch],
         )
         tbl.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -1281,7 +1289,7 @@ def _build_signatures(
     if head_signature is None:
         head_signature = Paragraph('Signature: __________', sig_style)
     head_block = labeled_block(
-        'HEADMASTER/MISTRESS',
+        'HEAD TEACHER / HEADMASTER',
         head_signature,
         f'Name: {head_teacher}' if head_teacher else 'Name: __________',
     )

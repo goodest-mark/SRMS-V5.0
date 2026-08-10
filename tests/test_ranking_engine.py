@@ -233,11 +233,11 @@ class TestComputeStudentScoresOLevel:
         bob = next(r for r in ranking if r["admission"] == "ADM002")
         assert alice["position"] < bob["position"]
 
-    def test_ready_students_sorted_by_average_descending(self, db_with_results):
+    def test_ready_students_sorted_by_total_marks_descending(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])
         ready = [r for r in ranking if r["status"] == "READY"]
-        averages = [r["average"] for r in ready]
-        assert averages == sorted(averages, reverse=True)
+        totals = [r["total_marks"] for r in ready]
+        assert totals == sorted(totals, reverse=True)
 
     def test_total_marks_rank_before_average(self, db_with_average_ranking_case):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_average_ranking_case["exam_id"])
