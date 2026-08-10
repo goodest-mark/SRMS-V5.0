@@ -131,8 +131,7 @@ full terms and conditions.
 
 DEVELOPER
 ===============================================================================
-
-Mark Essah – https://github.com/goodest-mark
+Issa Twalibu – https://github.com/goodest-mark
 
 
 ACKNOWLEDGEMENTS
