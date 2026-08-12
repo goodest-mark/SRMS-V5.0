@@ -1,3 +1,4 @@
+import logging
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -7,8 +8,10 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox, QProgressDialog, QApplic
 from db_utils import fetch_one
 import os
 
+logger = logging.getLogger(__name__)
 
-def _make_progress(parent, title):
+
+def make_progress(parent, title):
     progress = QProgressDialog(title, None, 0, 100, parent)
     progress.setWindowTitle(title)
     progress.setWindowModality(Qt.WindowModal if parent else Qt.NonModal)
@@ -21,7 +24,7 @@ def _make_progress(parent, title):
     return progress
 
 
-def _set_progress(progress, percent, message):
+def set_progress(progress, percent, message):
     if progress is None:
         return
     progress.setValue(max(0, min(100, int(percent))))
@@ -32,12 +35,12 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
     path, _ = QFileDialog.getSaveFileName(parent, "Download Template", filename, "Excel Files (*.xlsx)")
     if not path: return
     
-    progress = _make_progress(parent, "Creating template...")
+    progress = make_progress(parent, "Creating template...")
     try:
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Template"
-        _set_progress(progress, 10, "Preparing template")
+        set_progress(progress, 10, "Preparing template")
 
         # 1. School Header
         profile = fetch_one("""
@@ -77,53 +80,58 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
                 ws.add_image(logo, "A1")
             except Exception:
                 pass
-        _set_progress(progress, 35, "Adding school header")
+        set_progress(progress, 35, "Adding school header")
 
         # Row 5: Instructions
         ws.cell(row=5, column=1, value="INSTRUCTIONS:").font = bold_font
         if not instructions:
             instructions = [
-                "1. Do not modify the column headers in Row 10.",
-                "2. Start data entry from Row 12 (below the sample row).",
+                "1. Do not modify the column headers below.",
+                "2. Start data entry from the row below the sample row.",
                 "3. Ensure the 'Admission No' exists in the system where required.",
                 "4. Keep the sample row as a formatting guide and replace it with real data."
             ]
+        instructions_start_row = 6
         for i, text in enumerate(instructions):
-            ws.cell(row=6 + i, column=1, value=text).font = Font(italic=True, size=9)
-        _set_progress(progress, 55, "Writing instructions")
+            ws.cell(row=instructions_start_row + i, column=1, value=text).font = Font(italic=True, size=9)
+        set_progress(progress, 55, "Writing instructions")
 
-        # Row 10: Headers
+        # Headers row: placed dynamically after the instructions, with a blank spacer row
+        header_row = instructions_start_row + len(instructions) + 1
         for col_num, header in enumerate(headers, 1):
-            cell = ws.cell(row=10, column=col_num, value=header)
+            cell = ws.cell(row=header_row, column=col_num, value=header)
             cell.fill = blue_fill
             cell.font = white_font
             cell.alignment = center_align
-        _set_progress(progress, 75, "Writing headers")
+        set_progress(progress, 75, "Writing headers")
 
-        # Row 11: Sample Row
+        # Sample row: directly below the headers
+        sample_row = header_row + 1
         if samples:
             for col_num, val in enumerate(samples, 1):
-                cell = ws.cell(row=11, column=col_num, value=val)
+                cell = ws.cell(row=sample_row, column=col_num, value=val)
                 cell.font = Font(italic=True, color="808080")
-        _set_progress(progress, 90, "Adding sample row")
+        set_progress(progress, 90, "Adding sample row")
 
         # Freeze Panes (Header stays visible)
-        ws.freeze_panes = "A11"
+        ws.freeze_panes = f"A{sample_row}"
 
-        # Auto Column Width
-        for col in ws.columns:
+        # Auto Column Width — only measure from the header row downward so the
+        # school-name/instructions block (all in column A) doesn't blow out col A's width
+        for col_num in range(1, len(headers) + 1):
+            column_letter = get_column_letter(col_num)
             max_length = 0
-            column_letter = get_column_letter(col[0].column)
-            for cell in col:
+            for row_num in range(header_row, ws.max_row + 1):
+                cell = ws.cell(row=row_num, column=col_num)
                 if cell.value:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
+                    max_length = max(max_length, len(str(cell.value)))
             ws.column_dimensions[column_letter].width = max_length + 4
 
         wb.save(path)
-        _set_progress(progress, 100, "Template saved")
+        set_progress(progress, 100, "Template saved")
         QMessageBox.information(parent, "Success", f"Template saved to {path}")
     except Exception as e:
+        logger.exception("Failed to generate enrollment template")
         QMessageBox.critical(parent, "Error", "Failed to save template. Please check the file path and try again.")
     finally:
         progress.close()
@@ -132,7 +140,7 @@ def export_to_excel(parent, filename, headers, data):
     path, _ = QFileDialog.getSaveFileName(parent, "Export Data", filename, "Excel Files (*.xlsx)")
     if not path: return
     
-    progress = _make_progress(parent, "Exporting data...")
+    progress = make_progress(parent, "Exporting data...")
     try:
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -141,11 +149,12 @@ def export_to_excel(parent, filename, headers, data):
         for index, row in enumerate(data, start=1):
             ws.append(row)
             if index == 1 or index == total or index % 10 == 0:
-                _set_progress(progress, int((index / total) * 90), "Writing rows")
+                set_progress(progress, int((index / total) * 90), "Writing rows")
         wb.save(path)
-        _set_progress(progress, 100, "Export complete")
+        set_progress(progress, 100, "Export complete")
         QMessageBox.information(parent, "Success", f"Data exported to {path}")
     except Exception as e:
+        logger.exception("Failed to export enrollment data")
         QMessageBox.critical(parent, "Error", "Failed to export data. Please check the file path and try again.")
     finally:
         progress.close()
@@ -153,3 +162,47 @@ def export_to_excel(parent, filename, headers, data):
 def get_import_file(parent):
     path, _ = QFileDialog.getOpenFileName(parent, "Select Excel File", "", "Excel Files (*.xlsx *.xls)")
     return path
+
+
+def find_header_row(ws, instructions_label="INSTRUCTIONS:", max_scan_row=60):
+    """Locate the header row written by download_template().
+
+    The generated layout is always: a row with `instructions_label` in
+    column A, one row per instruction line (also column A, no gaps), a
+    single blank spacer row, then the header row. Scanning for this
+    structure (rather than hardcoding a row number) keeps import code
+    correct regardless of how many instructions a given template call
+    passed in — the header/sample/data rows all shift depending on that
+    count.
+
+    Returns the 1-indexed header row number, or None if the expected
+    structure isn't found (e.g. a hand-edited or non-template file), so
+    callers can surface a clear error instead of silently misreading data.
+    """
+    label_row = None
+    for row in range(1, max_scan_row + 1):
+        value = ws.cell(row=row, column=1).value
+        if value and str(value).strip().upper() == instructions_label:
+            label_row = row
+            break
+    if label_row is None:
+        return None
+
+    row = label_row + 1
+    while row <= max_scan_row and ws.cell(row=row, column=1).value not in (None, ""):
+        row += 1
+    # `row` is now the first blank spacer row after the instructions; the
+    # header row immediately follows it.
+    header_row = row + 1
+    if header_row > max_scan_row:
+        return None
+    return header_row
+
+
+def find_data_start_row(ws, instructions_label="INSTRUCTIONS:", max_scan_row=60):
+    """Header row + 1 (sample row) + 1 = first real data row. Returns None
+    if the header row itself can't be located."""
+    header_row = find_header_row(ws, instructions_label=instructions_label, max_scan_row=max_scan_row)
+    if header_row is None:
+        return None
+    return header_row + 2

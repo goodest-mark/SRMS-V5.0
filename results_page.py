@@ -294,10 +294,14 @@ class ResultsPage(QWidget):
                 selected_index = i
                 break
 
-        if selected_index >= 0:
-            self.subject.setCurrentIndex(selected_index)
-        elif self.subject.count() == 0:
-            self._clear_table()
+        self.subject.blockSignals(True)
+        try:
+            if selected_index >= 0:
+                self.subject.setCurrentIndex(selected_index)
+            elif self.subject.count() == 0:
+                self._clear_table()
+        finally:
+            self.subject.blockSignals(False)
 
         QTimer.singleShot(0, lambda: self.load_students(subject_name))
 
@@ -605,7 +609,16 @@ class ResultsPage(QWidget):
         try:
             wb = openpyxl.load_workbook(path, data_only=True)
             sheet = wb.active
-            rows = list(sheet.iter_rows(min_row=12, values_only=True))
+
+            data_start_row = excel_utils.find_data_start_row(sheet)
+            if data_start_row is None:
+                raise ValueError(
+                    "Could not detect the template's header row. Please use a "
+                    "template downloaded from this system, and don't remove "
+                    "the 'INSTRUCTIONS:' block or reorder rows."
+                )
+
+            rows = list(sheet.iter_rows(min_row=data_start_row, values_only=True))
 
             context = get_exam_context(exam_id)
             if not context:

@@ -64,6 +64,14 @@ class StudentsPage(QWidget):
         # TOP NAVIGATION BUTTONS
         # =====================================================
         nav_layout = QHBoxLayout()
+        nav_layout.setContentsMargins(0, 0, 0, 12)
+
+        nav_container = QFrame()
+        nav_container.setObjectName("studentsNavContainer")
+        nav_container_layout = QHBoxLayout(nav_container)
+        nav_container_layout.setContentsMargins(4, 4, 4, 4)
+        nav_container_layout.setSpacing(4)
+
         self.btn_students = QPushButton("STUDENTS")
         self.btn_students.setObjectName("navButton")
         self.btn_registration = QPushButton("REGISTRATION")
@@ -72,17 +80,46 @@ class StudentsPage(QWidget):
         self.btn_reports.setObjectName("navButton")
         for btn in (self.btn_students, self.btn_registration, self.btn_reports):
             btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedHeight(38)
+            btn.setMinimumWidth(130)
+            nav_container_layout.addWidget(btn)
         self.btn_students.setProperty("variant", "accent")
         self.btn_registration.setProperty("variant", "default")
         self.btn_reports.setProperty("variant", "default")
+
+        nav_container.setStyleSheet("""
+            QFrame#studentsNavContainer {
+                background-color: #EEF1F6;
+                border-radius: 12px;
+            }
+            QFrame#studentsNavContainer QPushButton#navButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 9px;
+                padding: 8px 18px;
+                font-weight: 600;
+                font-size: 12px;
+                color: #5B6472;
+            }
+            QFrame#studentsNavContainer QPushButton#navButton:hover {
+                background-color: #E0E4EC;
+                color: #1E293B;
+            }
+            QFrame#studentsNavContainer QPushButton#navButton[variant="accent"] {
+                background-color: #1E3A8A;
+                color: #FFFFFF;
+            }
+            QFrame#studentsNavContainer QPushButton#navButton[variant="accent"]:hover {
+                background-color: #1E3A8A;
+            }
+        """)
 
         self.btn_students.clicked.connect(lambda: self.switch_page(0))
         self.btn_registration.clicked.connect(lambda: self.switch_page(1))
         self.btn_reports.clicked.connect(lambda: self.switch_page(2))
 
-        nav_layout.addWidget(self.btn_students)
-        nav_layout.addWidget(self.btn_registration)
-        nav_layout.addWidget(self.btn_reports)
+        nav_layout.addWidget(nav_container)
         nav_layout.addStretch()
 
         main_layout.addLayout(nav_layout)
@@ -98,10 +135,18 @@ class StudentsPage(QWidget):
         list_layout.setContentsMargins(0, 0, 0, 0)
         list_layout.setSpacing(12)
 
+        list_top = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search student...")
         self.search.textChanged.connect(self.load_list)
-        list_layout.addWidget(self.search)
+        list_top.addWidget(self.search)
+
+        self.delete_selected_btn = QPushButton("Delete Selected")
+        self.delete_selected_btn.setObjectName("workflowDanger")
+        self.delete_selected_btn.clicked.connect(self.delete_selected_students)
+        self.delete_selected_btn.setEnabled(False)
+        list_top.addWidget(self.delete_selected_btn)
+        list_layout.addLayout(list_top)
 
         self.table = QTableWidget()
         self.table.setColumnCount(8)
@@ -113,10 +158,11 @@ class StudentsPage(QWidget):
         self.table.setColumnHidden(7, True)   # Level
 
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
         self.table.doubleClicked.connect(self.on_student_double_clicked)
+        self.table.itemSelectionChanged.connect(self.update_delete_selected_button)
 
         header = self.table.horizontalHeader()
         for col in range(self.table.columnCount()):
@@ -263,9 +309,12 @@ class StudentsPage(QWidget):
 
         # Action buttons
         reports_actions = QHBoxLayout()
-        self.view_report_page_btn = QPushButton("VIEW REPORT")
-        self.download_report_page_btn = QPushButton("DOWNLOAD REPORT")
-        self.preview_marks_btn = QPushButton("PREVIEW MARKS")
+        self.view_report_page_btn = QPushButton("View Report")
+        self.view_report_page_btn.setObjectName("workflowPrimary")
+        self.download_report_page_btn = QPushButton("Download Report")
+        self.download_report_page_btn.setObjectName("workflowSecondary")
+        self.preview_marks_btn = QPushButton("Preview Marks")
+        self.preview_marks_btn.setObjectName("workflowSecondary")
         self.view_report_page_btn.clicked.connect(self.view_selected_exam_report_page)
         self.download_report_page_btn.clicked.connect(self.download_selected_exam_report_page)
         self.preview_marks_btn.clicked.connect(self.preview_selected_exam_marks)
@@ -365,11 +414,11 @@ class StudentsPage(QWidget):
         current_class = self.class_box.currentText()
         classes = get_classes()
         self.class_box.clear()
-        self.class_box.addItems(classes)
+        self.class_box.addItems(["-- Select Class --"] + classes)
         index = self.class_box.findText(current_class)
-        if index >= 0:
+        if index > 0:
             self.class_box.setCurrentIndex(index)
-        elif self.class_box.count() > 0:
+        else:
             self.class_box.setCurrentIndex(0)
 
     def load_list(self):
@@ -402,6 +451,7 @@ class StudentsPage(QWidget):
                 item = QTableWidgetItem(text)
                 item.setToolTip(text)
                 self.table.setItem(row_index, column, item)
+        self.update_delete_selected_button()
 
     def on_student_double_clicked(self):
         row = self.table.currentRow()
@@ -430,7 +480,7 @@ class StudentsPage(QWidget):
             comments_row = cur.fetchone()
             self.comment.setText(comments_row[0] if comments_row and comments_row[0] else "")
 
-        self.save_btn.setText("UPDATE")
+        self.save_btn.setText("Update Student")
         self.delete_btn.setEnabled(True)
         self.switch_page(1)
 
@@ -447,7 +497,7 @@ class StudentsPage(QWidget):
         stream = self.stream.text().strip()
         level = SystemState.get_level()
 
-        if not admission_no or not full_name or not class_name:
+        if not admission_no or not full_name or not class_name or class_name == "-- Select Class --":
             QMessageBox.warning(self, "Required Fields", "Admission number, full name and class are required.")
             return
 
@@ -479,7 +529,8 @@ class StudentsPage(QWidget):
         if self.selected_id is None:
             QMessageBox.warning(self, "Delete Student", "Select a student before deleting.")
             return
-        answer = QMessageBox.question(self, "Delete Student", "Are you sure you want to delete this student?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        student_name = self.name.text().strip() or "this student"
+        answer = QMessageBox.question(self, "Delete Student", f"Are you sure you want to delete '{student_name}'?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if answer != QMessageBox.Yes:
             return
         if not authorize_action(self, "Delete Student"):
@@ -493,6 +544,61 @@ class StudentsPage(QWidget):
         self.clear_form()
         EventBus.emit("STUDENTS_UPDATED")
 
+    def update_delete_selected_button(self):
+        count = len(self.table.selectionModel().selectedRows())
+        self.delete_selected_btn.setEnabled(count > 0)
+        self.delete_selected_btn.setText(f"Delete Selected ({count})" if count > 0 else "Delete Selected")
+
+    def delete_selected_students(self):
+        selected_rows = sorted(set(idx.row() for idx in self.table.selectionModel().selectedRows()))
+        if not selected_rows:
+            QMessageBox.warning(self, "Delete Students", "Select at least one student to delete.")
+            return
+
+        students = []
+        for row in selected_rows:
+            id_item = self.table.item(row, 0)
+            name_item = self.table.item(row, 3)
+            if id_item is None:
+                continue
+            try:
+                sid = int(id_item.text())
+            except ValueError:
+                continue
+            students.append((sid, name_item.text() if name_item else "(unnamed)"))
+        if not students:
+            return
+
+        count = len(students)
+        if count == 1:
+            message = f"Are you sure you want to delete '{students[0][1]}'?"
+        else:
+            preview = ", ".join(name for _, name in students[:5])
+            if count > 5:
+                preview += f", and {count - 5} more"
+            message = f"Are you sure you want to delete {count} students?\n\n{preview}"
+        answer = QMessageBox.question(self, "Delete Students", message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return
+        if not authorize_action(self, "Delete Student" if count == 1 else f"Delete {count} Students"):
+            return
+
+        ids = [sid for sid, _ in students]
+        try:
+            with get_cursor(commit=True) as cur:
+                cur.executemany("DELETE FROM students WHERE id=?", [(sid,) for sid in ids])
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error", f"An unexpected error occurred while deleting student records: {e}")
+            return
+
+        if self.selected_id in ids:
+            self.clear_form()
+        # load_list()/load_reports_search() run via the STUDENTS_UPDATED
+        # subscription below (see on_students_updated) — calling them here
+        # too would refresh both twice for no benefit.
+        EventBus.emit("STUDENTS_UPDATED")
+        QMessageBox.information(self, "Delete Students", f"Deleted {count} student(s).")
+
     def clear_form(self):
         self.selected_id = None
         self.selected_admission_no = None
@@ -504,7 +610,7 @@ class StudentsPage(QWidget):
         self.gender.setCurrentIndex(0)
         if self.class_box.count() > 0:
             self.class_box.setCurrentIndex(0)
-        self.save_btn.setText("SAVE")
+        self.save_btn.setText("Save Student")
         self.delete_btn.setEnabled(False)
         self.switch_page(0)
 
@@ -1002,7 +1108,14 @@ class StudentsPage(QWidget):
         try:
             wb = openpyxl.load_workbook(path, data_only=True)
             sheet = wb.active
-            rows = list(sheet.iter_rows(min_row=12, values_only=True))
+            data_start_row = excel_utils.find_data_start_row(sheet)
+            if data_start_row is None:
+                raise ValueError(
+                    "Could not detect the template's header row. Please use a "
+                    "template downloaded from this system, and don't remove "
+                    "the 'INSTRUCTIONS:' block or reorder rows."
+                )
+            rows = list(sheet.iter_rows(min_row=data_start_row, values_only=True))
             imported = 0
             updated = 0
             rejected = 0
@@ -1064,8 +1177,9 @@ class StudentsPage(QWidget):
                         print(f"[ERROR] Failed to import student '{adm}': {e}")
                         rejected += 1
                         continue
-            self.load_list()
-            self.load_reports_search()
+            # load_list()/load_reports_search() run via the STUDENTS_UPDATED
+            # subscription (see on_students_updated) — calling them here too
+            # would refresh both twice for no benefit.
             EventBus.emit("STUDENTS_UPDATED")
             QMessageBox.information(self, "Import Complete",
                                   f"Operation Summary:\n- New Students Imported: {imported}\n- Existing Records Updated: {updated}\n- Rows Redirected to Actual Level: {redirected}\n- Records Rejected (Invalid Data): {rejected}")
