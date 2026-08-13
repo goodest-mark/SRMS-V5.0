@@ -1,10 +1,8 @@
 name: Build SRMS Executables
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   build:
     strategy:
@@ -19,17 +17,13 @@ jobs:
             sep: ':'
             dist_path: dist/SRMS
             artifact_name: SRMS-Linux
-
     runs-on: ${{ matrix.os }}
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
       - name: Cache pip packages
         uses: actions/cache@v4
         with:
@@ -37,7 +31,6 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-
       - name: Install dependencies (with retry)
         uses: nick-invision/retry@v2
         with:
@@ -47,7 +40,6 @@ jobs:
           command: |
             pip install --retries 5 --timeout 30 -r requirements.txt
             pip install --retries 5 --timeout 30 pyinstaller
-
       - name: Build executable
         shell: bash
         run: |
@@ -57,7 +49,6 @@ jobs:
           else
             WINDOWED=""
           fi
-
           pyinstaller --onefile $WINDOWED --name "SRMS" \
             --paths . \
             --hidden-import=ui.pages.historical_results_page \
@@ -70,13 +61,13 @@ jobs:
             --hidden-import=event_bus \
             --hidden-import=system_state \
             --hidden-import=ranking \
+            --collect-submodules=reportlab.graphics.barcode \
             --collect-all ui \
             --collect-all PySide6 \
             --add-data "assets${{ matrix.sep }}assets" \
             --add-data "themes${{ matrix.sep }}themes" \
             --add-data "srms.db${{ matrix.sep }}." \
             app.py
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
