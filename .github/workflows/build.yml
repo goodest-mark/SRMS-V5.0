@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build SRMS Executables
 
 on:
   push:
@@ -7,9 +7,23 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            sep: ';'
+            dist_path: dist/SRMS.exe
+            artifact_name: SRMS-Windows
+          - os: ubuntu-latest
+            sep: ':'
+            dist_path: dist/SRMS
+            artifact_name: SRMS-Linux
+
+    runs-on: ${{ matrix.os }}
+
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -21,12 +35,18 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build EXE
+      - name: Build executable
+        shell: bash
         run: |
-          pyinstaller --onefile --windowed --name "SRMS" --add-data "ui;ui" --add-data "assets;assets" --add-data "themes;themes" --add-data "srms.db;." app.py
+          pyinstaller --onefile --windowed --name "SRMS" \
+            --add-data "ui${{ matrix.sep }}ui" \
+            --add-data "assets${{ matrix.sep }}assets" \
+            --add-data "themes${{ matrix.sep }}themes" \
+            --add-data "srms.db${{ matrix.sep }}." \
+            app.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SRMS-Windows
-          path: dist/SRMS.exe
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.dist_path }}
