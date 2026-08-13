@@ -30,12 +30,13 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Cache pip
+      - name: Cache pip packages
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies (with retry)
         uses: nick-invision/retry@v2
@@ -50,18 +51,27 @@ jobs:
       - name: Build executable
         shell: bash
         run: |
-          pyinstaller --onefile --windowed --name "SRMS" \
-            --hidden-import=broadsheet_page \
-            --hidden-import=remarks_page \
-            --hidden-import=report_book_page \
+          # Use --windowed only on Windows (so Linux shows console errors if any)
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            WINDOWED="--windowed"
+          else
+            WINDOWED=""
+          fi
+
+          pyinstaller --onefile $WINDOWED --name "SRMS" \
+            --paths . \
+            --hidden-import=ui.pages.historical_results_page \
+            --hidden-import=ui.pages.broadsheet_page \
+            --hidden-import=ui.pages.remarks_page \
+            --hidden-import=ui.pages.report_book_page \
             --hidden-import=combo_loaders \
             --hidden-import=class_utils \
             --hidden-import=db_utils \
             --hidden-import=event_bus \
             --hidden-import=system_state \
             --hidden-import=ranking \
+            --collect-all ui \
             --collect-all PySide6 \
-            --add-data "ui${{ matrix.sep }}ui" \
             --add-data "assets${{ matrix.sep }}assets" \
             --add-data "themes${{ matrix.sep }}themes" \
             --add-data "srms.db${{ matrix.sep }}." \
