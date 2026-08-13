@@ -607,13 +607,49 @@ class MainWindow(QMainWindow):
         attr_name = self._page_attributes[page_name]
         page = getattr(self, attr_name)
         if page is None:
-            page = self._page_factories[page_name]()
+            try:
+                page = self._page_factories[page_name]()
+            except Exception as error:
+                import traceback
+                traceback.print_exc()
+                self._log_page_load_failure(page_name, error)
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.critical(
+                    self,
+                    "Failed to open module",
+                    f"The '{page_name}' module could not be opened.\n\n"
+                    f"{type(error).__name__}: {error}\n\n"
+                    "Details were written to srms_error.log next to the app.",
+                )
+                return None
             setattr(self, attr_name, page)
             if self.stack.indexOf(page) == -1:
                 self.stack.addWidget(page)
             self._refresh_page(page)
             self._page_last_refreshed[page] = True
         return page
+
+    @staticmethod
+    def _log_page_load_failure(page_name, error):
+        """Write the failure to a log file next to the app.
+
+        This matters most in --windowed frozen builds, which have no
+        console, so a stderr traceback would otherwise be invisible.
+        """
+        import traceback
+        from datetime import datetime
+        try:
+            from app_paths import DATA_DIR
+            log_path = DATA_DIR / "srms_error.log"
+        except Exception:
+            from pathlib import Path
+            log_path = Path.cwd() / "srms_error.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"\n[{datetime.now().isoformat()}] Failed to open page '{page_name}'\n")
+                traceback.print_exc(file=f)
+        except Exception:
+            pass
 
     def update_highlight(
         self,
