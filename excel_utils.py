@@ -136,7 +136,7 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
     finally:
         progress.close()
 
-def export_to_excel(parent, filename, headers, data):
+def export_to_excel(parent, filename, headers, data, title=None):
     path, _ = QFileDialog.getSaveFileName(parent, "Export Data", filename, "Excel Files (*.xlsx)")
     if not path: return
     
@@ -144,12 +144,79 @@ def export_to_excel(parent, filename, headers, data):
     try:
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.append(headers)
+
+        blue_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        white_font = Font(color="FFFFFF", bold=True)
+        center_align = Alignment(horizontal="center", vertical="center")
+        ncols = len(headers)
+
+        # School branding block, matching download_template()'s layout.
+        # No "INSTRUCTIONS:" label is written here — exports aren't meant
+        # to be re-imported, and omitting that label keeps find_header_row()
+        # correctly rejecting an exported file if someone tries anyway,
+        # rather than silently misreading the branding rows as data.
+        set_progress(progress, 10, "Preparing export")
+        profile = fetch_one("""
+            SELECT school_name, school_address, school_phone, school_email, school_logo
+            FROM school_profile
+            LIMIT 1
+        """)
+        school_name = profile[0].upper() if profile and profile[0] else "SCHOOL MANAGEMENT SYSTEM"
+        school_contact = f"{profile[1] if profile and profile[1] else '-'} | {profile[2] if profile and profile[2] else '-'} | {profile[3] if profile and profile[3] else '-'}"
+        school_logo = profile[4] if profile and len(profile) > 4 else None
+
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
+        ws.cell(row=1, column=1, value=school_name).font = Font(size=16, bold=True)
+        ws.cell(row=1, column=1).alignment = center_align
+
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=ncols)
+        ws.cell(row=2, column=1, value=school_contact).font = Font(size=10)
+        ws.cell(row=2, column=1).alignment = center_align
+
+        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=ncols)
+        ws.cell(row=3, column=1, value=(title or "DATA EXPORT").upper()).font = Font(size=14, bold=True, color="2563EB")
+        ws.cell(row=3, column=1).alignment = center_align
+
+        if school_logo and os.path.exists(school_logo):
+            try:
+                logo = ExcelImage(school_logo)
+                logo.width = 72
+                logo.height = 72
+                ws.add_image(logo, "A1")
+            except Exception:
+                pass
+
+        header_row = 5
+        # Header row: same blue-fill/bold-white convention as download_template.
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=header_row, column=col_num, value=header)
+            cell.fill = blue_fill
+            cell.font = white_font
+            cell.alignment = center_align
+
+        data_start_row = header_row + 1
         total = max(len(data), 1)
-        for index, row in enumerate(data, start=1):
-            ws.append(row)
-            if index == 1 or index == total or index % 10 == 0:
-                set_progress(progress, int((index / total) * 90), "Writing rows")
+        for index, row in enumerate(data, start=0):
+            row_num = data_start_row + index
+            for col_num, value in enumerate(row, 1):
+                cell = ws.cell(row=row_num, column=col_num, value=value)
+                cell.alignment = center_align
+            if index == 0 or index == total - 1 or index % 10 == 0:
+                set_progress(progress, 10 + int(((index + 1) / total) * 80), "Writing rows")
+
+        # Auto column width from actual content (header + data), so long
+        # names/admission numbers aren't clipped and short tick-mark columns
+        # don't sit unnecessarily wide.
+        for col_num in range(1, ncols + 1):
+            column_letter = get_column_letter(col_num)
+            max_length = len(str(headers[col_num - 1]))
+            for row in data:
+                if col_num - 1 < len(row) and row[col_num - 1]:
+                    max_length = max(max_length, len(str(row[col_num - 1])))
+            ws.column_dimensions[column_letter].width = max_length + 4
+
+        ws.row_dimensions[header_row].height = 22
+        ws.freeze_panes = f"A{data_start_row}"
         wb.save(path)
         set_progress(progress, 100, "Export complete")
         QMessageBox.information(parent, "Success", f"Data exported to {path}")

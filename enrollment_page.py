@@ -691,21 +691,42 @@ class EnrollmentPage(QWidget):
         import excel_utils
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
-        if not (year_id and term_id):
-            show_error(self, "Select Year and Term first")
+        class_name = self.class_box.currentText()
+        if not (year_id and term_id and class_name and class_name != "-- Select Class --"):
+            show_error(self, "Select Year, Term, and Class first")
             return
-            
-        data = fetch_all("""
+
+        if not self.student_list or not self.subject_list:
+            show_error(self, "No students or subjects found for the selected class.")
+            return
+
+        enrolled_pairs = set(fetch_all("""
             SELECT admission_no, subject_name
-            FROM enrollments 
+            FROM enrollments
             WHERE academic_year_id=? AND term_id=? AND class_name=?
-        """, (year_id, term_id, self.class_box.currentText()))
-        
+        """, (year_id, term_id, class_name)))
+
+        # Pivoted grid: one row per student, one column per subject, a tick
+        # mark where enrolled — mirrors the on-screen enrollment table
+        # instead of a flat (admission_no, subject_name) pair per row, which
+        # for a class of a few hundred students across 8 subjects produced
+        # thousands of rows that were hard to scan or cross-check by eye.
+        headers = ["Admission No", "Student Name"] + [get_subject_short_name(s) for s in self.subject_list]
+        data = []
+        for admission_no, full_name in self.student_list:
+            row = [admission_no, full_name]
+            for subject_name in self.subject_list:
+                row.append("✓" if (admission_no, subject_name) in enrolled_pairs else "")
+            data.append(row)
+
+        year_text = self.year_box.currentText().strip()
+        term_text = self.term_box.currentText().strip()
         excel_utils.export_to_excel(
-            self, 
-            "enrollments.xlsx", 
-            ["Admission No", "Subject Name"],
-            data
+            self,
+            f"enrollments_{class_name.replace(' ', '_')}.xlsx",
+            headers,
+            data,
+            title=f"Enrollment Export - {class_name} ({year_text} {term_text})"
         )
 
     def _read_long_format_pairs(self, sheet, data_start_row):
