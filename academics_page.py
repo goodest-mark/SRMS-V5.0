@@ -1,91 +1,123 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QTabWidget,
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
+    QFrame, QStackedWidget, QScrollArea, QSizePolicy,
 )
-
-from progress_dialog import ProgressDialog
-
 
 class AcademicsPage(QWidget):
 
     def __init__(self):
         super().__init__()
 
-        root = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
-        self.tabs.setMovable(False)
-        self.tabs.setUsesScrollButtons(False)
+        content = QWidget()
+        scroll.setWidget(content)
 
-        root.addWidget(self.tabs)
+        root = QVBoxLayout(content)
+        root.setContentsMargins(20, 20, 20, 20)
+        root.setSpacing(12)
+
+        # ─── Navigation container (theme‑aware) ──────────────────────
+        nav_container = QFrame()
+        nav_container.setObjectName("NavContainer")
+        nav_layout = QHBoxLayout(nav_container)
+        nav_layout.setContentsMargins(4, 4, 4, 4)
+        nav_layout.setSpacing(4)
+
+        self.btn_subjects = QPushButton("Subjects")
+        self.btn_enrollment = QPushButton("Enrollment")
+        self.btn_academic_years = QPushButton("Academic Years")
+        self.btn_terms = QPushButton("Terms")
+
+        self.nav_buttons = [
+            self.btn_subjects,
+            self.btn_enrollment,
+            self.btn_academic_years,
+            self.btn_terms,
+        ]
+
+        for btn in self.nav_buttons:
+            btn.setObjectName("navButton")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedHeight(38)
+            btn.setMinimumWidth(110)
+            btn.setProperty("variant", "default")
+            nav_layout.addWidget(btn)
+
+        root.addWidget(nav_container)
+
+        # ─── Stacked widget (lazy‑load) ──────────────────────────────
+        self.stack = QStackedWidget()
+        root.addWidget(self.stack)
 
         self._pages = {}
-        def create_subjects_page():
-            from subjects_page import SubjectsPage
-            return SubjectsPage()
-
-        def create_enrollment_page():
-            from enrollment_page import EnrollmentPage
-            return EnrollmentPage()
-
-        def create_years_page():
-            from academic_years import AcademicYearsPage
-            return AcademicYearsPage()
-
-        def create_terms_page():
-            from terms_page import TermsPage
-            return TermsPage()
-
         self._page_factories = {
-            "Subjects": create_subjects_page,
-            "Enrollment": create_enrollment_page,
-            "Academic Years": create_years_page,
-            "Terms": create_terms_page
+            "Subjects": lambda: __import__("subjects_page", fromlist=["SubjectsPage"]).SubjectsPage(),
+            "Enrollment": lambda: __import__("enrollment_page", fromlist=["EnrollmentPage"]).EnrollmentPage(),
+            "Academic Years": lambda: __import__("academic_years", fromlist=["AcademicYearsPage"]).AcademicYearsPage(),
+            "Terms": lambda: __import__("terms_page", fromlist=["TermsPage"]).TermsPage(),
         }
 
-        # We'll add placeholder widgets and swap them on tab change
-        for name in ["Subjects", "Enrollment", "Academic Years", "Terms"]:
-            self.tabs.addTab(QWidget(), name)
+        # Placeholders
+        for name in self._page_factories:
+            placeholder = QWidget()
+            placeholder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.stack.addWidget(placeholder)
 
-        self.tabs.currentChanged.connect(self._on_tab_changed)
-        self._on_tab_changed(0)
+        # Connect buttons
+        self.btn_subjects.clicked.connect(lambda: self.switch_page(0))
+        self.btn_enrollment.clicked.connect(lambda: self.switch_page(1))
+        self.btn_academic_years.clicked.connect(lambda: self.switch_page(2))
+        self.btn_terms.clicked.connect(lambda: self.switch_page(3))
 
-    def _on_tab_changed(self, index):
-        if index < 0:
+        # ─── Initial state ────────────────────────────────────────────
+        self.switch_page(0)
+
+        # Final layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll)
+        self.setLayout(main_layout)
+
+    # ─── Page switching ──────────────────────────────────────────────
+    def switch_page(self, index):
+        names = list(self._page_factories.keys())
+        if index >= len(names):
             return
-        name = self.tabs.tabText(index)
-        if not name or name not in self._page_factories:
-            return
+        name = names[index]
 
+        # Update button states
+        for i, btn in enumerate(self.nav_buttons):
+            variant = "accent" if i == index else "default"
+            btn.setProperty("variant", variant)
+            btn.setChecked(i == index)
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+
+        # Lazy load
         if name not in self._pages:
-            self._pages[name] = self._page_factories[name]()
-            # Replace the placeholder widget
-            self.tabs.blockSignals(True)
-            old_widget = self.tabs.widget(index)
-            self.tabs.removeTab(index)
-            self.tabs.insertTab(index, self._pages[name], name)
-            self.tabs.setCurrentIndex(index)
-            self.tabs.blockSignals(False)
-            
-            # Cleanup old widget
-            if old_widget:
-                old_widget.deleteLater()
-        
-        self.load()
+            page = self._page_factories[name]()
+            self._pages[name] = page
+            self.stack.blockSignals(True)
+            old = self.stack.widget(index)
+            self.stack.removeWidget(old)
+            old.deleteLater()
+            self.stack.insertWidget(index, page)
+            self.stack.blockSignals(False)
 
-    def load(self):
-        page = self.tabs.currentWidget()
+        self.stack.setCurrentIndex(index)
+        self.load_current_page()
+
+    def load_current_page(self):
+        page = self.stack.currentWidget()
         if page is None:
             return
-
-        for method_name in (
-            "refresh_all",
-            "load_data",
-            "load",
-            "load_years",
-        ):
+        for method_name in ("refresh_all", "load_data", "load", "load_years"):
             method = getattr(page, method_name, None)
             if callable(method):
                 try:
@@ -93,3 +125,6 @@ class AcademicsPage(QWidget):
                 except Exception as e:
                     print(f"[ERROR] Failed to call {method_name}: {e}")
                 break
+
+    def load(self):
+        self.load_current_page()

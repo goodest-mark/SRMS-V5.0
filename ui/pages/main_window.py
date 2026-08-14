@@ -1,8 +1,7 @@
 from PySide6.QtGui import QIcon, QPainter, QColor, QPen
 from PySide6.QtCore import (
     QSize, Qt, QPropertyAnimation, QEasingCurve,
-    QParallelAnimationGroup, QRectF, Property, Signal,
-    QTimer, QDateTime
+    QParallelAnimationGroup, QRectF, Property, Signal
 )
 
 from PySide6.QtWidgets import (
@@ -14,7 +13,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLabel,
     QStackedWidget,
-    QSizePolicy
+    QSizePolicy,
+    QMenu
 )
 
 from app_paths import find_icon_path
@@ -134,7 +134,12 @@ class LevelToggleSwitch(QWidget):
 
 from event_bus import EventBus
 from system_state import SystemState
-from theme import normalize_theme_name, apply_theme as apply_app_theme
+from theme import (
+    normalize_theme_name,
+    apply_theme as apply_app_theme,
+    get_tokens,
+    available_theme_names,
+)
 
 
 def _icon(*names):
@@ -183,12 +188,7 @@ class MainWindow(QMainWindow):
 
         # Breadcrumb label
         self.breadcrumb = QLabel("")
-        self.breadcrumb.setStyleSheet("""
-            font-size: 13px;
-            font-weight: 800;
-            color: #93C5FD;
-            padding: 0 8px;
-        """)
+        self.breadcrumb.setObjectName("BreadcrumbLabel")
 
         self.btn_dashboard = QPushButton("Dashboard")
         self.btn_students = QPushButton("Students")
@@ -219,36 +219,9 @@ class MainWindow(QMainWindow):
             self.btn_settings,
         ]
 
-        self.nav_button_style = """
-            QPushButton{
-                text-align:center;
-                padding:7px 9px;
-                border-radius:12px;
-                font-weight:900;
-                color:#D7E4F5;
-                font-size:12px;
-                background:transparent;
-                border:1px solid transparent;
-                min-width: 76px;
-            }
-            QPushButton:hover{
-                color:#FFFFFF;
-                background:rgba(59,130,246,0.14);
-                border:1px solid rgba(96,165,250,0.28);
-            }
-        """
-
-        self.nav_button_active_style = """
-            QPushButton{
-                background:#2563EB;
-                color:#FFFFFF;
-                font-weight:900;
-                border:1px solid rgba(191,219,254,0.35);
-                border-radius:12px;
-                padding:7px 9px;
-                min-width: 76px;
-            }
-        """
+        self.nav_button_style, self.nav_button_active_style = self._build_nav_button_styles(
+            get_tokens(self.current_theme)
+        )
 
         self.active_btn = None
         self._nav_labels = {}
@@ -259,72 +232,42 @@ class MainWindow(QMainWindow):
 
         for btn in self.nav_buttons:
             self._nav_labels[btn] = btn.text()
+            btn.setObjectName("NavButton")
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setIconSize(QSize(18,18))
+            btn.setIconSize(QSize(18, 18))
             btn.setMinimumHeight(34)
             btn.setMaximumHeight(38)
-            btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+            btn.setMinimumWidth(76)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             btn.setStyleSheet(self.nav_button_style)
             btn.setToolTip(btn.text())
             self.top_nav.addWidget(btn)
 
         self.top_nav_widget = QWidget()
         self.top_nav_widget.setObjectName("TopNavWidget")
+        self.top_nav_widget.setAttribute(Qt.WA_StyledBackground, True)
         self.top_nav_widget.setLayout(self.top_nav)
         self.top_nav_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.top_nav_widget.setStyleSheet("""
-            QWidget#TopNavWidget{
-                background:rgba(2,6,23,0.88);
-                border:1px solid rgba(59,130,246,0.18);
-                border-radius:20px;
-            }
-        """)
 
         top_bar.addWidget(self.top_nav_widget, 1)
 
-        # Clock
-        self.clock_lbl = QLabel()
-        self.clock_lbl.setStyleSheet("""
-            QLabel {
-                color: #FFFFFF;
-                font-size: 12px;
-                font-weight: 800;
-                padding: 6px 10px;
-                background: rgba(2, 6, 23, 0.88);
-                border: 1px solid rgba(59, 130, 246, 0.25);
-                border-radius: 14px;
-                margin-right: 2px;
-            }
-        """)
-        self.clock_lbl.setMinimumWidth(150)
-        self.clock_lbl.setMaximumWidth(190)
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_clock)
-        self.timer.start(1000)
-        self.update_clock()
-        top_bar.addWidget(self.clock_lbl)
-
         # Refresh Button
         self.btn_refresh = QPushButton()
+        self.btn_refresh.setObjectName("RefreshButton")
+        self.btn_refresh.setAttribute(Qt.WA_StyledBackground, True)
         self.btn_refresh.setIcon(_icon("refresh.svg"))
         self.btn_refresh.setIconSize(QSize(18, 18))
         self.btn_refresh.setFixedSize(34, 34)
         self.btn_refresh.setCursor(Qt.PointingHandCursor)
-        self.btn_refresh.setToolTip("Refresh system data")
-        self.btn_refresh.setStyleSheet("""
-            QPushButton {
-                background: rgba(2, 6, 23, 0.88);
-                border: 1px solid rgba(59, 130, 246, 0.25);
-                border-radius: 17px;
-                color: #FFFFFF;
-            }
-            QPushButton:hover {
-                background: rgba(59, 130, 246, 0.15);
-                border: 1px solid rgba(59, 130, 246, 0.45);
-            }
-        """)
+        self.btn_refresh.setToolTip("Refresh system data  •  Right-click to change theme")
         self.btn_refresh.clicked.connect(self.refresh_all)
+        self.btn_refresh.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.btn_refresh.customContextMenuRequested.connect(self._show_theme_menu)
         top_bar.addWidget(self.btn_refresh)
+
+        # Apply the chrome (nav bar / refresh button / breadcrumb) styling
+        # for the current theme now that all the relevant widgets exist.
+        self._apply_chrome_styles(get_tokens(self.current_theme))
 
         top_bar.addWidget(self.level_switch)
 
@@ -550,29 +493,11 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._closing = True
-        timer = getattr(self, "timer", None)
-        if timer is not None:
-            timer.stop()
         super().closeEvent(event)
 
     # =====================================
     # NAVIGATION
     # =====================================
-
-    def update_clock(self):
-        """Update the live clock display."""
-        if self._closing:
-            return
-
-        clock_lbl = getattr(self, "clock_lbl", None)
-        if clock_lbl is None:
-            return
-
-        try:
-            now = QDateTime.currentDateTime()
-            clock_lbl.setText(now.toString("dd MMM yyyy  hh:mm AP"))
-        except (AttributeError, RuntimeError, KeyboardInterrupt):
-            return
 
     def switch_page(
         self,
@@ -799,16 +724,129 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app:
             apply_app_theme(app, normalized)
+            self._repolish_all(app)
+
+        # The nav bar / refresh button / breadcrumb are drawn with their own
+        # widget-level stylesheets (they sit "on top of" the global QSS), so
+        # they need to be rebuilt from the new theme's tokens explicitly.
+        self._apply_chrome_styles(get_tokens(normalized))
+
+    def _repolish_all(self, app):
+        """Force every widget to re-evaluate its stylesheet and repaint.
+
+        A plain app.setStyleSheet() call doesn't reliably invalidate size
+        hints or cached QGraphicsDropShadowEffect pixmaps on every widget,
+        which is what causes the "ghosting"/overlapping-text artifact where
+        a card still shows a faint trace of the previous theme's render
+        underneath the new one. Explicitly unpolishing/polishing and
+        toggling graphics effects clears those stale caches.
+        """
+        for w in app.allWidgets():
+            w.style().unpolish(w)
+            w.style().polish(w)
+            effect = w.graphicsEffect()
+            if effect is not None:
+                effect.setEnabled(False)
+                effect.setEnabled(True)
+            w.update()
+
+    # =====================================
+    # THEME-AWARE CHROME (nav bar / refresh button / breadcrumb)
+    # =====================================
+
+    def _build_nav_button_styles(self, tokens):
+        """Return (inactive_style, active_style) QSS strings for nav buttons,
+        built from the given theme tokens instead of hardcoded colors."""
+        inactive_style = f"""
+            QPushButton#NavButton{{
+                text-align:center;
+                padding:7px 9px;
+                border-radius:12px;
+                font-weight:900;
+                color:{tokens['text_soft']};
+                font-size:12px;
+                background:transparent;
+                border:1px solid transparent;
+                min-height:22px;
+            }}
+            QPushButton#NavButton:hover{{
+                color:{tokens['text_soft']};
+                background:rgba(59,130,246,0.14);
+                border:1px solid {tokens['border']};
+            }}
+        """
+        active_style = f"""
+            QPushButton#NavButton{{
+                background:{tokens['primary']};
+                color:#FFFFFF;
+                font-weight:900;
+                border:1px solid {tokens['border']};
+                border-radius:12px;
+                padding:7px 9px;
+                min-height:22px;
+            }}
+        """
+        return inactive_style, active_style
+
+    def _apply_chrome_styles(self, tokens):
+        """Re-style the widgets that carry their own stylesheet (and would
+        otherwise stay locked to whatever theme was active at startup)."""
+        self.nav_button_style, self.nav_button_active_style = self._build_nav_button_styles(tokens)
+
+        self.top_nav_widget.setStyleSheet(f"""
+            QWidget#TopNavWidget{{
+                background:{tokens['surface_alt']};
+                border:1px solid {tokens['border']};
+                border-radius:20px;
+            }}
+        """)
+
+        self.btn_refresh.setStyleSheet(f"""
+            QPushButton#RefreshButton {{
+                background: {tokens['surface_alt']};
+                border: 1px solid {tokens['border']};
+                border-radius: 17px;
+                color: {tokens['text_soft']};
+            }}
+            QPushButton#RefreshButton:hover {{
+                background: rgba(59, 130, 246, 0.15);
+                border: 1px solid {tokens['primary_2']};
+            }}
+        """)
+
+        self.breadcrumb.setStyleSheet(f"""
+            font-size: 13px;
+            font-weight: 800;
+            color: {tokens['primary_2']};
+            padding: 0 8px;
+        """)
+
+        # Re-apply active/inactive styling to whichever nav button is current,
+        # since the strings it references were just rebuilt above.
+        for btn in self.nav_buttons:
+            if btn == self.active_btn:
+                btn.setStyleSheet(self.nav_button_active_style)
+            else:
+                btn.setStyleSheet(self.nav_button_style)
+
+    def _show_theme_menu(self, pos):
+        """Right-click menu on the refresh button to switch themes.
+        Left-click still refreshes as before; this is purely additive."""
+        menu = QMenu(self)
+        for name in available_theme_names():
+            action = menu.addAction(name)
+            action.setCheckable(True)
+            action.setChecked(normalize_theme_name(name) == self.current_theme)
+            action.triggered.connect(lambda checked=False, n=name: self.apply_theme(n))
+        menu.exec(self.btn_refresh.mapToGlobal(pos))
 
     def _enter_setup_mode(self):
         self.top_nav_widget.setVisible(False)
-        self.clock_lbl.setVisible(False)
         self.btn_refresh.setVisible(False)
         self.level_switch.setVisible(False)
 
     def _exit_setup_mode(self):
         self.top_nav_widget.setVisible(True)
-        self.clock_lbl.setVisible(True)
         self.btn_refresh.setVisible(True)
         self.level_switch.setVisible(True)
 

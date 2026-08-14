@@ -131,17 +131,11 @@ class EnrollmentPage(QWidget):
         self.enrollment_table.setMinimumHeight(400)
         self.content_layout.addWidget(QLabel("DYNAMIC ENROLLMENT GRID"))
 
-        # Per-subject bulk-enroll/unenroll buttons, rebuilt each time the
-        # subject list changes (see _rebuild_subject_bulk_rows).
-        self.subject_bulk_row = QHBoxLayout()
-        self.subject_bulk_row.addWidget(QLabel("Enroll all in:"))
-        self.subject_bulk_row.addStretch()
-        self.content_layout.addLayout(self.subject_bulk_row)
-
-        self.subject_unenroll_row = QHBoxLayout()
-        self.subject_unenroll_row.addWidget(QLabel("Unenroll all in:"))
-        self.subject_unenroll_row.addStretch()
-        self.content_layout.addLayout(self.subject_unenroll_row)
+        # ─── NEW: Single row for per‑subject toggle buttons ──────────
+        self.subject_toggle_row = QHBoxLayout()
+        self.subject_toggle_row.addWidget(QLabel("Toggle all in:"))
+        self.subject_toggle_row.addStretch()
+        self.content_layout.addLayout(self.subject_toggle_row)
 
         self.content_layout.addWidget(self.enrollment_table)
 
@@ -195,11 +189,6 @@ class EnrollmentPage(QWidget):
     # =========================
 
     def on_level_changed(self):
-        # Reload classes for the new level. If the combo's selected *index*
-        # happens to land on the same position as before, currentIndexChanged
-        # won't fire even though the underlying class/level has changed, so
-        # self.student_list/self.subject_list would otherwise go stale while
-        # the grid looks empty. Reset state explicitly and always reload.
         self.student_list = []
         self.subject_list = []
         combo_loaders.load_classes(self.class_box, placeholder="-- Select Class --")
@@ -223,11 +212,11 @@ class EnrollmentPage(QWidget):
         self.unenroll_all_btn.setEnabled(enabled)
         self.copy_previous_btn.setEnabled(enabled)
         self.enrollment_table.setEnabled(enabled)
-        for row in (self.subject_bulk_row, self.subject_unenroll_row):
-            for i in range(row.count()):
-                widget = row.itemAt(i).widget()
-                if isinstance(widget, QPushButton):
-                    widget.setEnabled(enabled)
+        # Enable/disable the per‑subject toggle buttons
+        for i in range(self.subject_toggle_row.count()):
+            widget = self.subject_toggle_row.itemAt(i).widget()
+            if isinstance(widget, QPushButton):
+                widget.setEnabled(enabled)
 
     # =========================
     # DATA LOADING
@@ -238,10 +227,6 @@ class EnrollmentPage(QWidget):
         self.load_terms()
 
     def load_terms(self):
-        # Repopulating term_box would otherwise fire currentIndexChanged
-        # (-> on_filter_changed) mid-update, causing load_enrollment_data to
-        # run once with a stale/old term before settling on the new one.
-        # Block signals here and trigger a single, consistent reload after.
         self.term_box.blockSignals(True)
         combo_loaders.load_terms(self.term_box, self.year_box.currentData())
         self.term_box.blockSignals(False)
@@ -277,7 +262,7 @@ class EnrollmentPage(QWidget):
 
         if not (year_id and term_id and class_name and class_name != "-- Select Class --"):
             self._reset_table_to_empty()
-            self._rebuild_subject_bulk_rows()
+            self._rebuild_subject_toggle_row()
             return
 
         self.subject_list = [
@@ -333,22 +318,14 @@ class EnrollmentPage(QWidget):
 
         self.enrollment_table.resizeColumnsToContents()
         self.enrollment_table.resizeRowsToContents()
-        self._rebuild_subject_bulk_rows()
+        self._rebuild_subject_toggle_row()
 
-    def _rebuild_subject_bulk_rows(self):
-        """Rebuild the rows of per-subject 'enroll everyone' / 'unenroll
-        everyone' buttons to match the current subject_list. Kept separate
-        from enroll_all/unenroll_all so a single subject can be bulk-toggled
-        without touching every other column."""
-        self._rebuild_subject_button_row(self.subject_bulk_row, self.enroll_all_for_subject)
-        self._rebuild_subject_button_row(self.subject_unenroll_row, self.unenroll_all_for_subject)
-
-    def _rebuild_subject_button_row(self, row_layout, handler):
-        """Clear and repopulate a per-subject button row (skip the leading
-        label and trailing stretch, which stay fixed) using the given
-        click handler."""
-        while row_layout.count() > 2:
-            item = row_layout.takeAt(1)
+    def _rebuild_subject_toggle_row(self):
+        """Rebuild the per‑subject toggle buttons: one button per subject.
+        Each button toggles all students for that subject (enroll/unenroll)."""
+        # Keep the label (index 0) and the stretch (last item), remove everything in between.
+        while self.subject_toggle_row.count() > 2:
+            item = self.subject_toggle_row.takeAt(1)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
@@ -358,9 +335,10 @@ class EnrollmentPage(QWidget):
             btn.setObjectName("workflowSecondary")
             btn.setEnabled(self.enrollment_mode_checkbox.isChecked())
             btn.clicked.connect(
-                lambda checked=False, s=subject_name: handler(s)
+                lambda checked=False, s=subject_name: self.toggle_all_for_subject(s)
             )
-            row_layout.insertWidget(row_layout.count() - 1, btn)
+            # Insert before the stretch (which is the last item)
+            self.subject_toggle_row.insertWidget(self.subject_toggle_row.count() - 1, btn)
 
     def clear_tables(self):
         self._reset_table_to_empty()
@@ -425,6 +403,59 @@ class EnrollmentPage(QWidget):
             QMessageBox.critical(self, "Error", "An unexpected error occurred while saving enrollments.")
 
         self.load_enrollment_data()
+
+    def toggle_all_for_subject(self, subject_name):
+        """Toggle all students for a single subject: if all are checked, uncheck all;
+        otherwise check all. Saves immediately."""
+        year_id = self.year_box.currentData()
+        term_id = self.term_box.currentData()
+        class_name = self.class_box.currentText()
+
+        if not (year_id and term_id and class_name and class_name != "-- Select Class --"):
+            show_error(self, "Please select Year, Term, and Class first.")
+            return
+
+        if subject_name not in self.subject_list:
+            return
+
+        col_index = self.subject_list.index(subject_name) + 1
+        display_name = get_subject_short_name(subject_name)
+
+        # Determine current state: count checked vs unchecked for this subject
+        checked_count = 0
+        unchecked_count = 0
+        for row_index in range(self.enrollment_table.rowCount()):
+            item = self.enrollment_table.item(row_index, col_index)
+            if item is not None:
+                if item.checkState() == Qt.Checked:
+                    checked_count += 1
+                else:
+                    unchecked_count += 1
+
+        # Decide action: if all are checked, uncheck all; otherwise check all
+        action = "unenroll" if checked_count == self.enrollment_table.rowCount() else "enroll"
+        action_verb = "Unenroll" if action == "unenroll" else "Enroll"
+
+        reply = QMessageBox.question(
+            self,
+            f"Confirm {action_verb} All",
+            f"{action_verb} all {self.enrollment_table.rowCount()} students in {class_name} "
+            f"from {display_name}? This saves immediately.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # Apply the toggle
+        new_state = Qt.Unchecked if action == "unenroll" else Qt.Checked
+        for row_index in range(self.enrollment_table.rowCount()):
+            item = self.enrollment_table.item(row_index, col_index)
+            if item is not None:
+                item.setCheckState(new_state)
+
+        # Save immediately
+        self.save_enrollments()
 
     def enroll_all(self):
         year_id = self.year_box.currentData()
@@ -494,81 +525,7 @@ class EnrollmentPage(QWidget):
 
         self.save_enrollments()
 
-    def unenroll_all_for_subject(self, subject_name):
-        """Uncheck every student's box for a single subject only, leaving
-        all other subjects untouched. Scoped alternative to unenroll_all()."""
-        year_id = self.year_box.currentData()
-        term_id = self.term_box.currentData()
-        class_name = self.class_box.currentText()
-
-        if not (year_id and term_id and class_name and class_name != "-- Select Class --"):
-            show_error(self, "Please select Year, Term, and Class first.")
-            return
-
-        if subject_name not in self.subject_list:
-            return
-
-        col_index = self.subject_list.index(subject_name) + 1
-        display_name = get_subject_short_name(subject_name)
-
-        reply = QMessageBox.question(
-            self,
-            "Confirm Unenroll All",
-            f"Unenroll all {len(self.student_list)} students in {class_name} "
-            f"from {display_name}? This saves immediately.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        for row_index in range(self.enrollment_table.rowCount()):
-            item = self.enrollment_table.item(row_index, col_index)
-            if item is not None:
-                item.setCheckState(Qt.Unchecked)
-
-        self.save_enrollments()
-
-    def enroll_all_for_subject(self, subject_name):
-        """Check every student's box for a single subject only, leaving all
-        other subjects untouched. Scoped alternative to enroll_all()."""
-        year_id = self.year_box.currentData()
-        term_id = self.term_box.currentData()
-        class_name = self.class_box.currentText()
-
-        if not (year_id and term_id and class_name and class_name != "-- Select Class --"):
-            show_error(self, "Please select Year, Term, and Class first.")
-            return
-
-        if subject_name not in self.subject_list:
-            return
-
-        col_index = self.subject_list.index(subject_name) + 1
-        display_name = get_subject_short_name(subject_name)
-
-        reply = QMessageBox.question(
-            self,
-            "Confirm Enroll All",
-            f"Enroll all {len(self.student_list)} students in {class_name} "
-            f"into {display_name}? This saves immediately.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        for row_index in range(self.enrollment_table.rowCount()):
-            item = self.enrollment_table.item(row_index, col_index)
-            if item is not None:
-                item.setCheckState(Qt.Checked)
-
-        self.save_enrollments()
-
     def copy_from_previous_term(self):
-        """Pre-check the current grid with enrollments from another term for
-        the same class. Purely in-memory: nothing is written to the database
-        until the user clicks Save Enrollments, so it's fully reviewable and
-        reversible before it's committed."""
         year_id = self.year_box.currentData()
         term_id = self.term_box.currentData()
         class_name = self.class_box.currentText()
@@ -577,9 +534,6 @@ class EnrollmentPage(QWidget):
             show_error(self, "Please select Year, Term, and Class first.")
             return
 
-        # NOTE: assumes lookup tables named academic_years(id, year_name) and
-        # terms(id, term_name) for display labels. Adjust the column/table
-        # names below if the actual schema differs.
         candidates = fetch_all(
             """
             SELECT DISTINCT e.academic_year_id, e.term_id, ay.year_name, t.term_name
@@ -649,7 +603,7 @@ class EnrollmentPage(QWidget):
         )
 
     # =========================
-    # EXCEL FRAMEWORK
+    # EXCEL FRAMEWORK (unchanged)
     # =========================
 
     def download_template(self):
@@ -669,8 +623,6 @@ class EnrollmentPage(QWidget):
             show_error(self, "No subjects are configured for the selected level yet.")
             return
 
-        # Wide format: one column per subject, admission numbers listed
-        # underneath (ragged — subjects have different numbers of students).
         excel_utils.download_template(
             self,
             "enrollment_template.xlsx",
@@ -706,11 +658,6 @@ class EnrollmentPage(QWidget):
             WHERE academic_year_id=? AND term_id=? AND class_name=?
         """, (year_id, term_id, class_name)))
 
-        # Pivoted grid: one row per student, one column per subject, a tick
-        # mark where enrolled — mirrors the on-screen enrollment table
-        # instead of a flat (admission_no, subject_name) pair per row, which
-        # for a class of a few hundred students across 8 subjects produced
-        # thousands of rows that were hard to scan or cross-check by eye.
         headers = ["Admission No", "Student Name"] + [get_subject_short_name(s) for s in self.subject_list]
         data = []
         for admission_no, full_name in self.student_list:
@@ -730,7 +677,6 @@ class EnrollmentPage(QWidget):
         )
 
     def _read_long_format_pairs(self, sheet, data_start_row):
-        """Legacy 2-column template: Admission No | Subject Name, one pair per row."""
         pairs = []
         for row_number, row in enumerate(sheet.iter_rows(min_row=data_start_row, values_only=True), start=data_start_row):
             if not row or len(row) < 2 or row[0] in (None, "") or row[1] in (None, ""):
@@ -739,11 +685,6 @@ class EnrollmentPage(QWidget):
         return pairs
 
     def _read_wide_format_pairs(self, sheet, header_row, data_start_row):
-        """One column per subject; admission numbers listed underneath.
-        Columns are read independently and are allowed to be ragged (different
-        numbers of entries per subject) — a blank cell just ends that
-        student's entry, not the whole column, so gaps mid-column are
-        tolerated rather than treated as the end of data."""
         pairs = []
         for col_index, subject_raw in enumerate(header_row):
             if subject_raw in (None, ""):
@@ -816,11 +757,6 @@ class EnrollmentPage(QWidget):
             }
             excel_utils.set_progress(progress, 25, "Detecting template format")
 
-            # Locate the header row structurally (it shifts depending on how
-            # many instruction lines the template was generated with) rather
-            # than assuming a fixed row number. The legacy long-format
-            # template has exactly ["Admission No*", "Subject Name*"]; the
-            # wide-format template has one column per subject name.
             header_row_num = excel_utils.find_header_row(sheet)
             if header_row_num is None:
                 raise ValueError(

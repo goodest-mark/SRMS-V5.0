@@ -1,53 +1,200 @@
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QFrame,
-    QGridLayout,
-    QSizePolicy
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QGridLayout, QSizePolicy, QGraphicsDropShadowEffect,
 )
+from PySide6.QtGui import QIcon, QColor, QPixmap, QPainter
 
-from PySide6.QtGui import QIcon, QFont
 from app_paths import icon_path
 from event_bus import EventBus
 from system_state import SystemState
 from db_utils import get_cursor
-from ui.cards import PremiumStatCard
+from theme import get_tokens
 
-class GlassButton(QPushButton):
-    """Modern glassmorphic button with icon and text for quick actions."""
-
-    def __init__(self, text, icon_path=None):
-        super().__init__()
-        self.setText(text)
-        if icon_path:
-            self.setIcon(QIcon(icon_path))
-
-        self.setCursor(Qt.PointingHandCursor)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(48)
-        self.setMaximumHeight(58)
-        self.setIconSize(QSize(22, 22))
-        
-        # Set font
-        font = QFont()
-        font.setPointSize(10)
-        font.setWeight(QFont.Weight.Bold)
-        self.setFont(font)
+PLACEHOLDER = "\u2014"
 
 
 def _icon(name):
-    """Helper to get a shared icon path."""
     path = icon_path(name)
     return str(path) if path.exists() else ""
 
 
-class DashboardHome(QWidget):
-    """Modern dashboard home page with KPIs, quick actions, and school information."""
+def _themed_icon_pixmap(icon_file, size):
+    pixmap = QIcon(icon_file).pixmap(size, size)
+    if pixmap.isNull():
+        return pixmap
+    tokens = get_tokens()
+    if not tokens.get("is_light"):
+        return pixmap
+    tinted = QPixmap(pixmap.size())
+    tinted.setDevicePixelRatio(pixmap.devicePixelRatio())
+    tinted.fill(Qt.transparent)
+    painter = QPainter(tinted)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+    painter.fillRect(tinted.rect(), QColor(tokens["primary"]))
+    painter.end()
+    return tinted
 
+
+def _soft_shadow(blur=24, y=6, alpha=70):
+    effect = QGraphicsDropShadowEffect()
+    effect.setBlurRadius(blur)
+    effect.setOffset(0, y)
+    effect.setColor(QColor(0, 0, 0, alpha))
+    return effect
+
+
+def _label(text, object_name, word_wrap=False):
+    lbl = QLabel(text)
+    lbl.setObjectName(object_name)
+    lbl.setWordWrap(word_wrap)
+    return lbl
+
+
+# ============================================================
+# STAT CARD – no subtitle
+# ============================================================
+class StatCard(QFrame):
+    def __init__(self, title, icon_file, tone="primary"):
+        super().__init__()
+        self.setObjectName("PremiumStatCard")
+        self.setProperty("tone", tone)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setGraphicsEffect(_soft_shadow())
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 14)
+        layout.setSpacing(4)
+
+        # Icon badge
+        icon_badge = QFrame()
+        icon_badge.setObjectName("PremiumStatIcon")
+        icon_badge.setFixedSize(44, 44)
+        icon_badge.setAttribute(Qt.WA_StyledBackground, True)
+        icon_row = QHBoxLayout(icon_badge)
+        icon_row.setContentsMargins(0, 0, 0, 0)
+        icon_lbl = QLabel()
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("background: transparent;")
+        if icon_file:
+            icon_lbl.setPixmap(_themed_icon_pixmap(icon_file, 20))
+        icon_row.addWidget(icon_lbl)
+        layout.addWidget(icon_badge)
+
+        # Value
+        self.value_lbl = _label(PLACEHOLDER, "MetricValue")
+        layout.addWidget(self.value_lbl)
+
+        # Title only (no subtitle)
+        self.title_lbl = _label(title, "MetricTitle")
+        layout.addWidget(self.title_lbl)
+
+        # Accent underline
+        underline = QFrame()
+        underline.setObjectName("CardAccent")
+        underline.setAttribute(Qt.WA_StyledBackground, True)
+        underline.setFixedHeight(3)
+        layout.addWidget(underline)
+
+    def set_value(self, value):
+        self.value_lbl.setText(str(value))
+
+
+# ============================================================
+# INFO ROW – keeps value on same line
+# ============================================================
+class InfoRow(QFrame):
+    def __init__(self, icon_file, label):
+        super().__init__()
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet("background: transparent; border: none;")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 4, 0, 4)
+        layout.setSpacing(12)
+
+        icon_badge = QFrame()
+        icon_badge.setObjectName("IconBadge")
+        icon_badge.setFixedSize(30, 30)
+        icon_badge.setAttribute(Qt.WA_StyledBackground, True)
+        icon_badge.setStyleSheet(icon_badge.styleSheet() + "border-radius: 15px;")
+        icon_row = QHBoxLayout(icon_badge)
+        icon_row.setContentsMargins(0, 0, 0, 0)
+        icon_lbl = QLabel()
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("background: transparent;")
+        if icon_file:
+            icon_lbl.setPixmap(_themed_icon_pixmap(icon_file, 14))
+        icon_row.addWidget(icon_lbl)
+        layout.addWidget(icon_badge)
+
+        label_lbl = _label(label, "LegendLabel")
+        label_lbl.setFixedWidth(100)
+        layout.addWidget(label_lbl)
+
+        layout.addStretch()
+
+        self.value_lbl = _label(PLACEHOLDER, "LegendValue")
+        self.value_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.value_lbl.setWordWrap(False)
+        self.value_lbl.setMinimumWidth(80)
+        layout.addWidget(self.value_lbl, 1)
+
+    def set_value(self, text, tone=None):
+        text = str(text)
+        self.value_lbl.setText(text)
+        self.value_lbl.setToolTip("")
+        if tone:
+            tokens = get_tokens()
+            self.value_lbl.setStyleSheet(f"color: {tokens[tone]}; font-size:13px; font-weight:850; background: transparent;")
+        else:
+            self.value_lbl.setStyleSheet("")
+
+
+# ============================================================
+# ACTION TILE
+# ============================================================
+class ActionTile(QPushButton):
+    def __init__(self, icon_file, label):
+        super().__init__()
+        self.setObjectName("navButton")
+        self.setProperty("variant", "default")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(64)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 8, 14, 8)
+        layout.setSpacing(12)
+
+        icon_badge = QFrame()
+        icon_badge.setObjectName("IconBadge")
+        icon_badge.setFixedSize(38, 38)
+        icon_badge.setAttribute(Qt.WA_StyledBackground, True)
+        icon_row = QHBoxLayout(icon_badge)
+        icon_row.setContentsMargins(0, 0, 0, 0)
+        icon_lbl = QLabel()
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("background: transparent;")
+        if icon_file:
+            icon_lbl.setPixmap(_themed_icon_pixmap(icon_file, 18))
+        icon_row.addWidget(icon_lbl)
+        layout.addWidget(icon_badge)
+
+        layout.addWidget(_label(label, "ChecklistLabel"))
+        layout.addStretch()
+
+        chevron = QLabel("\u203a")
+        chevron.setObjectName("LegendLabel")
+        layout.addWidget(chevron)
+
+
+# ============================================================
+# MAIN DASHBOARD
+# ============================================================
+class DashboardHome(QWidget):
     open_students = Signal()
     open_academics = Signal()
     open_exams = Signal()
@@ -60,305 +207,148 @@ class DashboardHome(QWidget):
     open_broadsheet = Signal()
     open_report_book = Signal()
 
-  
-
     def __init__(self):
-       super().__init__()
-       self._needs_refresh = False
-       self.build_ui()
+        super().__init__()
+        self._needs_refresh = False
+        self.build_ui()
+        self.load_dashboard()
 
-    # Load dashboard immediately
-       self.load_dashboard()
-
-    # Refresh automatically when data changes
-       EventBus.subscribe("STUDENTS_UPDATED", self.load_dashboard)
-       EventBus.subscribe("SUBJECTS_UPDATED", self.load_dashboard)
-       EventBus.subscribe("RESULTS_UPDATED", self.load_dashboard)
-       EventBus.subscribe("EXAMS_UPDATED", self.load_dashboard)
-       EventBus.subscribe("LEVEL_CHANGED", self.load_dashboard)
-       EventBus.subscribe("SCHOOL_PROFILE_UPDATED", self.load_dashboard)
+        EventBus.subscribe("STUDENTS_UPDATED", self.load_dashboard)
+        EventBus.subscribe("SUBJECTS_UPDATED", self.load_dashboard)
+        EventBus.subscribe("RESULTS_UPDATED", self.load_dashboard)
+        EventBus.subscribe("EXAMS_UPDATED", self.load_dashboard)
+        EventBus.subscribe("LEVEL_CHANGED", self.load_dashboard)
+        EventBus.subscribe("SCHOOL_PROFILE_UPDATED", self.load_dashboard)
+        EventBus.subscribe("THEME_CHANGED", self.load_dashboard)
 
     def build_ui(self):
-        """Build the complete dashboard UI with improved layout and styling."""
+        self.setObjectName("SRMSDashboardRoot")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # Main layout with reduced margins for better space usage
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 14, 16, 14)
-        root.setSpacing(10)
+        root.setContentsMargins(24, 20, 24, 16)
+        root.setSpacing(16)
 
-        # ====== HEADER SECTION ======
-        header = self._build_header()
-        root.addWidget(header)
+        # Header
+        header = QHBoxLayout()
+        header.addWidget(_label("Dashboard", "PageTitle"))
+        header.addStretch()
+        self.greeting_label = QLabel("Hi, Admin!")
+        self.greeting_label.setObjectName("PageSubtitle")
+        self.greeting_label.setStyleSheet("font-size: 16px; font-weight: 600;")
+        header.addWidget(self.greeting_label)
+        root.addLayout(header)
 
-        # ====== MAIN CONTENT AREA ======
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(12)
-        content_layout.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(_label("Welcome to School Results Management System", "PageSubtitle"))
 
-        # Left: KPI Cards
-        kpi_section = self._build_kpi_section()
-        content_layout.addWidget(kpi_section, 3)
+        # Main content
+        content_row = QHBoxLayout()
+        content_row.setSpacing(18)
+        root.addLayout(content_row, 1)
 
-        # Right: Quick Actions & School Info
-        right_panel = self._build_right_panel()
-        content_layout.addWidget(right_panel, 2)
+        # Left column
+        left_col = QVBoxLayout()
+        left_col.setSpacing(14)
+        content_row.addLayout(left_col, 3)
 
-        root.addLayout(content_layout, 1)
+        stat_grid = QGridLayout()
+        stat_grid.setHorizontalSpacing(14)
+        stat_grid.setVerticalSpacing(14)
 
-    def _build_header(self):
-        """Build the compact, modern header section."""
-        header = QFrame()
-        header.setObjectName("HeaderFrame")
-        header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        header.setMinimumHeight(78)
+        self.students_card = StatCard("Students", _icon("students.svg"), tone="primary")
+        self.subjects_card = StatCard("Subjects", _icon("academics.svg"), tone="secondary")
+        self.classes_card = StatCard("Classes", _icon("school.svg"), tone="success")
+        self.exams_card = StatCard("Exams", _icon("exams.svg"), tone="warning")
 
-        layout = QVBoxLayout(header)
-        layout.setContentsMargins(22, 10, 22, 8)
-        layout.setSpacing(3)
+        cards = [self.students_card, self.subjects_card, self.classes_card, self.exams_card]
+        for i, card in enumerate(cards):
+            row = i // 2
+            col = i % 2
+            stat_grid.addWidget(card, row, col)
+            stat_grid.setColumnStretch(col, 1)
 
-        # School Name
-        self.school_lbl = QLabel("Loading School...")
-        self.school_lbl.setAlignment(Qt.AlignCenter)
-        font = QFont()
-        font.setPointSize(17)
-        font.setWeight(QFont.Weight.Bold)
-        self.school_lbl.setFont(font)
-        self.school_lbl.setProperty("variant", "accent")
+        left_col.addLayout(stat_grid)
+        left_col.addWidget(self._build_quick_actions())
 
-        # Subtitle
-        subtitle = QLabel("School Results Management System")
-        subtitle.setAlignment(Qt.AlignCenter)
-        subtitle_font = QFont()
-        subtitle_font.setPointSize(9)
-        subtitle.setFont(subtitle_font)
-        subtitle.setProperty("variant", "muted")
+        # Right column
+        right_col = QVBoxLayout()
+        right_col.setSpacing(14)
+        content_row.addLayout(right_col, 2)
 
-        # Active Exam
-        self.exam_lbl = QLabel("Loading Exam...")
-        self.exam_lbl.setAlignment(Qt.AlignCenter)
-        exam_font = QFont()
-        exam_font.setPointSize(9)
-        exam_font.setWeight(QFont.Weight.DemiBold)
-        self.exam_lbl.setFont(exam_font)
-        self.exam_lbl.setProperty("variant", "success")
+        right_col.addWidget(self._build_school_info())
+        right_col.addStretch()
 
-        layout.addWidget(self.school_lbl, alignment=Qt.AlignCenter)
-        layout.addWidget(subtitle, alignment=Qt.AlignCenter)
-        layout.addWidget(self.exam_lbl, alignment=Qt.AlignCenter)
-
-        return header
-
-    def _build_kpi_section(self):
-        """Build the left panel with KPI cards."""
-        container = QFrame()
-        container.setObjectName("KPIContainer")
-
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(9)
-
-        # Section Title - Bold and prominent
-        title = QLabel("Key Performance Indicators")
-        title_font = QFont()
-        title_font.setPointSize(12)
-        title_font.setWeight(QFont.Weight.Bold)
-        title.setFont(title_font)
-        title.setProperty("variant", "accent")
-        layout.addWidget(title)
-
-        # KPI Grid container with background
-        grid_container = QFrame()
-        grid_layout_container = QVBoxLayout(grid_container)
-        grid_layout_container.setContentsMargins(10, 10, 10, 10)
-        grid_layout_container.setSpacing(0)
-
-        # KPI Grid (3 columns x 3 rows)
-        kpi_grid = QGridLayout()
-        kpi_grid.setHorizontalSpacing(8)
-        kpi_grid.setVerticalSpacing(8)
-        kpi_grid.setContentsMargins(0, 0, 0, 0)
-
-        # Create KPI Cards
-        self.students_card = PremiumStatCard(
-            "Students",
-            "Registered learners",
-            _icon("students.svg"),
-            "primary"
-        )
-        self.subjects_card = PremiumStatCard(
-            "Subjects",
-            "Configured subjects",
-            _icon("academics.svg"),
-            "secondary"
-        )
-        self.classes_card = PremiumStatCard(
-            "Classes",
-            "Active class groups",
-            _icon("school.svg"),
-            "success"
-        )
-        self.exams_card = PremiumStatCard(
-            "Exams",
-            "Tracked assessments",
-            _icon("exams.svg"),
-            "warning"
-        )
-        self.results_card = PremiumStatCard(
-            "Results",
-            "Stored result entries",
-            _icon("results.svg"),
-            "success"
-        )
-        self.male_card = PremiumStatCard(
-            "Male Students",
-            "Learners marked male",
-            _icon("students.svg"),
-            "primary"
-        )
-        self.female_card = PremiumStatCard(
-            "Female Students",
-            "Learners marked female",
-            _icon("students.svg"),
-            "danger"
-        )
-        self.completed_exam_card = PremiumStatCard(
-            "Completed Exams",
-            "Archived exam records",
-            _icon("exams.svg"),
-            "secondary"
-        )
-
-        # Layout cards in grid
-        cards = [
-            (self.students_card, 0, 0),
-            (self.subjects_card, 0, 1),
-            (self.classes_card, 0, 2),
-            (self.exams_card, 0, 3),
-            (self.results_card, 1, 0),
-            (self.male_card, 1, 1),
-            (self.female_card, 1, 2),
-            (self.completed_exam_card, 1, 3),
-        ]
-
-        for card, row, col in cards:
-            card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-            kpi_grid.addWidget(card, row, col)
-
-        for i in range(4):
-            kpi_grid.setColumnStretch(i, 1)
-
-        grid_layout_container.addLayout(kpi_grid)
-        layout.addWidget(grid_container, 1)
-
-        return container
-
-    def _build_right_panel(self):
-        """Build the right panel with quick actions and school info."""
-        container = QFrame()
-
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-
-        # ====== QUICK ACTIONS ======
-        quick_panel = self._build_quick_actions()
-        layout.addWidget(quick_panel, 0)
-
-        # ====== SCHOOL INFORMATION ======
-        school_panel = self._build_school_info()
-        layout.addWidget(school_panel, 0)
-        layout.addStretch(1)
-
-        return container
+        # Footer
+        root.addWidget(_label(
+            "\u00a9 2026 School Results Management System. All rights reserved.",
+            "FooterNote",
+        ), 0, Qt.AlignHCenter)
 
     def _build_quick_actions(self):
-        """Build the quick actions panel with button grid."""
         panel = QFrame()
         panel.setObjectName("QuickActionsPanel")
-        panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        panel.setAttribute(Qt.WA_StyledBackground, True)
+        panel.setGraphicsEffect(_soft_shadow())
 
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(20, 6, 20, 18)
+        layout.setSpacing(10)
 
-        # Section Title - Bold and prominent
-        title = QLabel("Quick Actions")
-        title_font = QFont()
-        title_font.setPointSize(13)
-        title_font.setWeight(QFont.Weight.Bold)
-        title.setFont(title_font)
-        title.setProperty("variant", "accent")
-        layout.addWidget(title)
+        layout.addWidget(_label("Quick Actions", "SectionTitle"))
 
-        self.add_student_btn = GlassButton("Add Student", _icon("students.svg"))
-        self.add_exam_btn = GlassButton("Add Exam", _icon("exams.svg"))
-        self.school_btn = GlassButton("School", _icon("school.svg"))
-        self.subjects_btn = GlassButton("Subjects", _icon("academics.svg"))
-        self.history_btn = GlassButton("History", _icon("dashboard.svg"))
+        self.add_student_btn = ActionTile(_icon("students.svg"), "Add Student")
+        self.add_exam_btn = ActionTile(_icon("exams.svg"), "Add Exam")
+        self.subjects_btn = ActionTile(_icon("academics.svg"), "Subjects")
+        self.history_btn = ActionTile(_icon("dashboard.svg"), "History")
 
-        button_grid = QGridLayout()
-        button_grid.setContentsMargins(0, 0, 0, 0)
-        button_grid.setHorizontalSpacing(8)
-        button_grid.setVerticalSpacing(8)
-
-        button_grid.addWidget(self.add_student_btn, 0, 0)
-        button_grid.addWidget(self.add_exam_btn, 0, 1)
-        button_grid.addWidget(self.school_btn, 0, 2)
-        button_grid.addWidget(self.subjects_btn, 1, 0)
-        button_grid.addWidget(self.history_btn, 1, 1)
-
-        for i in range(3):
-            button_grid.setColumnStretch(i, 1)
-
-        layout.addLayout(button_grid)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(10)
+        grid.addWidget(self.add_student_btn, 0, 0)
+        grid.addWidget(self.add_exam_btn, 0, 1)
+        grid.addWidget(self.subjects_btn, 1, 0)
+        grid.addWidget(self.history_btn, 1, 1)
+        layout.addLayout(grid)
 
         self.add_student_btn.clicked.connect(self.open_students.emit)
         self.add_exam_btn.clicked.connect(self.open_exams.emit)
-        self.school_btn.clicked.connect(self.open_school.emit)
         self.subjects_btn.clicked.connect(self.open_academics.emit)
         self.history_btn.clicked.connect(self.open_history.emit)
 
         return panel
 
     def _build_school_info(self):
-        """Build the school information panel."""
         panel = QFrame()
         panel.setObjectName("SchoolInfoPanel")
-        panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        panel.setMinimumHeight(205)
-        panel.setMaximumHeight(245)
+        panel.setAttribute(Qt.WA_StyledBackground, True)
+        panel.setGraphicsEffect(_soft_shadow())
 
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(20, 6, 20, 12)
+        layout.setSpacing(2)
 
-        # Section Title - Bold and prominent
-        title = QLabel("School Information")
-        title_font = QFont()
-        title_font.setPointSize(13)
-        title_font.setWeight(QFont.Weight.Bold)
-        title.setFont(title_font)
-        title.setProperty("variant", "accent")
-        layout.addWidget(title)
+        layout.addWidget(_label("School Information", "SectionTitle"))
+        layout.addSpacing(6)
 
-        # Info Label - Centered when empty
-        self.school_info_lbl = QLabel("Loading...")
-        self.school_info_lbl.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        self.school_info_lbl.setWordWrap(True)
-        info_font = QFont()
-        info_font.setPointSize(10)
-        self.school_info_lbl.setFont(info_font)
-        self.school_info_lbl.setProperty("variant", "muted")
-        layout.addWidget(self.school_info_lbl)
-        layout.addStretch()
+        # Rows – no "System"
+        self.row_school_name = InfoRow(_icon("school.svg"), "School Name")
+        self.row_head_teacher = InfoRow(_icon("user.svg"), "Head Teacher")
+        self.row_academic_master = InfoRow(_icon("academics.svg"), "Academic Master")
+        self.row_active_exam = InfoRow(_icon("exams.svg"), "Active Exam")
+        self.row_academic_year = InfoRow(_icon("calendar.svg"), "Academic Year")
+        self.row_school_level = InfoRow(_icon("students.svg"), "School Level")
+        self.row_location = InfoRow(_icon("location.svg"), "Location")
+
+        for row in [self.row_school_name, self.row_head_teacher, self.row_academic_master,
+                    self.row_active_exam, self.row_academic_year, self.row_school_level, self.row_location]:
+            layout.addWidget(row)
 
         return panel
 
-    # =====================================
-    # DATABASE LOADER
-    # =====================================
-
+    # ------------------------------------------------------------
+    # DATA LOADER
+    # ------------------------------------------------------------
     def load_dashboard(self):
         if not self.isVisible():
             self._needs_refresh = True
@@ -366,6 +356,7 @@ class DashboardHome(QWidget):
 
         try:
             with get_cursor() as cur:
+                # Counts
                 cur.execute("SELECT COUNT(*) FROM students")
                 students = cur.fetchone()[0]
 
@@ -376,73 +367,53 @@ class DashboardHome(QWidget):
                 classes = cur.fetchone()[0]
 
                 cur.execute("SELECT COUNT(*) FROM exams WHERE status != 'COMPLETED'")
-                exams = cur.fetchone()[0]
+                open_exams = cur.fetchone()[0]
 
-                cur.execute("""
-                    SELECT COUNT(*) FROM results r
-                    JOIN exams e ON r.exam_id = e.id
-                    WHERE e.status != 'COMPLETED'
-                """)
-                results = cur.fetchone()[0]
-
-                cur.execute("SELECT COUNT(*) FROM students WHERE gender='Male'")
-                males = cur.fetchone()[0]
-
-                cur.execute("SELECT COUNT(*) FROM students WHERE gender='Female'")
-                females = cur.fetchone()[0]
-
-                cur.execute("SELECT COUNT(*) FROM exams WHERE status='COMPLETED'")
-                completed_exams = cur.fetchone()[0]
-
+                # School profile – includes head_teacher, academic_master
                 cur.execute("""
                     SELECT school_name, head_teacher, academic_master, school_phone, school_email
                     FROM school_profile LIMIT 1
                 """)
                 row = cur.fetchone()
-
                 if row:
-                    school_name, head, academic, phone, email = row
-                    self.school_lbl.setText(school_name)
-                    self.school_info_lbl.setText(
-                        f"Head Teacher: {head}\n\n"
-                        f"Academic Master: {academic}\n\n"
-                        f"Phone: {phone}\n\n"
-                        f"Email: {email}"
-                    )
+                    self.row_school_name.set_value(row[0] or "N/A")
+                    self.row_head_teacher.set_value(row[1] or "N/A")
+                    self.row_academic_master.set_value(row[2] or "N/A")
+                else:
+                    self.row_school_name.set_value("N/A")
+                    self.row_head_teacher.set_value("N/A")
+                    self.row_academic_master.set_value("N/A")
 
-                cur.execute("SELECT exam_name FROM exams WHERE status='OPEN' LIMIT 1")
+                # Active exam
                 current_level = SystemState.get_level()
-
                 cur.execute("""
-                SELECT exam_name
-                FROM exams
-                WHERE status='OPEN'
-    
-                  AND level=?
-                  ORDER BY id DESC
-                  LIMIT 1
+                    SELECT exam_name FROM exams
+                    WHERE status='OPEN' AND level=?
+                    ORDER BY id DESC LIMIT 1
                 """, (current_level,))
-
-
                 exam = cur.fetchone()
                 if exam:
-                    self.exam_lbl.setText(f"Active Exam: {exam[0]}")
+                    self.row_active_exam.set_value(exam[0], tone="success")
                 else:
-                    self.exam_lbl.setText("No Active Exam")
+                    self.row_active_exam.set_value("No Active Exam")
 
-            self.students_card.set_value(students)
-            self.subjects_card.set_value(subjects)
-            self.classes_card.set_value(classes)
-            self.exams_card.set_value(exams)
-            self.results_card.set_value(results)
-            self.male_card.set_value(males)
-            self.female_card.set_value(females)
-            self.completed_exam_card.set_value(completed_exams)
+                # School level
+                self.row_school_level.set_value(current_level or "N/A")
+
+                # Academic Year – placeholder
+                self.row_academic_year.set_value("2026")
+
+                # Location – placeholder
+                self.row_location.set_value("N/A")
+
+                # Update stat cards
+                self.students_card.set_value(students)
+                self.subjects_card.set_value(subjects)
+                self.classes_card.set_value(classes)
+                self.exams_card.set_value(open_exams)
 
         except Exception as error:
             print(f"[ERROR] Dashboard failed to load: {error}")
-            self.school_lbl.setText("Dashboard Error")
-            self.exam_lbl.setText(f"Could not load data: {error}")
 
     def showEvent(self, event):
         super().showEvent(event)

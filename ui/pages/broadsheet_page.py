@@ -343,16 +343,16 @@ class BroadsheetPage(QWidget):
         top_bar.addWidget(self.context_label)
         top_bar.addStretch()
 
-        self.refresh_btn = QPushButton("🔄 Refresh")
+        self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.clicked.connect(self._load_data)
         top_bar.addWidget(self.refresh_btn)
 
-        self.excel_btn = QPushButton("📊 Export Excel")
+        self.excel_btn = QPushButton("Export Excel")
         self.excel_btn.clicked.connect(self._export_excel)
         self.excel_btn.setEnabled(False)
         top_bar.addWidget(self.excel_btn)
 
-        self.pdf_btn = QPushButton("📄 Export PDF")
+        self.pdf_btn = QPushButton("Export PDF")
         self.pdf_btn.clicked.connect(self._export_pdf)
         self.pdf_btn.setEnabled(False)
         top_bar.addWidget(self.pdf_btn)

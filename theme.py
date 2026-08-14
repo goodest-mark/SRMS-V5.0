@@ -28,6 +28,9 @@ def _theme(
     button_radius=14,
     table_item_padding=8,
     group_radius=18,
+    glass_highlight="rgba(255,255,255,0.07)",
+    glass_shade="rgba(0,0,0,0.10)",
+    is_light=False,
 ):
     return {
         "app_bg": app_bg,
@@ -54,14 +57,17 @@ def _theme(
         "button_radius": button_radius,
         "table_item_padding": table_item_padding,
         "group_radius": group_radius,
+        "glass_highlight": glass_highlight,
+        "glass_shade": glass_shade,
+        "is_light": is_light,
     }
 
 
 _THEME_TOKENS = {
     "Blue": _theme(
         app_bg="#081225",
-        surface="rgba(15,23,42,0.96)",
-        surface_alt="rgba(30,41,59,0.88)",
+        surface="rgba(22,33,58,0.97)",
+        surface_alt="rgba(35,49,79,0.92)",
         input_bg="rgba(15,23,42,0.95)",
         table_bg_0="rgba(2,6,23,0.98)",
         table_bg_1="rgba(15,23,42,0.96)",
@@ -69,13 +75,15 @@ _THEME_TOKENS = {
         text="#e2e8f0",
         text_soft="#dbeafe",
         muted="#94a3b8",
-        border="rgba(59,130,246,0.24)",
+        border="rgba(96,165,250,0.42)",
         primary="#2563eb",
         primary_2="#3b82f6",
         success="#10b981",
         warning="#f59e0b",
         danger="#ef4444",
         tooltip_bg="#111827",
+        glass_highlight="rgba(255,255,255,0.09)",
+        glass_shade="rgba(0,0,0,0.22)",
     ),
     "Professional Dark": _theme(
         app_bg="#020409",
@@ -95,6 +103,8 @@ _THEME_TOKENS = {
         warning="#f59e0b",
         danger="#ef4444",
         tooltip_bg="#020617",
+        glass_highlight="rgba(255,255,255,0.06)",
+        glass_shade="rgba(0,0,0,0.30)",
     ),
     "Light": _theme(
         app_bg="#f5f7fb",
@@ -114,6 +124,9 @@ _THEME_TOKENS = {
         warning="#d97706",
         danger="#dc2626",
         tooltip_bg="#020617",
+        glass_highlight="rgba(255,255,255,0.9)",
+        glass_shade="rgba(15,23,42,0.08)",
+        is_light=True,
     ),
     "Accessibility Blue": _theme(
         app_bg="#07101f",
@@ -140,6 +153,8 @@ _THEME_TOKENS = {
         button_radius=16,
         table_item_padding=10,
         group_radius=20,
+        glass_highlight="rgba(255,255,255,0.10)",
+        glass_shade="rgba(0,0,0,0.28)",
     ),
     "Accessibility Dark": _theme(
         app_bg="#02050d",
@@ -166,6 +181,8 @@ _THEME_TOKENS = {
         button_radius=16,
         table_item_padding=10,
         group_radius=20,
+        glass_highlight="rgba(255,255,255,0.08)",
+        glass_shade="rgba(0,0,0,0.32)",
     ),
     "High Contrast": _theme(
         app_bg="#000000",
@@ -192,6 +209,8 @@ _THEME_TOKENS = {
         button_radius=0,
         table_item_padding=10,
         group_radius=0,
+        glass_highlight="transparent",
+        glass_shade="transparent",
     ),
 }
 
@@ -214,7 +233,26 @@ def available_theme_names():
     return list(_THEME_TOKENS.keys())
 
 
+_current_theme_name = "Blue"
+
+
+def current_theme_name():
+    return _current_theme_name
+
+
+def get_tokens(theme_name=None):
+    name = normalize_theme_name(theme_name) if theme_name else _current_theme_name
+    return _THEME_TOKENS[name]
+
+
 def _build(tokens):
+    if tokens.get("is_light"):
+        icon_badge_bg = "#ffffff"
+        icon_badge_border = "rgba(37,99,235,0.22)"
+    else:
+        icon_badge_bg = "rgba(148,163,184,0.14)"
+        icon_badge_border = "rgba(148,163,184,0.24)"
+
     return f"""
 /* =========================================
    SRMS GLOBAL THEME
@@ -364,6 +402,18 @@ QPushButton#navButton[variant="default"]:hover{{
     border: 1px solid rgba(148,163,184,0.5);
 }}
 
+/* ---- Navigation container (used by Students, Academics, etc.) ---- */
+QFrame#NavContainer {{
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 {tokens['surface_alt']},
+        stop:1 {tokens['surface_alt']}
+    );
+    border: 1px solid {tokens['border']};
+    border-radius: 12px;
+    padding: 4px;
+}}
+
 /* =========================================
    WORKFLOW BUTTONS (page actions and tabs)
 ========================================= */
@@ -487,27 +537,91 @@ QGroupBox, QFrame#GlassCard, QFrame#HeaderFrame, QFrame#QuickActionsPanel, QFram
         stop:0 {tokens['surface']},
         stop:1 {tokens['surface_alt']}
     );
-    border:1px solid rgba(148,163,184,0.28);
+    border:1px solid {tokens['border']};
+    border-top:1px solid {tokens['glass_highlight']};
+    border-bottom:1px solid {tokens['glass_shade']};
     border-radius:{tokens['group_radius']}px;
     color:{tokens['text_soft']};
     margin-top:14px;
     padding-top:12px;
 }}
 
+QLabel#SectionTitle{{
+    padding-top:2px;
+}}
+
+QLabel#PageTitle{{
+    font-size:26px;
+    font-weight:900;
+    color:{tokens['text_soft']};
+}}
+
+QLabel#PageSubtitle{{
+    font-size:14px;
+    font-weight:600;
+    color:{tokens['muted']};
+}}
+
+QLabel#SectionTitle{{
+    font-size:16px;
+    font-weight:850;
+    color:{tokens['text_soft']};
+}}
+
+QLabel#LegendLabel{{
+    font-size:13px;
+    font-weight:600;
+    color:{tokens['muted']};
+}}
+
+QLabel#LegendValue{{
+    font-size:13px;
+    font-weight:850;
+    color:{tokens['text_soft']};
+}}
+
+QLabel#InsightCaption{{
+    font-size:12px;
+    font-weight:700;
+    color:{tokens['muted']};
+}}
+
+QLabel#FooterNote{{
+    font-size:11px;
+    font-weight:500;
+    color:{tokens['muted']};
+}}
+
+QLabel#ChecklistLabel{{
+    font-size:13px;
+    font-weight:800;
+    color:{tokens['text_soft']};
+}}
+
+QLabel#ChecklistSubtitle{{
+    font-size:11px;
+    font-weight:500;
+    color:{tokens['muted']};
+}}
+
 QFrame#GlassCard QLabel#MetricTitle,
 QFrame#PremiumStatCard QLabel#MetricTitle{{
     color:{tokens['muted']};
-    font-weight:900;
+    font-size:13px;
+    font-weight:750;
 }}
 
 QFrame#GlassCard QLabel#MetricSubtitle,
 QFrame#PremiumStatCard QLabel#MetricSubtitle{{
     color:{tokens['muted']};
+    font-size:12px;
+    font-weight:600;
 }}
 
 QFrame#GlassCard QLabel#MetricValue,
 QFrame#PremiumStatCard QLabel#MetricValue{{
     color:{tokens['text_soft']};
+    font-size:30px;
     font-weight:900;
 }}
 
@@ -517,7 +631,9 @@ QFrame#PremiumStatCard{{
         stop:0 {tokens['surface']},
         stop:1 {tokens['surface_alt']}
     );
-    border:1px solid rgba(148,163,184,0.22);
+    border:1px solid {tokens['border']};
+    border-top:1px solid {tokens['glass_highlight']};
+    border-bottom:1px solid {tokens['glass_shade']};
     border-radius:{tokens['group_radius']}px;
     color:{tokens['text_soft']};
     margin:2px;
@@ -527,9 +643,15 @@ QFrame#PremiumStatCard:hover{{
     border:1px solid rgba(96,165,250,0.48);
 }}
 
+QFrame#IconBadge{{
+    background:{icon_badge_bg};
+    border:1px solid {icon_badge_border};
+    border-radius:12px;
+}}
+
 QFrame#PremiumStatCard QFrame#PremiumStatIcon{{
-    background:rgba(148,163,184,0.14);
-    border:1px solid rgba(148,163,184,0.24);
+    background:{icon_badge_bg};
+    border:1px solid {icon_badge_border};
     border-radius:12px;
 }}
 
@@ -538,7 +660,6 @@ QFrame#PremiumStatCard QFrame#CardAccent{{
     border-radius:2px;
 }}
 
-QFrame#PremiumStatCard[tone="primary"] QFrame#PremiumStatIcon,
 QFrame#PremiumStatCard[tone="primary"] QFrame#CardAccent{{
     background:qlineargradient(
         x1:0,y1:0,x2:1,y2:0,
@@ -547,7 +668,6 @@ QFrame#PremiumStatCard[tone="primary"] QFrame#CardAccent{{
     );
 }}
 
-QFrame#PremiumStatCard[tone="secondary"] QFrame#PremiumStatIcon,
 QFrame#PremiumStatCard[tone="secondary"] QFrame#CardAccent{{
     background:qlineargradient(
         x1:0,y1:0,x2:1,y2:0,
@@ -556,7 +676,6 @@ QFrame#PremiumStatCard[tone="secondary"] QFrame#CardAccent{{
     );
 }}
 
-QFrame#PremiumStatCard[tone="success"] QFrame#PremiumStatIcon,
 QFrame#PremiumStatCard[tone="success"] QFrame#CardAccent{{
     background:qlineargradient(
         x1:0,y1:0,x2:1,y2:0,
@@ -565,7 +684,6 @@ QFrame#PremiumStatCard[tone="success"] QFrame#CardAccent{{
     );
 }}
 
-QFrame#PremiumStatCard[tone="warning"] QFrame#PremiumStatIcon,
 QFrame#PremiumStatCard[tone="warning"] QFrame#CardAccent{{
     background:qlineargradient(
         x1:0,y1:0,x2:1,y2:0,
@@ -574,7 +692,6 @@ QFrame#PremiumStatCard[tone="warning"] QFrame#CardAccent{{
     );
 }}
 
-QFrame#PremiumStatCard[tone="danger"] QFrame#PremiumStatIcon,
 QFrame#PremiumStatCard[tone="danger"] QFrame#CardAccent{{
     background:qlineargradient(
         x1:0,y1:0,x2:1,y2:0,
@@ -582,6 +699,43 @@ QFrame#PremiumStatCard[tone="danger"] QFrame#CardAccent{{
         stop:1 {tokens['warning']}
     );
 }}
+{"" if tokens.get("is_light") else f'''
+QFrame#PremiumStatCard[tone="primary"] QFrame#PremiumStatIcon{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['primary_2']},
+        stop:1 {tokens['primary']}
+    );
+}}
+QFrame#PremiumStatCard[tone="secondary"] QFrame#PremiumStatIcon{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['primary_2']},
+        stop:1 {tokens['primary']}
+    );
+}}
+QFrame#PremiumStatCard[tone="success"] QFrame#PremiumStatIcon{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['success']},
+        stop:1 {tokens['primary_2']}
+    );
+}}
+QFrame#PremiumStatCard[tone="warning"] QFrame#PremiumStatIcon{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['warning']},
+        stop:1 {tokens['primary_2']}
+    );
+}}
+QFrame#PremiumStatCard[tone="danger"] QFrame#PremiumStatIcon{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:0,
+        stop:0 {tokens['danger']},
+        stop:1 {tokens['warning']}
+    );
+}}
+'''}
 
 QFrame#BroadsheetCard{{
     background:qlineargradient(
@@ -590,6 +744,8 @@ QFrame#BroadsheetCard{{
         stop:1 {tokens['surface_alt']}
     );
     border:1px solid {tokens['border']};
+    border-top:1px solid {tokens['glass_highlight']};
+    border-bottom:1px solid {tokens['glass_shade']};
     border-radius:{tokens['group_radius']}px;
     color:{tokens['text_soft']};
 }}
@@ -601,6 +757,8 @@ QFrame#HelpStep, QFrame#SplashCard{{
         stop:1 {tokens['surface_alt']}
     );
     border:1px solid {tokens['border']};
+    border-top:1px solid {tokens['glass_highlight']};
+    border-bottom:1px solid {tokens['glass_shade']};
     border-radius:{tokens['group_radius']}px;
     color:{tokens['text_soft']};
 }}
@@ -613,6 +771,8 @@ QLabel#SecurityBackground{{
         stop:1 {tokens['surface_alt']}
     );
     border:1px solid {tokens['border']};
+    border-top:1px solid {tokens['glass_highlight']};
+    border-bottom:1px solid {tokens['glass_shade']};
     border-radius:{tokens['group_radius']}px;
     color:{tokens['text_soft']};
 }}
@@ -722,19 +882,56 @@ QToolTip{{
     padding:6px;
     border-radius:8px;
 }}
+
+/* ---- Trend label ---- */
+QLabel#TrendLabel {{
+    background: transparent;
+}}
+
+/* ---- Smart prompt banner and its button ---- */
+QFrame#SmartPromptBanner {{
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 {tokens['surface']},
+        stop:1 {tokens['surface_alt']}
+    );
+    border: 1px solid {tokens['border']};
+    border-radius: {tokens['group_radius']}px;
+    padding: 4px 8px;
+}}
+
+QPushButton#PromptButton {{
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 {tokens['primary_2']},
+        stop:1 {tokens['primary']}
+    );
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: 800;
+    padding: 8px 16px;
+}}
+QPushButton#PromptButton:hover {{
+    background: qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 #60a5fa,
+        stop:1 {tokens['primary_2']}
+    );
+}}
 """
 
 
 def get_theme(theme_name):
-    """Return the stylesheet for the selected SRMS theme."""
     return _build(_THEME_TOKENS[normalize_theme_name(theme_name)])
 
 
 def apply_theme(app, theme_name):
-    app.setStyleSheet(get_theme(theme_name))
+    global _current_theme_name
+    _current_theme_name = normalize_theme_name(theme_name)
+    app.setStyleSheet(get_theme(_current_theme_name))
 
 
-# Backward-compatible constants used by older modules.
 DARK_STYLE = get_theme("Blue")
 LIGHT_STYLE = get_theme("Light")
 APP_STYLE = DARK_STYLE
