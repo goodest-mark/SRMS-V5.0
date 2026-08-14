@@ -61,6 +61,10 @@ jobs:
             --hidden-import=event_bus \
             --hidden-import=system_state \
             --hidden-import=ranking \
+            --hidden-import=subjects_page \
+            --hidden-import=enrollment_page \
+            --hidden-import=academic_years \
+            --hidden-import=terms_page \
             --collect-submodules=reportlab.graphics.barcode \
             --collect-all ui \
             --collect-all PySide6 \
