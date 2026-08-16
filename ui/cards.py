@@ -123,8 +123,14 @@ class PremiumStatCard(QFrame):
         accent.setProperty("tone", tone)
         accent.setFixedHeight(4)
 
+        # value_lbl gets stretch=1 so it claims the free vertical space left
+        # over once top_row and accent take their natural (small) size --
+        # without this, all three sections pack tightly at the top near the
+        # icon and the leftover height sits unused below the accent bar
+        # instead of the number using it. value_lbl's existing AlignCenter
+        # then centers the number nicely within that claimed space.
         layout.addLayout(top_row)
-        layout.addWidget(self.value_lbl)
+        layout.addWidget(self.value_lbl, 1)
         layout.addWidget(accent)
 
     def set_value(self, value):
