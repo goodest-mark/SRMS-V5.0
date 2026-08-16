@@ -1,4 +1,6 @@
 import re
+import openpyxl
+from openpyxl.styles import Font, Alignment, Border, Side
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
@@ -17,11 +19,10 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
+    QFileDialog,   # <-- ensure this is here
 )
 
-import openpyxl
 import excel_utils
-
 from class_utils import get_classes
 from db_utils import get_cursor, fetch_all, fetch_one, get_exam_context
 from event_bus import EventBus
@@ -564,25 +565,160 @@ class ResultsPage(QWidget):
     # =========================
 
     def download_template(self):
-        exam_name = self.exam.currentText().strip() or "SELECTED EXAM"
-        class_name = self.class_box.currentText().strip() or "SELECTED CLASS"
-        subject_name = self.subject.currentText().strip() or "SELECTED SUBJECT"
-        level = SystemState.get_level()
+        """Generate a branded Excel template with pre-filled student names and admission numbers."""
+        exam_id = self.exam.currentData()
+        subject_name = self.subject.currentData()
+        class_name = self.class_box.currentText().strip()
 
-        excel_utils.download_template(
-            self,
-            "marks_template.xlsx",
-            f"EXAMINATION MARKS ENTRY FORM - {exam_name}",
-            ["Admission No*", "Marks (0-100)*"],
-            instructions=[
-                f"1. Template generated for Exam: {exam_name}.",
-                f"2. Class: {class_name} | Subject: {subject_name} | Level: {level}.",
-                "3. Do not change the column headers in Row 10.",
-                "4. Start data entry from Row 12 and keep marks between 0 and 100.",
-                "5. Admission numbers must already exist in the system.",
-            ],
-            samples=["2024/001", "85"]
+        if exam_id is None or not subject_name or not class_name:
+            show_error(self, "Please select Exam, Class, and Subject first.", title="Missing Filters")
+            return
+
+        level = SystemState.get_level()
+        context = get_exam_context(exam_id)
+        if not context:
+            show_error(self, "Invalid exam context.", title="Error")
+            return
+        year_id, term_id = context
+
+        # Fetch enrolled students for this subject/class/term
+        students = fetch_all("""
+            SELECT DISTINCT s.admission_no, s.full_name
+            FROM enrollments e
+            JOIN students s ON s.admission_no = e.admission_no
+            WHERE UPPER(TRIM(e.subject_name)) = UPPER(TRIM(?))
+              AND s.level = ?
+              AND UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
+              AND e.academic_year_id = ?
+              AND e.term_id = ?
+            ORDER BY s.full_name
+        """, (subject_name, level, class_name, year_id, term_id))
+
+        if not students:
+            show_error(self, "No students enrolled for this subject and class.", title="No Data")
+            return
+
+        # Exam details (school profile is now fetched inside write_branding_header)
+        exam_info = fetch_one("""
+            SELECT e.exam_name, t.term_name, y.year_name
+            FROM exams e
+            JOIN terms t ON t.id = e.term_id
+            JOIN academic_years y ON y.id = t.academic_year_id
+            WHERE e.id = ?
+        """, (exam_id,))
+        if exam_info:
+            exam_name, term_name, year_name = exam_info
+        else:
+            exam_name = "SELECTED EXAM"
+            term_name = "SELECTED TERM"
+            year_name = "SELECTED YEAR"
+
+        # Create workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Marks Entry"
+
+        # ===== Styling helpers =====
+        center_align = Alignment(horizontal='center', vertical='center')
+        left_align = Alignment(horizontal='left', vertical='center')
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
         )
+
+        # ===== Shared school branding (rows 1-3: name, contact, title + logo) =====
+        # Uses the same helper as download_template()/export_to_excel() in
+        # excel_utils.py, so every generated workbook -- templates, exports,
+        # and this marks-entry sheet -- shares one school-header source of
+        # truth (name, contact line, brand-blue title, and logo).
+        blue_fill, white_font, _ = excel_utils.write_branding_header(
+            ws, 3, f"Examination Marks Entry Form \u2013 {exam_name}"
+        )
+        row = 4
+
+        # ===== Subtitle (class/subject) =====
+        ws.merge_cells(f'A{row}:C{row}')
+        cell = ws[f'A{row}']
+        cell.value = f"Class: {class_name}  |  Subject: {subject_name}  |  Level: {level}  |  Term: {term_name}  |  Year: {year_name}"
+        cell.font = Font(bold=True, size=12)
+        cell.alignment = center_align
+        row += 1
+
+        row += 1  # blank line
+
+        # ===== Instructions =====
+        instructions = [
+            "INSTRUCTIONS:",
+            "1. Do not change the column headers.",
+            "2. Enter marks between 0 and 100.",
+            "3. Admission numbers are pre-filled – do not modify.",
+            "4. Start data entry from the row after the header.",
+        ]
+        for line in instructions:
+            ws.merge_cells(f'A{row}:C{row}')
+            cell = ws[f'A{row}']
+            cell.value = line
+            cell.alignment = left_align
+            cell.font = Font(size=10)
+            row += 1
+
+        row += 1  # blank line
+
+        # ===== Header row =====
+        # Same navy-fill / white-text convention as excel_utils' templates
+        # and exports, plus this page's own thin-border touch.
+        headers = ["Admission No*", "Student Name", "Marks (0-100)*"]
+        header_row = row
+        for col, header in enumerate(headers, start=1):
+            cell = ws.cell(row=header_row, column=col, value=header)
+            cell.fill = blue_fill
+            cell.font = white_font
+            cell.alignment = center_align
+            cell.border = thin_border
+
+        # ===== Student data =====
+        data_row = header_row + 1
+        for admission_no, full_name in students:
+            ws.cell(row=data_row, column=1, value=admission_no)
+            ws.cell(row=data_row, column=2, value=full_name)
+            ws.cell(row=data_row, column=3, value="")  # empty marks
+            data_row += 1
+
+        # ===== Apply borders to data rows =====
+        for r in range(header_row + 1, data_row):
+            for c in range(1, 4):
+                cell = ws.cell(row=r, column=c)
+                cell.border = thin_border
+                cell.alignment = center_align if c != 2 else left_align
+
+        # ===== Column widths =====
+        ws.column_dimensions['A'].width = 20
+        ws.column_dimensions['B'].width = 30
+        ws.column_dimensions['C'].width = 18
+
+        # ===== Freeze header row =====
+        ws.freeze_panes = f'A{header_row + 1}'
+
+        # ===== Save file =====
+        default_name = f"marks_template_{class_name}_{subject_name}.xlsx"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Template",
+            default_name,
+            "Excel Files (*.xlsx)"
+        )
+        if not save_path:
+            return
+        if not save_path.lower().endswith(".xlsx"):
+            save_path += ".xlsx"
+
+        try:
+            wb.save(save_path)
+            show_info(self, f"Template saved to {save_path}")
+        except Exception as e:
+            show_error(self, f"Failed to save template: {e}", title="Error")
 
     def import_excel(self):
         exam_id = self.exam.currentData()
@@ -601,6 +737,9 @@ class ResultsPage(QWidget):
             return
 
         class_name = self.class_box.currentText().strip()
+        if not class_name:
+            show_error(self, "Please select a class.")
+            return
 
         path = excel_utils.get_import_file(self)
         if not path:
@@ -610,14 +749,20 @@ class ResultsPage(QWidget):
             wb = openpyxl.load_workbook(path, data_only=True)
             sheet = wb.active
 
-            data_start_row = excel_utils.find_data_start_row(sheet)
-            if data_start_row is None:
+            # Find header row (contains "Admission No*" etc.)
+            header_row = None
+            for row_num in range(1, 20):
+                cell_val = sheet.cell(row=row_num, column=1).value
+                if cell_val and "Admission" in str(cell_val):
+                    header_row = row_num
+                    break
+            if header_row is None:
                 raise ValueError(
-                    "Could not detect the template's header row. Please use a "
-                    "template downloaded from this system, and don't remove "
-                    "the 'INSTRUCTIONS:' block or reorder rows."
+                    "Could not detect the template's header row. "
+                    "Please use a template downloaded from this system."
                 )
 
+            data_start_row = header_row + 1
             rows = list(sheet.iter_rows(min_row=data_start_row, values_only=True))
 
             context = get_exam_context(exam_id)
@@ -628,23 +773,27 @@ class ResultsPage(QWidget):
             imported = 0
             with get_cursor(commit=True) as cur:
                 for row in rows:
-                    if not row or not row[0] or row[1] is None:
+                    if not row or not row[0]:
                         continue
-                    adm, marks = row
+                    adm_no = str(row[0]).strip()
+                    # Marks are in column 3 (index 2)
+                    marks_raw = row[2] if len(row) > 2 else None
 
-                    # Validate marks range
+                    if marks_raw is None:
+                        continue
+
                     try:
-                        marks_int = int(marks)
+                        marks_int = int(marks_raw)
                         if not (0 <= marks_int <= 100):
                             raise ValueError("Marks must be between 0 and 100")
                     except (ValueError, TypeError) as e:
-                        print(f"[WARNING] Skipping invalid marks for {adm}: {marks} ({e})")
+                        print(f"[WARNING] Skipping invalid marks for {adm_no}: {marks_raw} ({e})")
                         continue
 
                     cur.execute("""
                         SELECT 1 FROM enrollments
                         WHERE admission_no=? AND subject_name=? AND class_name=? AND academic_year_id=? AND term_id=?
-                    """, (str(adm), subject_name, class_name, year_id, term_id))
+                    """, (adm_no, subject_name, class_name, year_id, term_id))
 
                     if cur.fetchone():
                         try:
@@ -654,10 +803,10 @@ class ResultsPage(QWidget):
                                 ON CONFLICT(admission_no, subject_name, exam_id) DO UPDATE SET
                                     marks=excluded.marks,
                                     class_name=excluded.class_name
-                            """, (str(adm), subject_name, marks_int, exam_id, class_name))
+                            """, (adm_no, subject_name, marks_int, exam_id, class_name))
                             imported += 1
                         except Exception as e:
-                            print(f"[ERROR] Failed to import result for '{adm}': {e}")
+                            print(f"[ERROR] Failed to import result for '{adm_no}': {e}")
                             continue
 
             self.load_students()

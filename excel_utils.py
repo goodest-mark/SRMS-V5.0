@@ -31,6 +31,54 @@ def set_progress(progress, percent, message):
     progress.setLabelText(f"{message}\n\nProgress: {max(0, min(100, int(percent)))}%")
     QApplication.processEvents()
 
+def write_branding_header(ws, ncols, title):
+    """Write the shared rows 1-3 school branding block (name, contact, title
+    + logo) used by both download_template() and export_to_excel(). Keeping
+    this in one place means any future palette/layout tweak automatically
+    applies to templates and exports alike, instead of needing to be
+    duplicated and kept in sync by hand.
+
+    Returns the PatternFill/Font objects the caller needs for its own
+    header row, so callers don't redefine the same styling constants.
+    """
+    profile = fetch_one("""
+        SELECT school_name, school_address, school_phone, school_email, school_logo
+        FROM school_profile
+        LIMIT 1
+    """)
+
+    school_name = profile[0].upper() if profile and profile[0] else "SCHOOL MANAGEMENT SYSTEM"
+    school_contact = f"{profile[1] if profile and profile[1] else '-'} | {profile[2] if profile and profile[2] else '-'} | {profile[3] if profile and profile[3] else '-'}"
+    school_logo = profile[4] if profile and len(profile) > 4 else None
+
+    blue_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    white_font = Font(color="FFFFFF", bold=True)
+    center_align = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
+    ws.cell(row=1, column=1, value=school_name).font = Font(size=16, bold=True)
+    ws.cell(row=1, column=1).alignment = center_align
+
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=ncols)
+    ws.cell(row=2, column=1, value=school_contact).font = Font(size=10)
+    ws.cell(row=2, column=1).alignment = center_align
+
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=ncols)
+    ws.cell(row=3, column=1, value=title.upper()).font = Font(size=14, bold=True, color="2563EB")
+    ws.cell(row=3, column=1).alignment = center_align
+
+    if school_logo and os.path.exists(school_logo):
+        try:
+            logo = ExcelImage(school_logo)
+            logo.width = 72
+            logo.height = 72
+            ws.add_image(logo, "A1")
+        except Exception:
+            logger.warning("Could not embed school logo from %s", school_logo, exc_info=True)
+
+    return blue_fill, white_font, center_align
+
+
 def download_template(parent, filename, title, headers, instructions=None, samples=None):
     path, _ = QFileDialog.getSaveFileName(parent, "Download Template", filename, "Excel Files (*.xlsx)")
     if not path: return
@@ -42,44 +90,9 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
         ws.title = "Template"
         set_progress(progress, 10, "Preparing template")
 
-        # 1. School Header
-        profile = fetch_one("""
-            SELECT school_name, school_address, school_phone, school_email, school_logo
-            FROM school_profile
-            LIMIT 1
-        """)
-
-        school_name = profile[0].upper() if profile and profile[0] else "SCHOOL MANAGEMENT SYSTEM"
-        school_contact = f"{profile[1] if profile and profile[1] else '-'} | {profile[2] if profile and profile[2] else '-'} | {profile[3] if profile and profile[3] else '-'}"
-        school_logo = profile[4] if profile and len(profile) > 4 else None
-
-        # Styling
-        blue_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-        white_font = Font(color="FFFFFF", bold=True)
+        # Row 1-3: School Info & Title (+ logo)
+        blue_fill, white_font, center_align = write_branding_header(ws, len(headers), title)
         bold_font = Font(bold=True)
-        center_align = Alignment(horizontal="center", vertical="center")
-        
-        # Row 1-3: School Info & Title
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
-        ws.cell(row=1, column=1, value=school_name).font = Font(size=16, bold=True)
-        ws.cell(row=1, column=1).alignment = center_align
-
-        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(headers))
-        ws.cell(row=2, column=1, value=school_contact).font = Font(size=10)
-        ws.cell(row=2, column=1).alignment = center_align
-
-        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=len(headers))
-        ws.cell(row=3, column=1, value=title.upper()).font = Font(size=14, bold=True, color="2563EB")
-        ws.cell(row=3, column=1).alignment = center_align
-
-        if school_logo and os.path.exists(school_logo):
-            try:
-                logo = ExcelImage(school_logo)
-                logo.width = 72
-                logo.height = 72
-                ws.add_image(logo, "A1")
-            except Exception:
-                pass
         set_progress(progress, 35, "Adding school header")
 
         # Row 5: Instructions
@@ -131,7 +144,7 @@ def download_template(parent, filename, title, headers, instructions=None, sampl
         set_progress(progress, 100, "Template saved")
         QMessageBox.information(parent, "Success", f"Template saved to {path}")
     except Exception as e:
-        logger.exception("Failed to generate enrollment template")
+        logger.exception("Failed to generate template '%s'", title)
         QMessageBox.critical(parent, "Error", "Failed to save template. Please check the file path and try again.")
     finally:
         progress.close()
@@ -144,10 +157,6 @@ def export_to_excel(parent, filename, headers, data, title=None):
     try:
         wb = openpyxl.Workbook()
         ws = wb.active
-
-        blue_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-        white_font = Font(color="FFFFFF", bold=True)
-        center_align = Alignment(horizontal="center", vertical="center")
         ncols = len(headers)
 
         # School branding block, matching download_template()'s layout.
@@ -156,35 +165,7 @@ def export_to_excel(parent, filename, headers, data, title=None):
         # correctly rejecting an exported file if someone tries anyway,
         # rather than silently misreading the branding rows as data.
         set_progress(progress, 10, "Preparing export")
-        profile = fetch_one("""
-            SELECT school_name, school_address, school_phone, school_email, school_logo
-            FROM school_profile
-            LIMIT 1
-        """)
-        school_name = profile[0].upper() if profile and profile[0] else "SCHOOL MANAGEMENT SYSTEM"
-        school_contact = f"{profile[1] if profile and profile[1] else '-'} | {profile[2] if profile and profile[2] else '-'} | {profile[3] if profile and profile[3] else '-'}"
-        school_logo = profile[4] if profile and len(profile) > 4 else None
-
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
-        ws.cell(row=1, column=1, value=school_name).font = Font(size=16, bold=True)
-        ws.cell(row=1, column=1).alignment = center_align
-
-        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=ncols)
-        ws.cell(row=2, column=1, value=school_contact).font = Font(size=10)
-        ws.cell(row=2, column=1).alignment = center_align
-
-        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=ncols)
-        ws.cell(row=3, column=1, value=(title or "DATA EXPORT").upper()).font = Font(size=14, bold=True, color="2563EB")
-        ws.cell(row=3, column=1).alignment = center_align
-
-        if school_logo and os.path.exists(school_logo):
-            try:
-                logo = ExcelImage(school_logo)
-                logo.width = 72
-                logo.height = 72
-                ws.add_image(logo, "A1")
-            except Exception:
-                pass
+        blue_fill, white_font, center_align = write_branding_header(ws, ncols, title or "DATA EXPORT")
 
         header_row = 5
         # Header row: same blue-fill/bold-white convention as download_template.

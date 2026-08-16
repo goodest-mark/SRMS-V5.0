@@ -147,14 +147,42 @@ class PromotionPage(QWidget):
             self.summary_label.setText("Choose a completed exam and promotable class.")
             return
 
-        ranking = compute_student_scores(level, exam_id, class_name)
-        if ranking:
-            rows = [
-                row for row in ranking
-                if row.get("class") == class_name
-            ]
-        else:
-            rows = self._students_without_results(class_name, level)
+        ranking = compute_student_scores(level, exam_id, class_name) or []
+        ranked_by_admission = {
+            row.get("admission"): row
+            for row in ranking
+            if row.get("class") == class_name
+        }
+
+        # Always start from the full class roster, not just the ranking
+        # output. compute_student_scores() only returns students who have
+        # at least some results -- a student with none simply isn't in that
+        # list. Merging against the full roster here means a no-results
+        # student is shown and flagged instead of silently disappearing
+        # from the promotion table.
+        all_students = fetch_all(
+            """
+            SELECT admission_no, full_name
+            FROM students
+            WHERE class=? AND level=?
+            ORDER BY full_name, admission_no
+            """,
+            (class_name, level),
+        )
+
+        rows = []
+        for admission_no, full_name in all_students:
+            ranked = ranked_by_admission.get(admission_no)
+            if ranked:
+                rows.append(ranked)
+            else:
+                rows.append({
+                    "admission": admission_no,
+                    "name": full_name,
+                    "class": class_name,
+                    "average": "-",
+                    "status": "NO RESULTS",
+                })
 
         self.preview_rows = rows
         self.table.setRowCount(len(rows))
@@ -166,7 +194,12 @@ class PromotionPage(QWidget):
                 | Qt.ItemFlag.ItemIsEnabled
                 | Qt.ItemFlag.ItemIsSelectable
             )
-            promote_item.setCheckState(Qt.Checked)
+            # Students with no results are unchecked by default so office
+            # staff must explicitly opt them into promotion after reviewing
+            # why they have no results, rather than sweeping them along
+            # with everyone else by accident.
+            has_results = student.get("status", "NO RESULTS") != "NO RESULTS"
+            promote_item.setCheckState(Qt.Checked if has_results else Qt.Unchecked)
             self.table.setItem(row_index, 0, promote_item)
 
             values = [
@@ -185,29 +218,11 @@ class PromotionPage(QWidget):
                 self.table.setItem(row_index, column, item)
 
         self.apply_btn.setEnabled(bool(rows))
-        self.summary_label.setText(
-            f"{len(rows)} student(s) ready for review from {class_name} to {target_class}."
-        )
-
-    def _students_without_results(self, class_name, level):
-        return [
-            {
-                "admission": admission_no,
-                "name": full_name,
-                "class": class_name,
-                "average": "-",
-                "status": "NO RESULTS",
-            }
-            for admission_no, full_name in fetch_all(
-                """
-                SELECT admission_no, full_name
-                FROM students
-                WHERE class=? AND level=?
-                ORDER BY full_name, admission_no
-                """,
-                (class_name, level),
-            )
-        ]
+        no_results_count = sum(1 for r in rows if r.get("status") == "NO RESULTS")
+        summary = f"{len(rows)} student(s) ready for review from {class_name} to {target_class}."
+        if no_results_count:
+            summary += f" {no_results_count} have NO RESULTS and are unchecked by default."
+        self.summary_label.setText(summary)
 
     def checked_admissions(self):
         admissions = []
@@ -225,30 +240,36 @@ class PromotionPage(QWidget):
     # ------------------------------------------------------------------
     # Helper: copy enrollments for a single student
     # ------------------------------------------------------------------
-    def _copy_enrollments(self, admission_no, old_class, new_class, year_id, term_id):
-        """Copy all subject enrollments from old_class to new_class for a student."""
-        with get_cursor(commit=True) as cur:
-            # Get subjects the student is enrolled in for old_class, year, term
-            cur.execute("""
-                SELECT subject_name
-                FROM enrollments
-                WHERE admission_no = ?
-                  AND class_name = ?
-                  AND academic_year_id = ?
-                  AND term_id = ?
-            """, (admission_no, old_class, year_id, term_id))
-            subjects = [row[0] for row in cur.fetchall()]
+    def _copy_enrollments(self, cur, admission_no, old_class, new_class, year_id, term_id):
+        """Move this student's ACTIVE-term subject enrollments from
+        old_class to new_class.
 
-            if not subjects:
-                return  # nothing to copy
+        This used to INSERT new rows for new_class while leaving the
+        old_class rows for the same term/year untouched -- so a promoted
+        student ended up enrolled in BOTH classes at once for the active
+        term, and showed up in Results Entry under both. Updating
+        class_name in place instead means there is only ever one
+        enrollment row per (student, subject, year, term); it always
+        reflects the class the student is actually in right now.
 
-            # Insert them with the new class (ignore duplicates)
-            for subject in subjects:
-                cur.execute("""
-                    INSERT OR IGNORE INTO enrollments
-                        (admission_no, subject_name, class_name, academic_year_id, term_id)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (admission_no, subject, new_class, year_id, term_id))
+        Enrollment rows for OTHER (past, already-completed) terms are left
+        completely alone -- those are historical records tied to
+        already-issued results and must keep showing the class the student
+        was actually in at the time those results were entered.
+
+        `OR IGNORE` guards the rare case where a matching (new_class,
+        subject, year, term) row already exists for some other reason --
+        the update is skipped for that one subject rather than raising a
+        uniqueness error and aborting the whole promotion.
+        """
+        cur.execute("""
+            UPDATE OR IGNORE enrollments
+            SET class_name = ?
+            WHERE admission_no = ?
+              AND class_name = ?
+              AND academic_year_id = ?
+              AND term_id = ?
+        """, (new_class, admission_no, old_class, year_id, term_id))
 
     # ------------------------------------------------------------------
     # Apply promotion
@@ -320,8 +341,13 @@ class PromotionPage(QWidget):
             return
 
         try:
+            # Single transaction: student class updates AND every student's
+            # enrollment copy all happen on the same cursor. If anything
+            # fails partway (e.g. student #47 of 60), get_cursor's context
+            # manager rolls back the ENTIRE batch -- no student ends up
+            # promoted without their enrollments copied, and no partial
+            # state is ever committed.
             with get_cursor(commit=True) as cur:
-                # Update student classes
                 cur.executemany(
                     """
                     UPDATE students
@@ -334,13 +360,16 @@ class PromotionPage(QWidget):
                     ],
                 )
 
-            if not is_graduation:
-                # Copy enrollments for each promoted student
-                for admission_no in admissions:
-                    self._copy_enrollments(admission_no, source_class, target_class, year_id, term_id)
+                if not is_graduation:
+                    for admission_no in admissions:
+                        self._copy_enrollments(cur, admission_no, source_class, target_class, year_id, term_id)
 
         except Exception as error:
-            show_error(self, f"Promotion failed:\n{error}")
+            show_error(
+                self,
+                f"Promotion failed and was fully rolled back -- no students were "
+                f"changed:\n{error}",
+            )
             return
 
         EventBus.emit("STUDENTS_UPDATED")

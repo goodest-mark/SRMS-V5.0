@@ -1,11 +1,10 @@
 import openpyxl
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, 
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,
     QLabel, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem,
     QHeaderView, QProgressBar, QApplication
 )
 
-from progress_dialog import ProgressDialog
 from PySide6.QtCore import Qt
 
 from database import connect
@@ -15,6 +14,7 @@ from event_bus import EventBus
 from class_utils import get_classes
 from ui_helpers import show_error, show_info, confirm_action
 import combo_loaders
+import excel_utils  # <-- import to use find_data_start_row
 
 
 class ExcelResultsImport(QWidget):
@@ -63,16 +63,16 @@ class ExcelResultsImport(QWidget):
         # FILE BROWSER AREA
         # =========================
         file_layout = QHBoxLayout()
-        
+
         self.file_path_label = QLabel("No file selected...")
         self.file_path_label.setProperty("variant", "muted")
-        
+
         self.browse_btn = QPushButton("BROWSE EXCEL")
         self.browse_btn.clicked.connect(self.browse_file)
-        
+
         file_layout.addWidget(self.file_path_label, 1)
         file_layout.addWidget(self.browse_btn)
-        
+
         self.layout.addLayout(file_layout)
 
         # =========================
@@ -124,7 +124,7 @@ class ExcelResultsImport(QWidget):
 
         level = SystemState.get_level()
         for row in fetch_all("""
-            SELECT DISTINCT e.subject_name 
+            SELECT DISTINCT e.subject_name
             FROM enrollments e
             WHERE UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
             ORDER BY e.subject_name
@@ -142,12 +142,12 @@ class ExcelResultsImport(QWidget):
         self.log_table.insertRow(r)
         self.log_table.setItem(r, 0, QTableWidgetItem(str(row)))
         self.log_table.setItem(r, 1, QTableWidgetItem(detail))
-        
+
         status_item = QTableWidgetItem(status)
         if status == "SUCCESS": status_item.setForeground(Qt.darkGreen)
         elif status == "SKIPPED": status_item.setForeground(Qt.darkYellow)
         else: status_item.setForeground(Qt.red)
-        
+
         self.log_table.setItem(r, 2, status_item)
         self.log_table.scrollToBottom()
 
@@ -183,7 +183,17 @@ class ExcelResultsImport(QWidget):
         try:
             wb = openpyxl.load_workbook(self.selected_file, data_only=True, read_only=True)
             sheet = wb.active
-            rows = list(sheet.iter_rows(min_row=12, values_only=True))
+
+            # Use branded header detection
+            data_start_row = excel_utils.find_data_start_row(sheet)
+            if data_start_row is None:
+                raise ValueError(
+                    "Could not detect the template's header row. Please use a "
+                    "template downloaded from this system, and don't remove "
+                    "the 'INSTRUCTIONS:' block or reorder rows."
+                )
+
+            rows = list(sheet.iter_rows(min_row=data_start_row, values_only=True))
             total_rows = max(len(rows), 1)
 
             imported = 0
@@ -199,18 +209,19 @@ class ExcelResultsImport(QWidget):
             conn = connect()
             cur = conn.cursor()
 
-            for idx, row in enumerate(rows, start=1):
-                if idx == 1 or idx == len(rows) or idx % 10 == 0:
-                    self.progress.setValue(int((idx / total_rows) * 100))
+            for idx, row in enumerate(rows, start=data_start_row):
+                if idx % 10 == 0:
+                    self.progress.setValue(int(((idx - data_start_row + 1) / total_rows) * 100))
                     QApplication.processEvents()
 
-                if not row or len(row) < 2:
+                if not row or len(row) < 3:  # now expecting 3 columns
                     self.add_log(idx, "Empty or incomplete row", "SKIPPED")
                     skipped += 1
                     continue
 
                 adm_no = str(row[0]).strip() if row[0] is not None else ""
-                marks_raw = row[1]
+                # marks are in column 3 (index 2)
+                marks_raw = row[2] if len(row) > 2 else None
 
                 if not adm_no or marks_raw is None:
                     self.add_log(idx, f"Missing data: {adm_no} / {marks_raw}", "SKIPPED")
