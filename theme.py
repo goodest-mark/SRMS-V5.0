@@ -394,7 +394,7 @@ QPushButton#navButton[variant="accent"]{{
 QPushButton#navButton[variant="default"]{{
     background: transparent;
     border: 1px solid rgba(148,163,184,0.3);
-    color: #94a3b8;
+    color: {tokens['muted']};
 }}
 
 QPushButton#navButton[variant="default"]:hover{{
@@ -641,6 +641,13 @@ QFrame#PremiumStatCard{{
 
 QFrame#PremiumStatCard:hover{{
     border:1px solid rgba(96,165,250,0.48);
+}}
+
+/* Dashboard panels use layout margins for their content.  Removing the
+   generic frame margin/padding keeps headings aligned with the card grid. */
+QFrame#QuickActionsPanel, QFrame#SchoolInfoPanel{{
+    margin-top:0;
+    padding-top:0;
 }}
 
 QFrame#IconBadge{{

@@ -319,8 +319,8 @@ def to_excel(parent, data):
 
         # ----- Signatures -----
         ws.append([])
-        ws.append(["Academic Master Signature: ...................................................."])
-        ws.append(["Head Teacher Signature: ...................................................."])
+        ws.append(["Academic Master / Mistress Signature: ......................................."])
+        ws.append(["Headmaster / Headmistress Signature: ........................................"])
         ws.append(["School Stamp:"])
 
         # Style data cells
@@ -743,8 +743,8 @@ def to_pdf(parent, data):
         sig_data = [
             [
                 Paragraph("<b>CLASS TEACHER</b>", styles['SigHeader']),
-                Paragraph("<b>ACADEMIC MASTER</b>", styles['SigHeader']),
-                Paragraph("<b>HEAD TEACHER</b>", styles['SigHeader']),
+                Paragraph("<b>ACADEMIC MASTER / MISTRESS</b>", styles['SigHeader']),
+                Paragraph("<b>HEADMASTER / HEADMISTRESS</b>", styles['SigHeader']),
                 Paragraph("<b>OFFICIAL STAMP</b>", styles['SigHeader'])
             ],
             [

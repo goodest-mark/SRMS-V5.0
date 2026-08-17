@@ -3,6 +3,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QCheckBox,
     QFileDialog,
     QGroupBox,
     QHeaderView,
@@ -24,7 +25,7 @@ from PySide6.QtWidgets import (
 
 import sqlite3
 
-from class_utils import get_classes, get_level_for_class
+from class_utils import GRADUATED_CLASS, get_classes, get_level_for_class
 from db_utils import get_cursor, fetch_all, fetch_one
 from event_bus import EventBus
 from system_state import SystemState
@@ -147,6 +148,32 @@ class StudentsPage(QWidget):
         self.delete_selected_btn.setEnabled(False)
         list_top.addWidget(self.delete_selected_btn)
         list_layout.addLayout(list_top)
+
+        filters = QHBoxLayout()
+        filters.setSpacing(10)
+        self.class_filter = QComboBox()
+        self.class_filter.setMinimumWidth(165)
+        self.stream_filter = QComboBox()
+        self.stream_filter.setMinimumWidth(135)
+        self.gender_filter = QComboBox()
+        self.gender_filter.setMinimumWidth(120)
+        self.gender_filter.addItems(["All Genders", "Male", "Female"])
+        self.show_graduated = QCheckBox("Show Graduated")
+
+        filters.addWidget(QLabel("Class"))
+        filters.addWidget(self.class_filter)
+        filters.addWidget(QLabel("Stream"))
+        filters.addWidget(self.stream_filter)
+        filters.addWidget(QLabel("Gender"))
+        filters.addWidget(self.gender_filter)
+        filters.addWidget(self.show_graduated)
+        filters.addStretch()
+        list_layout.addLayout(filters)
+
+        self.class_filter.currentIndexChanged.connect(self._on_class_filter_changed)
+        self.stream_filter.currentIndexChanged.connect(self.load_list)
+        self.gender_filter.currentIndexChanged.connect(self.load_list)
+        self.show_graduated.toggled.connect(self._on_show_graduated_toggled)
 
         self.table = QTableWidget()
         self.table.setColumnCount(8)
@@ -356,6 +383,7 @@ class StudentsPage(QWidget):
         # INITIALISE
         # =====================================================
         self.refresh_classes()
+        self.refresh_list_filters()
         self.load_list()
         self.switch_page(0)
 
@@ -394,9 +422,11 @@ class StudentsPage(QWidget):
             return
         self.clear_form()
         self.refresh_classes()
+        self.refresh_list_filters()
         self.load_list()
 
     def on_students_updated(self):
+        self.refresh_list_filters()
         self.load_list()
         self.load_reports_search()
 
@@ -421,29 +451,90 @@ class StudentsPage(QWidget):
         else:
             self.class_box.setCurrentIndex(0)
 
+    def refresh_list_filters(self):
+        """Populate filters from the active level without mixing level data."""
+        selected_class = self.class_filter.currentText()
+        self.class_filter.blockSignals(True)
+        self.class_filter.clear()
+        classes = get_classes()
+        if self.show_graduated.isChecked():
+            classes.append(GRADUATED_CLASS)
+        self.class_filter.addItems(["All Classes"] + classes)
+        index = self.class_filter.findText(selected_class)
+        self.class_filter.setCurrentIndex(index if index >= 0 else 0)
+        self.class_filter.blockSignals(False)
+        self.refresh_stream_filter()
+
+    def refresh_stream_filter(self):
+        selected_stream = self.stream_filter.currentText()
+        level = SystemState.get_level()
+        class_name = self.class_filter.currentText()
+        query = """
+            SELECT DISTINCT TRIM(stream)
+            FROM students
+            WHERE level=? AND TRIM(COALESCE(stream, ''))<>''
+        """
+        params = [level]
+        if class_name and class_name != "All Classes":
+            query += " AND class=?"
+            params.append(class_name)
+        elif not self.show_graduated.isChecked():
+            query += " AND class<>?"
+            params.append(GRADUATED_CLASS)
+        query += " ORDER BY TRIM(stream) COLLATE NOCASE"
+        streams = [row[0] for row in fetch_all(query, tuple(params))]
+
+        self.stream_filter.blockSignals(True)
+        self.stream_filter.clear()
+        self.stream_filter.addItem("All Streams")
+        self.stream_filter.addItems(streams)
+        index = self.stream_filter.findText(selected_stream)
+        self.stream_filter.setCurrentIndex(index if index >= 0 else 0)
+        self.stream_filter.blockSignals(False)
+
+    def _on_class_filter_changed(self):
+        self.refresh_stream_filter()
+        self.load_list()
+
+    def _on_show_graduated_toggled(self):
+        self.refresh_list_filters()
+        self.load_list()
+
     def load_list(self):
         level = SystemState.get_level()
         search_text = self.search.text().strip()
+        conditions = ["level=?"]
+        params = [level]
+
+        if not self.show_graduated.isChecked():
+            conditions.append("class<>?")
+            params.append(GRADUATED_CLASS)
+        class_name = self.class_filter.currentText()
+        if class_name and class_name != "All Classes":
+            conditions.append("class=?")
+            params.append(class_name)
+        stream = self.stream_filter.currentText()
+        if stream and stream != "All Streams":
+            conditions.append("TRIM(COALESCE(stream, ''))=?")
+            params.append(stream)
+        gender = self.gender_filter.currentText()
+        if gender and gender != "All Genders":
+            conditions.append("gender=?")
+            params.append(gender)
         if search_text:
             pattern = f"%{search_text}%"
-            rows = fetch_all("""
-                SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
-                FROM students
-                WHERE level=?
-                  AND class<>?
-                  AND (
-                      admission_no LIKE ? OR COALESCE(exam_no, '') LIKE ?
-                      OR full_name LIKE ? OR class LIKE ? OR COALESCE(stream, '') LIKE ?
-                  )
-                ORDER BY id DESC
-            """, (level, "Graduated", pattern, pattern, pattern, pattern, pattern))
-        else:
-            rows = fetch_all("""
-                SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
-                FROM students
-                WHERE level=? AND class<>?
-                ORDER BY id DESC
-            """, (level, "Graduated"))
+            conditions.append("""(
+                admission_no LIKE ? OR COALESCE(exam_no, '') LIKE ?
+                OR full_name LIKE ? OR class LIKE ? OR COALESCE(stream, '') LIKE ?
+            )""")
+            params.extend([pattern] * 5)
+
+        rows = fetch_all(f"""
+            SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
+            FROM students
+            WHERE {' AND '.join(conditions)}
+            ORDER BY id DESC
+        """, tuple(params))
         self.table.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
             for column, value in enumerate(row):
@@ -981,9 +1072,9 @@ class StudentsPage(QWidget):
 
         comments_data = [
             ("Class Teacher", teacher_rem or "______________________________________________"),
-            ("Academic Master", academic_rem or "______________________________________________"),
-            ("Head Teacher", head_rem or "______________________________________________"),
-            ("Discipline Master", discipline_rem or "______________________________________________"),
+            ("Academic Master / Mistress", academic_rem or "______________________________________________"),
+            ("Headmaster / Headmistress", head_rem or "______________________________________________"),
+            ("Discipline Master / Mistress", discipline_rem or "______________________________________________"),
         ]
         comments_table = QTableWidget()
         comments_table.setColumnCount(2)

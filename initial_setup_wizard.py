@@ -148,9 +148,9 @@ class StaffPage(QWidget):
         self.academic_master = QLineEdit()
         self.discipline_master = QLineEdit()
         self.class_master = QLineEdit()
-        self.class_master.setPlaceholderText("Optional. Leave blank if class masters vary by class.")
+        self.class_master.setPlaceholderText("Optional. Leave blank if class masters or mistresses vary by class.")
 
-        layout.addRow("Head Master / Mistress", self.head_teacher)
+        layout.addRow("Headmaster / Headmistress", self.head_teacher)
         layout.addRow("Academic Master / Mistress", self.academic_master)
         layout.addRow("Discipline Master / Mistress", self.discipline_master)
         layout.addRow("Class Master / Mistress", self.class_master)
@@ -182,21 +182,21 @@ class SignaturesPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
 
-        # Only head master signature with checkbox
-        self.head_sig = _SignaturePicker("Select Head Master Signature", "Upload Signature")
+        # Only headmaster / headmistress signature with checkbox
+        self.head_sig = _SignaturePicker("Select Headmaster / Headmistress Signature", "Upload Signature")
 
         row = QFrame()
         row_layout = QVBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.setSpacing(6)
-        label = QLabel("Head Master / Mistress Signature")
+        label = QLabel("Headmaster / Headmistress Signature")
         label.setProperty("variant", "accent")
         row_layout.addWidget(label)
         row_layout.addWidget(self.head_sig)
         layout.addWidget(row)
 
         note_label = QLabel(
-            "Upload a digital signature for the Head Master. Use the checkbox to enable/disable it."
+            "Upload a digital signature for the Headmaster or Headmistress. Use the checkbox to enable/disable it."
         )
         note_label.setWordWrap(True)
         note_label.setProperty("variant", "muted")

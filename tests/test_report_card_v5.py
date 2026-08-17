@@ -254,7 +254,7 @@ class TestStudentReportCards:
             if hasattr(cell, "getPlainText")
         )
 
-        assert "HEAD TEACHER / HEADMASTER SIGNATURE" in left_text
+        assert "HEADMASTER / HEADMISTRESS SIGNATURE" in left_text
         assert "Head Teacher Name" in left_text
         assert "ACADEMIC MASTER" not in left_text
         assert "DISCIPLINE MASTER" not in left_text

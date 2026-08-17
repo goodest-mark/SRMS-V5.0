@@ -62,16 +62,25 @@ class StatCard(QFrame):
         self.setProperty("tone", tone)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        # The dashboard grid has two rows above Quick Actions.  A fixed card
+        # height prevents the grid from consuming the column's spare height
+        # and visually running into the panel below it.
+        self.setFixedHeight(120)
         self.setGraphicsEffect(_soft_shadow())
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 14)
-        layout.setSpacing(4)
+        layout.setContentsMargins(18, 16, 18, 14)
+        layout.setSpacing(8)
 
-        # Icon badge
+        # Keep the title and icon together so the metric has a clear reading
+        # order, with the value claiming the remaining vertical space.
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(10)
+
         icon_badge = QFrame()
         icon_badge.setObjectName("PremiumStatIcon")
-        icon_badge.setFixedSize(44, 44)
+        icon_badge.setFixedSize(40, 40)
         icon_badge.setAttribute(Qt.WA_StyledBackground, True)
         icon_row = QHBoxLayout(icon_badge)
         icon_row.setContentsMargins(0, 0, 0, 0)
@@ -79,17 +88,20 @@ class StatCard(QFrame):
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("background: transparent;")
         if icon_file:
-            icon_lbl.setPixmap(_themed_icon_pixmap(icon_file, 20))
+            icon_lbl.setPixmap(_themed_icon_pixmap(icon_file, 18))
         icon_row.addWidget(icon_lbl)
-        layout.addWidget(icon_badge)
+        self._icon_file = icon_file
+        self._icon_label = icon_lbl
 
-        # Value
-        self.value_lbl = _label(PLACEHOLDER, "MetricValue")
-        layout.addWidget(self.value_lbl)
-
-        # Title only (no subtitle)
         self.title_lbl = _label(title, "MetricTitle")
-        layout.addWidget(self.title_lbl)
+        top_row.addWidget(icon_badge)
+        top_row.addWidget(self.title_lbl)
+        top_row.addStretch()
+        layout.addLayout(top_row)
+
+        self.value_lbl = _label(PLACEHOLDER, "MetricValue")
+        self.value_lbl.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.value_lbl, 1)
 
         # Accent underline
         underline = QFrame()
@@ -100,6 +112,10 @@ class StatCard(QFrame):
 
     def set_value(self, value):
         self.value_lbl.setText(str(value))
+
+    def refresh_theme_icon(self):
+        if self._icon_file:
+            self._icon_label.setPixmap(_themed_icon_pixmap(self._icon_file, 18))
 
 
 # ============================================================
@@ -127,18 +143,21 @@ class InfoRow(QFrame):
         if icon_file:
             icon_lbl.setPixmap(_themed_icon_pixmap(icon_file, 14))
         icon_row.addWidget(icon_lbl)
+        self._icon_file = icon_file
+        self._icon_label = icon_lbl
         layout.addWidget(icon_badge)
 
-        label_lbl = _label(label, "LegendLabel")
-        label_lbl.setFixedWidth(100)
+        label_lbl = _label(label, "LegendLabel", word_wrap=True)
+        label_lbl.setFixedWidth(190)
         layout.addWidget(label_lbl)
 
         layout.addStretch()
 
         self.value_lbl = _label(PLACEHOLDER, "LegendValue")
         self.value_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.value_lbl.setWordWrap(False)
-        self.value_lbl.setMinimumWidth(80)
+        self.value_lbl.setWordWrap(True)
+        self.value_lbl.setMinimumWidth(0)
+        self.value_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         layout.addWidget(self.value_lbl, 1)
 
     def set_value(self, text, tone=None):
@@ -150,6 +169,10 @@ class InfoRow(QFrame):
             self.value_lbl.setStyleSheet(f"color: {tokens[tone]}; font-size:13px; font-weight:850; background: transparent;")
         else:
             self.value_lbl.setStyleSheet("")
+
+    def refresh_theme_icon(self):
+        if self._icon_file:
+            self._icon_label.setPixmap(_themed_icon_pixmap(self._icon_file, 14))
 
 
 # ============================================================
@@ -181,6 +204,8 @@ class ActionTile(QPushButton):
         if icon_file:
             icon_lbl.setPixmap(_themed_icon_pixmap(icon_file, 18))
         icon_row.addWidget(icon_lbl)
+        self._icon_file = icon_file
+        self._icon_label = icon_lbl
         layout.addWidget(icon_badge)
 
         layout.addWidget(_label(label, "ChecklistLabel"))
@@ -189,6 +214,10 @@ class ActionTile(QPushButton):
         chevron = QLabel("\u203a")
         chevron.setObjectName("LegendLabel")
         layout.addWidget(chevron)
+
+    def refresh_theme_icon(self):
+        if self._icon_file:
+            self._icon_label.setPixmap(_themed_icon_pixmap(self._icon_file, 18))
 
 
 # ============================================================
@@ -219,7 +248,7 @@ class DashboardHome(QWidget):
         EventBus.subscribe("EXAMS_UPDATED", self.load_dashboard)
         EventBus.subscribe("LEVEL_CHANGED", self.load_dashboard)
         EventBus.subscribe("SCHOOL_PROFILE_UPDATED", self.load_dashboard)
-        EventBus.subscribe("THEME_CHANGED", self.load_dashboard)
+        EventBus.subscribe("THEME_CHANGED", self.refresh_theme_assets)
 
     def build_ui(self):
         self.setObjectName("SRMSDashboardRoot")
@@ -253,8 +282,8 @@ class DashboardHome(QWidget):
         content_row.addLayout(left_col, 3)
 
         stat_grid = QGridLayout()
-        stat_grid.setHorizontalSpacing(14)
-        stat_grid.setVerticalSpacing(14)
+        stat_grid.setHorizontalSpacing(24)
+        stat_grid.setVerticalSpacing(24)
 
         self.students_card = StatCard("Students", _icon("students.svg"), tone="primary")
         self.subjects_card = StatCard("Subjects", _icon("academics.svg"), tone="secondary")
@@ -269,6 +298,8 @@ class DashboardHome(QWidget):
             stat_grid.setColumnStretch(col, 1)
 
         left_col.addLayout(stat_grid)
+        # Keep the lower stat cards visually distinct from the action panel.
+        left_col.addSpacing(12)
         left_col.addWidget(self._build_quick_actions())
 
         # Right column
@@ -333,8 +364,8 @@ class DashboardHome(QWidget):
 
         # Rows – no "System"
         self.row_school_name = InfoRow(_icon("school.svg"), "School Name")
-        self.row_head_teacher = InfoRow(_icon("user.svg"), "Head Teacher")
-        self.row_academic_master = InfoRow(_icon("academics.svg"), "Academic Master")
+        self.row_head_teacher = InfoRow(_icon("user.svg"), "Headmaster / Headmistress")
+        self.row_academic_master = InfoRow(_icon("academics.svg"), "Academic Master / Mistress")
         self.row_active_exam = InfoRow(_icon("exams.svg"), "Active Exam")
         self.row_academic_year = InfoRow(_icon("calendar.svg"), "Academic Year")
         self.row_school_level = InfoRow(_icon("students.svg"), "School Level")
@@ -345,6 +376,20 @@ class DashboardHome(QWidget):
             layout.addWidget(row)
 
         return panel
+
+    def refresh_theme_assets(self, *_):
+        """Regenerate raster icon pixmaps after the application theme changes."""
+        for card in (self.students_card, self.subjects_card, self.classes_card, self.exams_card):
+            card.refresh_theme_icon()
+        for row in (
+            self.row_school_name, self.row_head_teacher, self.row_academic_master,
+            self.row_active_exam, self.row_academic_year, self.row_school_level,
+            self.row_location,
+        ):
+            row.refresh_theme_icon()
+        for action in (self.add_student_btn, self.add_exam_btn, self.subjects_btn, self.history_btn):
+            action.refresh_theme_icon()
+        self.load_dashboard()
 
     # ------------------------------------------------------------
     # DATA LOADER

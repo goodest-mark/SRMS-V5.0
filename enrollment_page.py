@@ -288,6 +288,7 @@ class EnrollmentPage(QWidget):
                 WHERE e.academic_year_id=? AND e.term_id=?
                   AND e.class_name=?
                   AND s.level=?
+                  AND COALESCE(e.is_active, 1)=1
                 """,
                 (year_id, term_id, class_name, SystemState.get_level()),
             )

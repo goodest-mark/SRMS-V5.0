@@ -97,8 +97,8 @@ class RemarksPage(QWidget):
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
             "Admission No", "Name", "Teacher Remarks",
-            "Headteacher Remarks", "Academic Master Remarks",
-            "Discipline Master Remarks"
+            "Headmaster / Headmistress Remarks", "Academic Master / Mistress Remarks",
+            "Discipline Master / Mistress Remarks"
         ])
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)

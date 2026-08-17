@@ -1,4 +1,4 @@
-from PySide6.QtGui import QIcon, QPainter, QColor, QPen
+from PySide6.QtGui import QIcon, QPainter, QColor, QPen, QPixmap
 from PySide6.QtCore import (
     QSize, Qt, QPropertyAnimation, QEasingCurve,
     QParallelAnimationGroup, QRectF, Property, Signal
@@ -148,6 +148,23 @@ def _icon(*names):
     return QIcon(str(path)) if path is not None else QIcon()
 
 
+def _tinted_icon(icon_name, color, size=18):
+    """Render a monochrome icon whose color follows the active theme."""
+    source = _icon(icon_name).pixmap(size, size)
+    if source.isNull():
+        return QIcon()
+
+    tinted = QPixmap(source.size())
+    tinted.setDevicePixelRatio(source.devicePixelRatio())
+    tinted.fill(Qt.transparent)
+    painter = QPainter(tinted)
+    painter.drawPixmap(0, 0, source)
+    painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+    painter.fillRect(tinted.rect(), QColor(color))
+    painter.end()
+    return QIcon(tinted)
+
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -218,6 +235,16 @@ class MainWindow(QMainWindow):
             self.btn_school,
             self.btn_settings,
         ]
+        self._nav_icon_names = {
+            self.btn_dashboard: "dashboard.svg",
+            self.btn_students: "students.svg",
+            self.btn_academics: "academics.svg",
+            self.btn_exams: "exams.svg",
+            self.btn_results: "results.svg",
+            self.btn_history: "dashboard.svg",
+            self.btn_school: "school.svg",
+            self.btn_settings: "settings.svg",
+        }
 
         self.nav_button_style, self.nav_button_active_style = self._build_nav_button_styles(
             get_tokens(self.current_theme)
@@ -587,6 +614,7 @@ class MainWindow(QMainWindow):
                 btn.setStyleSheet(self.nav_button_active_style)
             else:
                 btn.setStyleSheet(self.nav_button_style)
+        self._refresh_theme_icons()
 
     # =====================================
     # LEVEL SWITCH
@@ -726,6 +754,11 @@ class MainWindow(QMainWindow):
             apply_app_theme(app, normalized)
             self._repolish_all(app)
 
+        # Dashboard icons are cached pixmaps, so unlike stylesheet-driven
+        # controls they must be regenerated after a theme switch.
+        if hasattr(self, "dashboard"):
+            self.dashboard.refresh_theme_assets()
+
         # The nav bar / refresh button / breadcrumb are drawn with their own
         # widget-level stylesheets (they sit "on top of" the global QSS), so
         # they need to be rebuilt from the new theme's tokens explicitly.
@@ -828,6 +861,16 @@ class MainWindow(QMainWindow):
                 btn.setStyleSheet(self.nav_button_active_style)
             else:
                 btn.setStyleSheet(self.nav_button_style)
+        self._refresh_theme_icons()
+
+    def _refresh_theme_icons(self):
+        """Keep chrome icons readable after a theme or active-page change."""
+        tokens = get_tokens(self.current_theme)
+        inactive_color = tokens["muted"] if tokens.get("is_light") else tokens["text_soft"]
+        for button, icon_name in self._nav_icon_names.items():
+            color = "#ffffff" if button == self.active_btn else inactive_color
+            button.setIcon(_tinted_icon(icon_name, color))
+        self.btn_refresh.setIcon(_tinted_icon("refresh.svg", tokens["text_soft"]))
 
     def _show_theme_menu(self, pos):
         """Right-click menu on the refresh button to switch themes.

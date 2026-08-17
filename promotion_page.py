@@ -287,8 +287,18 @@ class PromotionPage(QWidget):
             return
 
         is_graduation = target_class == GRADUATED_CLASS
+        graduation_exam_id = self.exam_box.currentData()
         term_id = year_id = None
-        if not is_graduation:
+        if is_graduation:
+            graduation_context = fetch_one("""
+                SELECT t.academic_year_id, e.term_id
+                FROM exams e
+                JOIN terms t ON t.id = e.term_id
+                WHERE e.id=?
+            """, (graduation_exam_id,))
+            if graduation_context:
+                year_id, term_id = graduation_context
+        else:
             # Get active term and its academic year for enrollment copying
             active_term = fetch_one("SELECT id, academic_year_id FROM terms WHERE is_active=1 LIMIT 1")
             if not active_term:
@@ -348,17 +358,44 @@ class PromotionPage(QWidget):
             # promoted without their enrollments copied, and no partial
             # state is ever committed.
             with get_cursor(commit=True) as cur:
-                cur.executemany(
-                    """
-                    UPDATE students
-                    SET class=?
-                    WHERE admission_no=? AND class=?
-                    """,
-                    [
-                        (target_class, admission_no, source_class)
-                        for admission_no in admissions
-                    ],
-                )
+                if is_graduation:
+                    cur.executemany(
+                        """
+                        UPDATE students
+                        SET class=?, status='GRADUATED',
+                            graduated_at=CURRENT_TIMESTAMP, graduation_exam_id=?
+                        WHERE admission_no=? AND class=?
+                        """,
+                        [
+                            (target_class, graduation_exam_id, admission_no, source_class)
+                            for admission_no in admissions
+                        ],
+                    )
+                    if year_id is not None and term_id is not None:
+                        cur.executemany(
+                            """
+                            UPDATE enrollments
+                            SET is_active=0
+                            WHERE admission_no=? AND class_name=?
+                              AND academic_year_id=? AND term_id=?
+                            """,
+                            [
+                                (admission_no, source_class, year_id, term_id)
+                                for admission_no in admissions
+                            ],
+                        )
+                else:
+                    cur.executemany(
+                        """
+                        UPDATE students
+                        SET class=?
+                        WHERE admission_no=? AND class=?
+                        """,
+                        [
+                            (target_class, admission_no, source_class)
+                            for admission_no in admissions
+                        ],
+                    )
 
                 if not is_graduation:
                     for admission_no in admissions:

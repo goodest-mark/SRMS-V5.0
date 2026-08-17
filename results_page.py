@@ -417,6 +417,8 @@ class ResultsPage(QWidget):
             JOIN students s ON s.admission_no = e.admission_no
             WHERE UPPER(TRIM(e.subject_name)) = UPPER(TRIM(?))
               AND s.level = ?
+              AND COALESCE(s.status, 'ACTIVE') = 'ACTIVE'
+              AND COALESCE(e.is_active, 1) = 1
               AND UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
               AND e.academic_year_id = ?
               AND e.term_id = ?
@@ -588,6 +590,8 @@ class ResultsPage(QWidget):
             JOIN students s ON s.admission_no = e.admission_no
             WHERE UPPER(TRIM(e.subject_name)) = UPPER(TRIM(?))
               AND s.level = ?
+              AND COALESCE(s.status, 'ACTIVE') = 'ACTIVE'
+              AND COALESCE(e.is_active, 1) = 1
               AND UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
               AND e.academic_year_id = ?
               AND e.term_id = ?

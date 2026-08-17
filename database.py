@@ -71,9 +71,25 @@ def _init_db_inner(conn, cur):
         class TEXT,
         stream TEXT,
         level TEXT,
-        comments TEXT
+        comments TEXT,
+        status TEXT DEFAULT 'ACTIVE',
+        graduated_at TEXT,
+        graduation_exam_id INTEGER
     )
     """)
+
+    # Keep existing installations compatible while adding an explicit
+    # lifecycle state for students who have completed Form IV or Form VI.
+    cur.execute("PRAGMA table_info(students)")
+    student_columns = {row[1] for row in cur.fetchall()}
+    for column, definition in [
+        ("status", "TEXT DEFAULT 'ACTIVE'"),
+        ("graduated_at", "TEXT"),
+        ("graduation_exam_id", "INTEGER"),
+    ]:
+        if column not in student_columns:
+            cur.execute(f"ALTER TABLE students ADD COLUMN {column} {definition}")
+    cur.execute("UPDATE students SET status='ACTIVE' WHERE status IS NULL OR TRIM(status) = ''")
 
     # =========================
     # TEACHERS
@@ -160,12 +176,19 @@ def _init_db_inner(conn, cur):
         class_name TEXT,
         academic_year_id INTEGER,
         term_id INTEGER,
+        is_active INTEGER DEFAULT 1,
         UNIQUE(admission_no, subject_name, class_name, academic_year_id, term_id),
         FOREIGN KEY (admission_no) REFERENCES students(admission_no) ON DELETE CASCADE,
         FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE,
         FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE CASCADE
     )
     """)
+
+    cur.execute("PRAGMA table_info(enrollments)")
+    enrollment_columns = {row[1] for row in cur.fetchall()}
+    if "is_active" not in enrollment_columns:
+        cur.execute("ALTER TABLE enrollments ADD COLUMN is_active INTEGER DEFAULT 1")
+    cur.execute("UPDATE enrollments SET is_active=1 WHERE is_active IS NULL")
 
     # =========================
     # REQUIREMENTS
@@ -520,7 +543,7 @@ def _init_db_inner(conn, cur):
             _hash_secret("000000"),
             "What is the school name?",
             _hash_secret(school_name),
-            "What is the head teacher's name?",
+            "What is the headmaster's or headmistress's name?",
             _hash_secret(head_teacher),
         ))
 

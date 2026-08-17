@@ -6,17 +6,12 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QComboBox,
-    QMessageBox,
     QScrollArea,
     QFrame,
     QSizePolicy,
 )
 
 from PySide6.QtCore import Qt
-
-from progress_dialog import ProgressDialog
-import openpyxl
-import excel_utils
 
 from academic_rules import allowed_subject_types, normalize_subject_type, validate_subject_type
 from db_utils import get_cursor, fetch_all
@@ -78,22 +73,10 @@ class SubjectsPage(QWidget):
             self.delete_subject
         )
 
-        self.import_btn = QPushButton("IMPORT")
-        self.import_btn.clicked.connect(self.import_excel)
-        
-        self.export_btn = QPushButton("EXPORT")
-        self.export_btn.clicked.connect(self.export_excel)
-        
-        self.template_btn = QPushButton("TEMPLATE")
-        self.template_btn.clicked.connect(self.download_template)
-
         form.addWidget(self.name)
         form.addWidget(self.subject_type)
         form.addWidget(self.save_btn)
         form.addWidget(self.delete_btn)
-        form.addWidget(self.import_btn)
-        form.addWidget(self.export_btn)
-        form.addWidget(self.template_btn)
 
         self.layout.addLayout(form)
 
@@ -278,75 +261,3 @@ class SubjectsPage(QWidget):
             self.load()
             EventBus.emit("SUBJECTS_UPDATED")
 
-    # =====================
-    # EXCEL FRAMEWORK
-    # =====================
-
-    def download_template(self):
-        level = SystemState.get_level()
-        excel_utils.download_template(
-            self, 
-            "subjects_template.xlsx",
-            f"SUBJECT REGISTRATION FORM - {level}",
-            ["Subject Name*", "Subject Type*", "Level"],
-            instructions=[
-                f"1. Template generated for Level: {level}.",
-                "2. Do not modify the column headers in Row 10.",
-                "3. Start data entry from Row 12.",
-                "4. Subject Type should be COUNTED, PRINCIPAL, or another configured type.",
-                "5. Level must match the selected system level on the page.",
-            ],
-            samples=["Mathematics", "COUNTED", SystemState.get_level()]
-        )
-
-    def export_excel(self):
-        level = SystemState.get_level()
-        data = fetch_all("SELECT subject_name, subject_type FROM subjects WHERE level=?", (level,))
-        
-        excel_utils.export_to_excel(
-            self, 
-            f"subjects_{level}.xlsx", 
-            ["Subject Name", "Subject Type"],
-            data
-        )
-
-    def import_excel(self):
-        path = excel_utils.get_import_file(self)
-        if not path: return
-        
-        try:
-            wb = openpyxl.load_workbook(path, data_only=True)
-            sheet = wb.active
-            rows = list(sheet.iter_rows(min_row=12, values_only=True))
-            level = SystemState.get_level()
-            
-            imported = 0
-            with get_cursor(commit=True) as cur:
-                for row in rows:
-                    if not row or len(row) < 2 or not row[0]: continue
-                    
-                    name = row[0]
-                    stype = row[1]
-                    
-                    try:
-                        subject_type = normalize_subject_type(level, str(stype))
-                        if not validate_subject_type(level, subject_type):
-                            raise ValueError(f"Invalid subject type for {level}")
-                        cur.execute("""
-                            INSERT INTO subjects (subject_name, subject_short_name, level, subject_type)
-                            VALUES (?, ?, ?, ?)
-                            ON CONFLICT(subject_name, level) DO UPDATE SET
-                                subject_type=excluded.subject_type,
-                                subject_short_name=excluded.subject_short_name
-                        """, (str(name), get_subject_short_name(str(name)), level, subject_type))
-                        imported += 1
-                    except Exception as e:
-                        print(f"[ERROR] Failed to import subject '{name}': {e}")
-                        continue
-            
-            self.load()
-            EventBus.emit("SUBJECTS_UPDATED")
-            QMessageBox.information(self, "Import Complete", f"Imported {imported} subjects.")
-            
-        except Exception as e:
-            QMessageBox.critical(self, "Error", "Import failed. Please check the file format and try again.")

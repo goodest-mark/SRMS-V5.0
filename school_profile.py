@@ -83,9 +83,9 @@ class SchoolProfilePage(QWidget):
         self.head_teacher = QLineEdit()
         self.academic_master = QLineEdit()
         self.discipline_master = QLineEdit()
-        form3.addRow("Head Teacher:", self.head_teacher)
-        form3.addRow("Academic Master:", self.academic_master)
-        form3.addRow("Discipline Master:", self.discipline_master)
+        form3.addRow("Headmaster / Headmistress:", self.head_teacher)
+        form3.addRow("Academic Master / Mistress:", self.academic_master)
+        form3.addRow("Discipline Master / Mistress:", self.discipline_master)
 
         # SECTION 4: BRANDING
         sec4 = QGroupBox("SECTION 4: BRANDING")
@@ -99,18 +99,18 @@ class SchoolProfilePage(QWidget):
         self.stamp_preview, stamp_btn = self._build_image_row("No Stamp", "UPLOAD STAMP", self.upload_stamp)
         form4.addRow("School Stamp:", self._wrap_row(self.stamp_preview, stamp_btn))
 
-        # SECTION 5: HEAD TEACHER SIGNATURE (only)
+        # SECTION 5: HEADMASTER / HEADMISTRESS SIGNATURE (only)
         sec5 = QGroupBox("SECTION 5: SIGNATURES")
         form5 = QFormLayout(sec5)
         self.head_signature_preview, head_sig_btn, self.head_teacher_signature_enabled, head_row = self._build_signature_row(
-            "No Signature", "UPLOAD HEAD SIGNATURE", self.upload_head_signature, self.head_teacher_signature_enabled
+            "No Signature", "UPLOAD HEADMASTER / HEADMISTRESS SIGNATURE", self.upload_head_signature, self.head_teacher_signature_enabled
         )
         # Removed Academic, Discipline, Class Master signatures
         # Add a note that other signatures are handled on paper
-        note_label = QLabel("Note: Academic Master, Discipline Master, and Class Master signatures are handled physically on paper.")
+        note_label = QLabel("Note: Academic Master / Mistress, Discipline Master / Mistress, and Class Master / Mistress signatures are handled physically on paper.")
         note_label.setWordWrap(True)
         note_label.setProperty("variant", "muted")
-        form5.addRow("Head Teacher / Head Mistress:", head_row)
+        form5.addRow("Headmaster / Headmistress:", head_row)
         form5.addRow(note_label)
 
         container_layout.addWidget(sec1)
@@ -181,7 +181,7 @@ class SchoolProfilePage(QWidget):
             self.show_preview(self.stamp_preview, file_path)
 
     def upload_head_signature(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Head Teacher Signature", "", "Images (*.png *.jpg *.jpeg)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Headmaster / Headmistress Signature", "", "Images (*.png *.jpg *.jpeg)")
         if file_path and _is_safe_image_path(file_path):
             self.head_teacher_signature_path = file_path
             self.show_preview(self.head_signature_preview, file_path)

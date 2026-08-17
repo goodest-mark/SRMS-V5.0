@@ -1062,9 +1062,9 @@ def _build_comments_block(ST, discipline_remarks, teacher_remarks, academic_rema
     ]))
 
     entries = [
-        ('DISCIPLINE MASTER', discipline_remarks),
+        ('DISCIPLINE MASTER / MISTRESS', discipline_remarks),
         ('CLASS TEACHER', teacher_remarks),
-        ('ACADEMIC MASTER', academic_remarks),
+        ('ACADEMIC MASTER / MISTRESS', academic_remarks),
     ]
     rows = [[title]]
     for role, text in entries:
@@ -1235,7 +1235,7 @@ def _build_student_report_content(
     content.append(_build_student_page_footer(ST))
     content.append(Spacer(1, 5))
     content.append(Paragraph(
-        '<b>Note:</b> This report is computer generated and requires only the head teacher signature.',
+        '<b>Note:</b> This report is computer generated and requires only the headmaster / headmistress signature.',
         ST['note']
     ))
     contacts_line = _build_footer_contacts(ST, school_addr, school_phone, school_email, school_website)
@@ -1289,7 +1289,7 @@ def _build_signatures(
     if head_signature is None:
         head_signature = Paragraph('Signature: __________', sig_style)
     head_block = labeled_block(
-        'HEAD TEACHER / HEADMASTER',
+        'HEADMASTER / HEADMISTRESS',
         head_signature,
         f'Name: {head_teacher}' if head_teacher else 'Name: __________',
     )
