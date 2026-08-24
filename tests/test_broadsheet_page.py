@@ -5,7 +5,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
-from ui.pages.broadsheet_page import BroadsheetPage
+from ui.pages.broadsheet_page import BroadsheetPage, BroadsheetService
 from database import connect, init_db
 
 
@@ -74,3 +74,20 @@ def test_broadsheet_page_preserves_historical_class_subjects(tmp_db):
     assert "Mathematics" in data['subjects']
     assert data['subject_headers'][0] == "MATH"
     app.quit()
+
+
+def test_broadsheet_positions_and_top_bottom_use_total_marks():
+    students = [
+        {"admission": "A", "total_marks": 500, "average": 50, "position": 1},
+        {"admission": "B", "total_marks": 480, "average": 80, "position": 2},
+        {"admission": "C", "total_marks": 450, "average": 90, "position": 3},
+    ]
+
+    ordered = BroadsheetService._assign_class_positions(students)
+    assert [student["admission"] for student in ordered] == ["A", "B", "C"]
+    assert [student["class_position"] for student in ordered] == [1, 2, 3]
+
+    service = object.__new__(BroadsheetService)
+    top, bottom = service._compute_top_bottom(ordered)
+    assert [student["admission"] for student in top] == ["A", "B", "C"]
+    assert [student["admission"] for student in bottom] == ["C", "B", "A"]

@@ -6,7 +6,7 @@ from academic_rules import is_ranking_subject
 from cache_utils import ranking_cache
 
 
-def compute_student_scores(level, exam_id=None, class_name=None):
+def compute_student_scores(level, exam_id=None, class_name=None, stream=None):
     """
     Ranking Engine V4.0
 
@@ -21,7 +21,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
     # Build cache key
     # Include the active database.  Tests, backup restores, and database
     # switches must not reuse rankings calculated for another SQLite file.
-    cache_key = (database.DB_NAME, level, exam_id, class_name)
+    cache_key = (database.DB_NAME, level, exam_id, class_name, stream)
     cached = ranking_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -87,6 +87,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
                 s.full_name,
                 s.gender,
                 COALESCE(r.class_name, s.class) AS historical_class,
+                COALESCE(r.stream, s.stream) AS historical_stream,
                 r.subject_name,
                 r.marks,
                 sub.subject_type
@@ -104,6 +105,9 @@ def compute_student_scores(level, exam_id=None, class_name=None):
         if class_name:
             query += " AND COALESCE(r.class_name, s.class) = ?"
             params.append(class_name)
+        if stream is not None:
+            query += " AND UPPER(TRIM(COALESCE(r.stream, s.stream, ''))) = UPPER(TRIM(?))"
+            params.append(stream)
 
         cur.execute(query, params)
         rows = cur.fetchall()
@@ -123,7 +127,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
     # Organise data per student
     students_data = {}
     for row in rows:
-        adm, name, gender, student_class, subject, marks, subject_type = row
+        adm, name, gender, student_class, student_stream, subject, marks, subject_type = row
 
         if has_enrollments and (adm, subject) not in enrolled_pairs:
             continue
@@ -141,6 +145,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
                 "name": name,
                 "gender": gender,
                 "class": student_class,
+                "stream": student_stream,
                 "subjects": []
             }
 
@@ -214,6 +219,7 @@ def compute_student_scores(level, exam_id=None, class_name=None):
             "name": data["name"],
             "gender": data["gender"],
             "class": data["class"],
+            "stream": data["stream"],
             "subjects": subject_count,          # total subjects taken
             "total_marks": _format_number(total_marks),
             "average": average,                 # always computed

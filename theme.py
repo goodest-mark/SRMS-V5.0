@@ -414,6 +414,44 @@ QFrame#NavContainer {{
     padding: 4px;
 }}
 
+QGroupBox#registrationCard {{
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:1,
+        stop:0 {tokens['surface']},
+        stop:1 {tokens['surface_alt']}
+    );
+    border: 1px solid {tokens['border']};
+    border-radius: 16px;
+    margin-top: 14px;
+    padding-top: 14px;
+}}
+
+QGroupBox#registrationCard::title {{
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 20px;
+    padding: 0 6px;
+    color: {tokens['primary_2']};
+    font-size: 17px;
+    font-weight: 850;
+}}
+
+QPushButton#registrationBulkAction {{
+    background: {tokens['input_bg']};
+    border: 1px solid {tokens['border']};
+    border-radius: 12px;
+    color: {tokens['text_soft']};
+    font-size: 16px;
+    font-weight: 800;
+    padding: 14px 20px;
+    text-align: left;
+}}
+
+QPushButton#registrationBulkAction:hover {{
+    background: rgba(59,130,246,0.16);
+    border-color: {tokens['primary_2']};
+}}
+
 /* =========================================
    WORKFLOW BUTTONS (page actions and tabs)
 ========================================= */
@@ -548,6 +586,38 @@ QGroupBox, QFrame#GlassCard, QFrame#HeaderFrame, QFrame#QuickActionsPanel, QFram
 
 QLabel#SectionTitle{{
     padding-top:2px;
+}}
+
+QLabel#FieldLabel{{
+    font-size:11px;
+    font-weight:600;
+}}
+
+QLabel#ExplainerText{{
+    font-size:12px;
+}}
+
+QLabel#SubsectionTitle{{
+    font-size:13px;
+    font-weight:800;
+}}
+
+QFrame#PreviewCard{{
+    background:qlineargradient(
+        x1:0,y1:0,x2:1,y2:1,
+        stop:0 {tokens['surface']},
+        stop:1 {tokens['surface_alt']}
+    );
+    border:1px solid {tokens['border']};
+    border-radius:10px;
+    padding:10px;
+}}
+
+QLabel#ProfileSummary{{
+    background:{tokens['surface_alt']};
+    border-radius:6px;
+    padding:8px;
+    font-size:12px;
 }}
 
 QLabel#PageTitle{{

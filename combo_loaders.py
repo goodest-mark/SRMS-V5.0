@@ -68,6 +68,51 @@ def load_classes(combo, *, placeholder=None):
     combo.blockSignals(False)
 
 
+def load_streams(combo, *, class_name=None, exam_id=None, level=None,
+                 include_all=True):
+    """Populate stream choices for a class, retaining ``None`` for all streams.
+
+    Current student streams are included for results entry.  When an exam is
+    supplied, stored result streams are included too, so old historical views
+    remain selectable after a student changes stream.
+    """
+    current = combo.currentData()
+    combo.blockSignals(True)
+    combo.clear()
+    if include_all:
+        combo.addItem("All Streams", None)
+
+    if level is None:
+        level = SystemState.get_level()
+    if not class_name:
+        combo.blockSignals(False)
+        return
+
+    params = [class_name, level]
+    query = """
+        SELECT DISTINCT TRIM(stream)
+        FROM students
+        WHERE class=? AND level=? AND TRIM(COALESCE(stream, '')) != ''
+    """
+    if exam_id is not None:
+        query += """
+            UNION
+            SELECT DISTINCT TRIM(COALESCE(r.stream, s.stream))
+            FROM results r
+            JOIN students s ON s.admission_no = r.admission_no
+            WHERE r.exam_id=?
+              AND COALESCE(r.class_name, s.class)=?
+              AND s.level=?
+              AND TRIM(COALESCE(r.stream, s.stream, '')) != ''
+        """
+        params.extend([exam_id, class_name, level])
+    query += " ORDER BY 1 COLLATE NOCASE"
+    for (stream,) in fetch_all(query, tuple(params)):
+        combo.addItem(stream, stream)
+    _restore_by_data(combo, current)
+    combo.blockSignals(False)
+
+
 def load_open_exams(combo, level=None):
     """Populate an exam combo box with OPEN exams for the given *level*."""
     current = combo.currentData()

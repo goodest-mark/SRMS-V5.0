@@ -18,11 +18,12 @@ class RemarksWorker(QThread):
     finished = Signal(list, dict, str)
     error = Signal(str)
 
-    def __init__(self, exam_id, class_name, level):
+    def __init__(self, exam_id, class_name, level, stream=None):
         super().__init__()
         self.exam_id = exam_id
         self.class_name = class_name
         self.level = level
+        self.stream = stream
 
     def run(self):
         try:
@@ -37,10 +38,11 @@ class RemarksWorker(QThread):
                 FROM students s
                 LEFT JOIN exam_remarks er ON s.admission_no = er.admission_no AND er.exam_id = ?
                 WHERE s.class = ? AND s.level = ?
+                  AND (? IS NULL OR UPPER(TRIM(COALESCE(s.stream, ''))) = UPPER(TRIM(?)))
                 ORDER BY s.full_name
             """
-            rows = fetch_all(query, (self.exam_id, self.class_name, self.level))
-            scores = compute_student_scores(self.level, self.exam_id, self.class_name)
+            rows = fetch_all(query, (self.exam_id, self.class_name, self.level, self.stream, self.stream))
+            scores = compute_student_scores(self.level, self.exam_id, self.class_name, self.stream)
             score_map = {str(s["admission"]): s for s in scores}
             self.finished.emit(rows, score_map, self.level)
         except Exception as e:
@@ -54,6 +56,7 @@ class RemarksPage(QWidget):
         self.history_exam_id = None
         self.history_class_name = None
         self.history_level = None
+        self.history_stream = None
         self._worker = None
 
         root = QVBoxLayout(self)
@@ -120,10 +123,11 @@ class RemarksPage(QWidget):
         EventBus.subscribe("RESULTS_UPDATED", self._on_data_changed)
         EventBus.subscribe("STUDENTS_UPDATED", self._on_data_changed)
 
-    def set_history_context(self, exam_id, class_name, level=None):
+    def set_history_context(self, exam_id, class_name, level=None, stream=None):
         self.history_exam_id = exam_id
         self.history_class_name = class_name
         self.history_level = level or SystemState.get_level()
+        self.history_stream = stream
 
         from db_utils import fetch_one
         row = fetch_one("""
@@ -137,6 +141,7 @@ class RemarksPage(QWidget):
             exam_name, term_name, year_name = row
             self.context_label.setText(
                 f"Context: {exam_name} - {term_name} - {year_name} - {class_name}"
+                + (f" - {stream}" if stream else "")
             )
         else:
             self.context_label.setText(f"Context: Exam #{exam_id} - {class_name}")
@@ -147,6 +152,7 @@ class RemarksPage(QWidget):
         self.history_exam_id = None
         self.history_class_name = None
         self.history_level = None
+        self.history_stream = None
         self.context_label.setText("Select an exam and class to enter remarks.")
         self._show_placeholder("Select a valid exam and class.")
 
@@ -196,7 +202,7 @@ class RemarksPage(QWidget):
             self._worker.quit()
             self._worker.wait()
 
-        self._worker = RemarksWorker(exam_id, class_name, level)
+        self._worker = RemarksWorker(exam_id, class_name, level, self.history_stream)
         self._worker.finished.connect(self._on_data_loaded)
         self._worker.error.connect(self._on_error)
         self._worker.start()

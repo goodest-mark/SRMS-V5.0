@@ -1,10 +1,11 @@
-from PySide6.QtCore import QUrl, Qt
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QTimer, QUrl, Qt
+from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QCheckBox,
     QFileDialog,
+    QGridLayout,
     QGroupBox,
     QHeaderView,
     QHBoxLayout,
@@ -52,23 +53,24 @@ class StudentsPage(QWidget):
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         root.addWidget(self.scroll_area)
 
         self.content_widget = QWidget()
         self.scroll_area.setWidget(self.content_widget)
 
         main_layout = QVBoxLayout(self.content_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(16, 12, 16, 12)
+        main_layout.setSpacing(8)
 
         # =====================================================
         # TOP NAVIGATION BUTTONS
         # =====================================================
         nav_layout = QHBoxLayout()
-        nav_layout.setContentsMargins(0, 0, 0, 12)
+        nav_layout.setContentsMargins(0, 0, 0, 6)
 
         nav_container = QFrame()
-        nav_container.setObjectName("studentsNavContainer")
+        nav_container.setObjectName("NavContainer")
         nav_container_layout = QHBoxLayout(nav_container)
         nav_container_layout.setContentsMargins(4, 4, 4, 4)
         nav_container_layout.setSpacing(4)
@@ -88,33 +90,6 @@ class StudentsPage(QWidget):
         self.btn_students.setProperty("variant", "accent")
         self.btn_registration.setProperty("variant", "default")
         self.btn_reports.setProperty("variant", "default")
-
-        nav_container.setStyleSheet("""
-            QFrame#studentsNavContainer {
-                background-color: #EEF1F6;
-                border-radius: 12px;
-            }
-            QFrame#studentsNavContainer QPushButton#navButton {
-                background-color: transparent;
-                border: none;
-                border-radius: 9px;
-                padding: 8px 18px;
-                font-weight: 600;
-                font-size: 12px;
-                color: #5B6472;
-            }
-            QFrame#studentsNavContainer QPushButton#navButton:hover {
-                background-color: #E0E4EC;
-                color: #1E293B;
-            }
-            QFrame#studentsNavContainer QPushButton#navButton[variant="accent"] {
-                background-color: #1E3A8A;
-                color: #FFFFFF;
-            }
-            QFrame#studentsNavContainer QPushButton#navButton[variant="accent"]:hover {
-                background-color: #1E3A8A;
-            }
-        """)
 
         self.btn_students.clicked.connect(lambda: self.switch_page(0))
         self.btn_registration.clicked.connect(lambda: self.switch_page(1))
@@ -207,64 +182,180 @@ class StudentsPage(QWidget):
 
         # ---- Page 1: Registration ----
         self.register_page = QWidget()
-        register_layout = QVBoxLayout(self.register_page)
+        self.register_page.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.register_page.setMinimumSize(0, 0)
+        register_layout = QHBoxLayout(self.register_page)
         register_layout.setContentsMargins(0, 0, 0, 0)
-        register_layout.setSpacing(12)
+        register_layout.setSpacing(10)
 
-        form_layout = QHBoxLayout()
+        # ===== Card 1: Single Registration =====
+        single_card = QGroupBox("Single Registration")
+        single_card.setObjectName("registrationCard")
+        single_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        single_card.setMinimumHeight(480)
+        single_card.setMaximumHeight(585)
+        single_card_layout = QVBoxLayout(single_card)
+        single_card_layout.setContentsMargins(22, 28, 22, 22)
+        single_card_layout.setSpacing(14)
+
+        single_form = QGridLayout()
+        single_form.setHorizontalSpacing(32)
+        single_form.setVerticalSpacing(18)
+        single_form.setContentsMargins(0, 0, 0, 0)
+        single_form.setColumnStretch(0, 1)
+        single_form.setColumnStretch(1, 1)
+
         self.adm = QLineEdit()
         self.adm.setPlaceholderText("Admission No *")
+        self.adm.setMinimumHeight(50)
+        self.adm.setMaximumHeight(52)
+
         self.exam_no = QLineEdit()
         self.exam_no.setPlaceholderText("Exam No (Optional)")
+        self.exam_no.setMinimumHeight(50)
+        self.exam_no.setMaximumHeight(52)
+
         self.name = QLineEdit()
         self.name.setPlaceholderText("Full Name *")
+        self.name.setMinimumHeight(50)
+        self.name.setMaximumHeight(52)
+
         self.gender = QComboBox()
         self.gender.addItems(["Male", "Female"])
+        self.gender.setMinimumHeight(50)
+        self.gender.setMaximumHeight(52)
+
         self.class_box = QComboBox()
-        self.class_box.setPlaceholderText("Select Class *")
-        self.stream = QLineEdit()
-        self.stream.setPlaceholderText("Stream (Optional)")
+        self.class_box.setMinimumHeight(50)
+        self.class_box.setMaximumHeight(52)
 
-        form_layout.addWidget(self.adm)
-        form_layout.addWidget(self.exam_no)
-        form_layout.addWidget(self.name)
-        form_layout.addWidget(self.gender)
-        form_layout.addWidget(self.class_box)
-        form_layout.addWidget(self.stream)
-        register_layout.addLayout(form_layout)
+        self.stream_box = QLineEdit()
+        self.stream_box.setPlaceholderText("Stream (Optional)")
+        self.stream_box.setMinimumHeight(50)
+        self.stream_box.setMaximumHeight(52)
 
-        self.comment = QTextEdit()
-        self.comment.setPlaceholderText("Comments / Remarks")
-        self.comment.setFixedHeight(70)
-        register_layout.addWidget(self.comment)
+        def field_label(text):
+            lbl = QLabel(text)
+            lbl.setObjectName("FieldLabel")
+            lbl.setProperty("variant", "muted")
+            f = lbl.font()
+            f.setPointSizeF(9.5)
+            f.setWeight(QFont.Weight.DemiBold)
+            lbl.setFont(f)
+            return lbl
 
-        action_layout = QHBoxLayout()
+        # Each field is a compact label + input block.  This prevents the grid
+        # from creating oversized empty vertical bands when the card is taller
+        # than the natural form height.
+        def field_block(label_text, widget):
+            block = QVBoxLayout()
+            block.setContentsMargins(0, 0, 0, 0)
+            block.setSpacing(4)
+            block.addWidget(field_label(label_text))
+            block.addWidget(widget)
+            return block
+
+        single_form.addLayout(field_block("Admission No *", self.adm), 0, 0)
+        single_form.addLayout(field_block("Exam No", self.exam_no), 0, 1)
+        single_form.addLayout(field_block("Full Name *", self.name), 1, 0)
+        single_form.addLayout(field_block("Gender", self.gender), 1, 1)
+        single_form.addLayout(field_block("Class *", self.class_box), 2, 0)
+        single_form.addLayout(field_block("Stream", self.stream_box), 2, 1)
+
+        single_card_layout.addLayout(single_form)
+
+        self.comment = QTextEdit(self.register_page)
+        self.comment.setVisible(False)
+
+        single_actions = QHBoxLayout()
+        single_actions.setSpacing(14)
         self.save_btn = QPushButton("Save Student")
         self.save_btn.setObjectName("workflowPrimary")
+        self.save_btn.setMinimumHeight(52)
+        self.save_btn.setMaximumHeight(52)
         self.save_btn.clicked.connect(self.save_student)
+
         self.delete_btn = QPushButton("Delete Student")
         self.delete_btn.setObjectName("workflowDanger")
+        self.delete_btn.setMinimumHeight(52)
+        self.delete_btn.setMaximumHeight(52)
         self.delete_btn.clicked.connect(self.delete_student)
         self.delete_btn.setEnabled(False)
-        self.import_btn = QPushButton("Import Excel")
-        self.import_btn.setObjectName("workflowSecondary")
-        self.import_btn.clicked.connect(self.import_excel)
-        self.export_btn = QPushButton("Export Excel")
-        self.export_btn.setObjectName("workflowSecondary")
-        self.export_btn.clicked.connect(self.export_excel)
+
+        single_actions.addStretch(1)
+        single_actions.addWidget(self.delete_btn)
+        single_actions.addWidget(self.save_btn)
+        single_card_layout.addStretch(1)
+        single_card_layout.addLayout(single_actions)
+
+        # ===== Card 2: Bulk Registration =====
+        bulk_card = QGroupBox("Bulk Registration")
+        bulk_card.setObjectName("registrationCard")
+        bulk_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        bulk_card.setMinimumHeight(480)
+        bulk_card.setMaximumHeight(585)
+        bulk_card_layout = QVBoxLayout(bulk_card)
+        bulk_card_layout.setContentsMargins(22, 28, 22, 22)
+        bulk_card_layout.setSpacing(14)
+
+        # Keep the bulk workflow visually structured: explanation first,
+        # then the primary template action, followed by import/export tools.
+        bulk_explainer = QLabel(
+            "Register many students at once using an Excel file. Download the template, fill it in, then import it back."
+        )
+        bulk_explainer.setWordWrap(True)
+        bulk_explainer.setObjectName("ExplainerText")
+        bulk_explainer.setProperty("variant", "muted")
+        bulk_explainer.setMinimumHeight(52)
+        explainer_font = bulk_explainer.font()
+        explainer_font.setPointSizeF(11.0)
+        bulk_explainer.setFont(explainer_font)
+        bulk_card_layout.addWidget(bulk_explainer)
+
         self.template_btn = QPushButton("Download Template")
-        self.template_btn.setObjectName("workflowSecondary")
+        self.template_btn.setObjectName("registrationBulkAction")
+        self.template_btn.setMinimumHeight(78)
         self.template_btn.clicked.connect(self.download_template)
 
-        action_layout.addWidget(self.template_btn)
-        action_layout.addWidget(self.import_btn)
-        action_layout.addWidget(self.export_btn)
-        action_layout.addWidget(self.save_btn)
-        action_layout.addWidget(self.delete_btn)
-        action_layout.addStretch()
-        register_layout.addLayout(action_layout)
+        self.import_btn = QPushButton("Import Excel")
+        self.import_btn.setObjectName("registrationBulkAction")
+        self.import_btn.setMinimumHeight(78)
+        self.import_btn.clicked.connect(self.import_excel)
+
+        self.export_btn = QPushButton("Export Excel")
+        self.export_btn.setObjectName("registrationBulkAction")
+        self.export_btn.setMinimumHeight(78)
+        self.export_btn.clicked.connect(self.export_excel)
+
+        bulk_card_layout.addWidget(self.template_btn)
+        bulk_card_layout.addWidget(self.import_btn)
+        bulk_card_layout.addWidget(self.export_btn)
+        bulk_card_layout.addStretch(1)
+
+        # Give the main form more room while keeping the bulk tools comfortably readable.
+        register_layout.addWidget(single_card, 5, Qt.AlignTop)
+        register_layout.addWidget(bulk_card, 3, Qt.AlignTop)
 
         self.stacked_widget.addWidget(self.register_page)
+
+        # Registration-page readability: larger typography and balanced card sizing.
+        # Keep this scoped to Registration so the Students and Reports pages are untouched.
+        card_font = single_card.font()
+        card_font.setPointSizeF(12.5)
+        card_font.setWeight(QFont.Weight.DemiBold)
+        single_card.setFont(card_font)
+        bulk_card.setFont(card_font)
+
+        for field in (self.adm, self.exam_no, self.name, self.gender, self.class_box, self.stream_box):
+            f = field.font()
+            f.setPointSizeF(11.0)
+            field.setFont(f)
+
+        for button in (self.save_btn, self.delete_btn, self.template_btn, self.import_btn, self.export_btn):
+            f = button.font()
+            f.setPointSizeF(11.0)
+            f.setWeight(QFont.Weight.DemiBold)
+            button.setFont(f)
 
         # ---- Page 2: Reports ----
         self.reports_page = QWidget()
@@ -274,8 +365,8 @@ class StudentsPage(QWidget):
 
         # Search
         search_label = QLabel("Find a Student")
+        search_label.setObjectName("SectionTitle")
         search_label.setProperty("variant", "accent")
-        search_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         reports_page_layout.addWidget(search_label)
 
         self.reports_search = QLineEdit()
@@ -285,8 +376,8 @@ class StudentsPage(QWidget):
 
         # Student selection table
         student_list_label = QLabel("Select a Student")
+        student_list_label.setObjectName("SectionTitle")
         student_list_label.setProperty("variant", "accent")
-        student_list_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         reports_page_layout.addWidget(student_list_label)
 
         self.reports_student_table = QTableWidget()
@@ -309,8 +400,8 @@ class StudentsPage(QWidget):
 
         # Reports list
         reports_list_label = QLabel("Available Exam Reports")
+        reports_list_label.setObjectName("SectionTitle")
         reports_list_label.setProperty("variant", "accent")
-        reports_list_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         reports_page_layout.addWidget(reports_list_label)
 
         self.reports_table_page = QTableWidget()
@@ -358,14 +449,6 @@ class StudentsPage(QWidget):
         # Preview frame (hidden by default)
         self.preview_frame = QFrame()
         self.preview_frame.setObjectName("PreviewCard")
-        self.preview_frame.setStyleSheet("""
-            QFrame#PreviewCard {
-                background: rgba(0,0,0,0.03);
-                border: 1px solid rgba(148,163,184,0.2);
-                border-radius: 10px;
-                padding: 10px;
-            }
-        """)
         self.preview_layout = QVBoxLayout(self.preview_frame)
         self.preview_layout.setContentsMargins(12, 12, 12, 12)
         self.preview_layout.setSpacing(10)
@@ -396,6 +479,10 @@ class StudentsPage(QWidget):
 
     def switch_page(self, index):
         self.stacked_widget.setCurrentIndex(index)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.verticalScrollBar().setValue(0)
+        QTimer.singleShot(0, lambda: self.scroll_area.verticalScrollBar().setValue(0))
         for btn in (self.btn_students, self.btn_registration, self.btn_reports):
             btn.setProperty("variant", "default")
             btn.setChecked(False)
@@ -523,24 +610,32 @@ class StudentsPage(QWidget):
             params.append(gender)
         if search_text:
             pattern = f"%{search_text}%"
-            conditions.append("""(
-                admission_no LIKE ? OR COALESCE(exam_no, '') LIKE ?
-                OR full_name LIKE ? OR class LIKE ? OR COALESCE(stream, '') LIKE ?
-            )""")
-            params.extend([pattern] * 5)
-
-        rows = fetch_all(f"""
-            SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
-            FROM students
-            WHERE {' AND '.join(conditions)}
-            ORDER BY id DESC
-        """, tuple(params))
+            rows = fetch_all("""
+                SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
+                FROM students
+                WHERE level=?
+                  AND class<>?
+                  AND (
+                      admission_no LIKE ? OR COALESCE(exam_no, '') LIKE ?
+                      OR full_name LIKE ? OR class LIKE ? OR COALESCE(stream, '') LIKE ?
+                  )
+                ORDER BY id DESC
+            """, (level, "Graduated", pattern, pattern, pattern, pattern, pattern))
+        else:
+            rows = fetch_all("""
+                SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
+                FROM students
+                WHERE level=? AND class<>?
+                ORDER BY id DESC
+            """, (level, "Graduated"))
         self.table.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
-            for column, value in enumerate(row):
+            for column, value in enumerate(row[:8]):
                 text = "" if value is None else str(value)
                 item = QTableWidgetItem(text)
                 item.setToolTip(text)
+                if column == 0:
+                    item.setData(Qt.UserRole, row[8] or "")
                 self.table.setItem(row_index, column, item)
         self.update_delete_selected_button()
 
@@ -564,12 +659,11 @@ class StudentsPage(QWidget):
         if class_index >= 0:
             self.class_box.setCurrentIndex(class_index)
 
-        self.stream.setText(self.table.item(row, 6).text())
+        stream = self.table.item(row, 6).text() if self.table.item(row, 6) else ""
+        self.stream_box.setText(stream)
 
-        with get_cursor() as cur:
-            cur.execute("SELECT comments FROM students WHERE id=?", (self.selected_id,))
-            comments_row = cur.fetchone()
-            self.comment.setText(comments_row[0] if comments_row and comments_row[0] else "")
+        id_item = self.table.item(row, 0)
+        self.comment.setText(id_item.data(Qt.UserRole) if id_item else "")
 
         self.save_btn.setText("Update Student")
         self.delete_btn.setEnabled(True)
@@ -585,7 +679,7 @@ class StudentsPage(QWidget):
         full_name = self.name.text().strip()
         gender = self.gender.currentText().strip()
         class_name = self.class_box.currentText().strip()
-        stream = self.stream.text().strip()
+        stream = self.stream_box.text().strip()
         level = SystemState.get_level()
 
         if not admission_no or not full_name or not class_name or class_name == "-- Select Class --":
@@ -614,7 +708,7 @@ class StudentsPage(QWidget):
             return
 
         self.clear_form()
-        EventBus.emit("STUDENTS_UPDATED")
+        self.load_list()
 
     def delete_student(self):
         if self.selected_id is None:
@@ -633,7 +727,7 @@ class StudentsPage(QWidget):
             QMessageBox.critical(self, "Database Error", f"An unexpected error occurred while deleting the student record: {e}")
             return
         self.clear_form()
-        EventBus.emit("STUDENTS_UPDATED")
+        EventBus.emit("STUDENTS_UPDATED", visible_only=True)
 
     def update_delete_selected_button(self):
         count = len(self.table.selectionModel().selectedRows())
@@ -684,10 +778,7 @@ class StudentsPage(QWidget):
 
         if self.selected_id in ids:
             self.clear_form()
-        # load_list()/load_reports_search() run via the STUDENTS_UPDATED
-        # subscription below (see on_students_updated) — calling them here
-        # too would refresh both twice for no benefit.
-        EventBus.emit("STUDENTS_UPDATED")
+        EventBus.emit("STUDENTS_UPDATED", visible_only=True)
         QMessageBox.information(self, "Delete Students", f"Deleted {count} student(s).")
 
     def clear_form(self):
@@ -696,8 +787,10 @@ class StudentsPage(QWidget):
         self.adm.clear()
         self.exam_no.clear()
         self.name.clear()
-        self.stream.clear()
+        if hasattr(self, "stream_box"):
+            self.stream_box.clear()
         self.comment.clear()
+        # No stream field to clear
         self.gender.setCurrentIndex(0)
         if self.class_box.count() > 0:
             self.class_box.setCurrentIndex(0)
@@ -956,8 +1049,8 @@ class StudentsPage(QWidget):
 
         # Header
         header = QLabel("📄 REPORT CARD PREVIEW")
+        header.setObjectName("SectionTitle")
         header.setProperty("variant", "accent")
-        header.setStyleSheet("font-size: 16px; font-weight: bold;")
         self.preview_layout.addWidget(header)
 
         # Student Profile
@@ -974,7 +1067,7 @@ class StudentsPage(QWidget):
         )
         profile_label = QLabel(profile_text)
         profile_label.setWordWrap(True)
-        profile_label.setStyleSheet("padding: 8px; background: rgba(0,0,0,0.04); border-radius: 6px; font-size: 12px;")
+        profile_label.setObjectName("ProfileSummary")
         self.preview_layout.addWidget(profile_label)
 
         # Academic Summary
@@ -989,7 +1082,7 @@ class StudentsPage(QWidget):
 
         # Subject Performance
         subject_label = QLabel("Subject Performance")
-        subject_label.setStyleSheet("font-weight: bold; margin-top: 6px; font-size: 13px;")
+        subject_label.setObjectName("SubsectionTitle")
         self.preview_layout.addWidget(subject_label)
 
         preview_table = QTableWidget()
@@ -1039,7 +1132,7 @@ class StudentsPage(QWidget):
         # ---- Requirements (instead of signatures) ----
         if req_rows:
             req_label = QLabel("Requirements")
-            req_label.setStyleSheet("font-weight: bold; margin-top: 6px; font-size: 13px;")
+            req_label.setObjectName("SubsectionTitle")
             self.preview_layout.addWidget(req_label)
 
             req_table = QTableWidget()
@@ -1067,7 +1160,7 @@ class StudentsPage(QWidget):
 
         # ---- Comments ----
         comments_label = QLabel("Comments")
-        comments_label.setStyleSheet("font-weight: bold; margin-top: 6px; font-size: 13px;")
+        comments_label.setObjectName("SubsectionTitle")
         self.preview_layout.addWidget(comments_label)
 
         comments_data = [
@@ -1098,8 +1191,6 @@ class StudentsPage(QWidget):
         )
         self.preview_layout.addWidget(comments_table)
 
-        # ---- No signatures section ----
-
         self.preview_frame.setVisible(True)
 
     def clear_preview_layout(self):
@@ -1111,9 +1202,7 @@ class StudentsPage(QWidget):
                 widget.setParent(None)
                 widget.deleteLater()
             elif item.layout():
-                # If it's a layout, clear it recursively
                 self._clear_layout(item.layout())
-        # Also remove any direct children of the preview frame (just in case)
         for child in self.preview_frame.children():
             if isinstance(child, QWidget):
                 child.setParent(None)
@@ -1268,10 +1357,7 @@ class StudentsPage(QWidget):
                         print(f"[ERROR] Failed to import student '{adm}': {e}")
                         rejected += 1
                         continue
-            # load_list()/load_reports_search() run via the STUDENTS_UPDATED
-            # subscription (see on_students_updated) — calling them here too
-            # would refresh both twice for no benefit.
-            EventBus.emit("STUDENTS_UPDATED")
+            EventBus.emit("STUDENTS_UPDATED", visible_only=True)
             QMessageBox.information(self, "Import Complete",
                                   f"Operation Summary:\n- New Students Imported: {imported}\n- Existing Records Updated: {updated}\n- Rows Redirected to Actual Level: {redirected}\n- Records Rejected (Invalid Data): {rejected}")
         except Exception as e:

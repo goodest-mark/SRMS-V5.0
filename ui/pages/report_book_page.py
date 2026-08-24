@@ -16,11 +16,12 @@ class ReportBookWorker(QThread):
     finished = Signal(bool, str)
     progress = Signal(int, str)
 
-    def __init__(self, exam_id, class_name, save_path):
+    def __init__(self, exam_id, class_name, save_path, stream=None):
         super().__init__()
         self.exam_id = exam_id
         self.class_name = class_name
         self.save_path = save_path
+        self.stream = stream
 
     def run(self):
         success, message = report_book_pdf.generate_report_book(
@@ -29,6 +30,7 @@ class ReportBookWorker(QThread):
             self.class_name,
             self.save_path,
             progress_callback=lambda percent, msg: self.progress.emit(percent, msg),
+            stream=self.stream,
         )
         self.finished.emit(success, message)
 
@@ -39,6 +41,7 @@ class ReportBookPage(QWidget):
         self.history_exam_id = None
         self.history_class_name = None
         self.history_level = None
+        self.history_stream = None
 
         layout = QVBoxLayout(self)
 
@@ -81,17 +84,19 @@ class ReportBookPage(QWidget):
         EventBus.subscribe("GRADE_RULES_CHANGED", self.refresh_all)
         EventBus.subscribe("DIVISION_RULES_CHANGED", self.refresh_all)
 
-    def set_history_context(self, exam_id, class_name, level=None):
+    def set_history_context(self, exam_id, class_name, level=None, stream=None):
         self.history_exam_id = exam_id
         self.history_class_name = class_name
         self.history_level = level or SystemState.get_level()
-        self.context_label.setText(f"{class_name} – Exam #{exam_id}")
+        self.history_stream = stream
+        self.context_label.setText(f"{class_name} – Exam #{exam_id}" + (f" – {stream}" if stream else ""))
         self.update_summary()
 
     def clear_history_context(self):
         self.history_exam_id = None
         self.history_class_name = None
         self.history_level = None
+        self.history_stream = None
         self.context_label.setText("")
         self.summary_label.setText("Select criteria and click Preview...")
 
@@ -106,14 +111,14 @@ class ReportBookPage(QWidget):
             self.summary_label.setText("Select criteria and click Preview...")
             return
 
-        ranking = compute_student_scores(level, exam_id, class_name)
+        ranking = compute_student_scores(level, exam_id, class_name, self.history_stream)
         class_students = [s for s in ranking if s.get('class') == class_name]
         total = len(class_students)
         ready = len([s for s in class_students if s.get('status') == "READY"])
         incomplete = total - ready
 
         summary_text = (
-            f"<b>CLASS:</b> {class_name} ({level})<br>"
+            f"<b>CLASS:</b> {class_name}" + (f" – {self.history_stream}" if self.history_stream else "") + f" ({level})<br>"
             f"<b>Total Students:</b> {total}<br>"
             f"<b>Ready:</b> {ready} | <b>Incomplete:</b> {incomplete}"
         )
@@ -147,7 +152,7 @@ class ReportBookPage(QWidget):
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
 
-        self.worker = ReportBookWorker(exam_id, class_name, save_path)
+        self.worker = ReportBookWorker(exam_id, class_name, save_path, self.history_stream)
         self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self._on_finished)
         self.worker.start()

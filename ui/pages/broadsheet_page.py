@@ -92,13 +92,13 @@ class BroadsheetService:
 
     def fetch_data(self, exam_id: Optional[int], class_name: str,
                    year_id: Optional[int], term_id: Optional[int],
-                   level: Optional[str]) -> BroadsheetData:
+                   level: Optional[str], stream: Optional[str] = None) -> BroadsheetData:
         if not exam_id or not class_name:
             raise ValueError("Exam ID and class name are required.")
         if level is None:
             level = self._get_level()
 
-        ranking_summary = self._compute_scores(level, exam_id, class_name)
+        ranking_summary = self._compute_scores(level, exam_id, class_name, stream)
         ranking_summary = [s for s in ranking_summary if s.get('class') == class_name]
         if not ranking_summary:
             raise ValueError("No students found.")
@@ -145,7 +145,7 @@ class BroadsheetService:
         school_profile = self._get_school_profile()
         meta = {
             'year': year_name, 'term': term_name, 'exam': exam_name,
-            'class': class_name, 'level': level,
+            'class': class_name, 'stream': stream, 'level': level,
             'school_profile': school_profile,
             'generated_date': datetime.now().strftime("%A, %d %B %Y %I:%M %p")
         }
@@ -168,10 +168,18 @@ class BroadsheetService:
 
     @staticmethod
     def _assign_class_positions(students):
+        """Keep Broadsheet order identical to the ranking engine.
+
+        Total marks are the primary ranking measure throughout SRMS. Average
+        remains a display and performance statistic, not a second position
+        calculation.
+        """
         sorted_students = sorted(students, key=lambda x: (
-            -float(x.get('average', 0)), -float(x.get('total_marks', 0)), x.get('admission', '')))
+            -float(x.get('total_marks', 0)), x.get('admission', '')))
         for idx, s in enumerate(sorted_students, 1):
-            s['class_position'] = idx
+            # Retain the engine's already-computed total-marks position to
+            # prevent tie-break drift between views.
+            s['class_position'] = s.get('position', idx)
         return sorted_students
 
     def _fetch_subjects(self, admissions, year_id, term_id, class_name):
@@ -253,9 +261,14 @@ class BroadsheetService:
         return counts
 
     def _compute_top_bottom(self, ranking_summary):
-        ready = [s for s in ranking_summary if s.get('status') == 'READY']
-        top = ready[:TOP_BOTTOM_COUNT]
-        bottom = sorted(ready, key=lambda x: x.get('average', 0))[:TOP_BOTTOM_COUNT]
+        # The ranking engine gives every student a total-marks position,
+        # including incomplete records. Keeping them here avoids position gaps
+        # such as a Top 10 beginning at position 5.
+        top = ranking_summary[:TOP_BOTTOM_COUNT]
+        bottom = sorted(
+            ranking_summary,
+            key=lambda x: (float(x.get('total_marks', 0)), x.get('admission', '')),
+        )[:TOP_BOTTOM_COUNT]
         return top, bottom
 
     def _compute_subject_performance(self, rows, subjects):
@@ -295,6 +308,7 @@ class BroadsheetWorker(QObject):
                 year_id=self._filters.get('year_id'),
                 term_id=self._filters.get('term_id'),
                 level=self._filters.get('level'),
+                stream=self._filters.get('stream'),
             )
             self.data_ready.emit(data)
         except Exception as e:
@@ -485,7 +499,7 @@ class BroadsheetPage(QWidget):
         EventBus.subscribe("STUDENTS_UPDATED", self._on_data_changed)
 
     # ─── Context setters ─────────────────────────────────────────────
-    def set_history_context(self, exam_id, class_name, level=None):
+    def set_history_context(self, exam_id, class_name, level=None, stream=None):
         self.history_level = level
         if not exam_id or not class_name:
             self.footer.setText("Invalid context.")
@@ -498,7 +512,8 @@ class BroadsheetPage(QWidget):
         self.context = {
             'exam_id': exam_id, 'class_name': class_name,
             'year_id': year_id, 'term_id': term_id,
-            'level': level or SystemState.get_level()
+            'level': level or SystemState.get_level(),
+            'stream': stream,
         }
         # Set context label
         exam_row = fetch_one(
@@ -506,7 +521,10 @@ class BroadsheetPage(QWidget):
             (exam_id,))
         if exam_row:
             exam_name, term_name, year_name = exam_row
-            self.context_label.setText(f"{exam_name} – {term_name} – {year_name} – {class_name}")
+            self.context_label.setText(
+                f"{exam_name} – {term_name} – {year_name} – {class_name}"
+                + (f" – {stream}" if stream else "")
+            )
         else:
             self.context_label.setText(f"Exam #{exam_id} – {class_name}")
         self._load_data()

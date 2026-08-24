@@ -136,6 +136,19 @@ def _resolve_historical_class(cur, admission_no, exam_id, fallback_class):
     return fallback_class
 
 
+def _resolve_historical_stream(cur, admission_no, exam_id, fallback_stream):
+    """Use the stream captured with exam results when it is available."""
+    cur.execute("""
+        SELECT stream
+        FROM results
+        WHERE admission_no = ? AND exam_id = ? AND stream IS NOT NULL AND stream <> ''
+        ORDER BY id DESC
+        LIMIT 1
+    """, (admission_no, exam_id))
+    row = cur.fetchone()
+    return row[0] if row and row[0] else fallback_stream
+
+
 def list_student_report_exams(admission_no, level):
     conn = connect()
     cur = conn.cursor()
@@ -290,7 +303,8 @@ def _get_student_styles():
     return _student_styles_cache
 
 
-def generate_report_book(parent, exam_id, class_name, save_path, progress_callback=None):
+def generate_report_book(parent, exam_id, class_name, save_path, progress_callback=None,
+                         stream=None):
     try:
         from pypdf import PdfWriter
     except Exception:
@@ -347,7 +361,7 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
     """, (year_id, term_id, level, class_name))
     requirements_data = cur.fetchall()
 
-    ranking_data = compute_student_scores(level, exam_id, class_name)
+    ranking_data = compute_student_scores(level, exam_id, class_name, stream)
     class_students = [s for s in ranking_data if s.get('class') == class_name]
 
     if not class_students:
@@ -399,7 +413,7 @@ def generate_report_book(parent, exam_id, class_name, save_path, progress_callba
         exam_no = s_row[0] if s_row and s_row[0] else student.get('exam_no', '')
         student_name = s_row[1] if s_row else student.get('name', '')
         student_gender = s_row[2] if s_row else student.get('gender', '')
-        student_stream = (s_row[3] if s_row and s_row[3] else '-')
+        student_stream = student.get('stream') or (s_row[3] if s_row and s_row[3] else '-')
         student_comment = s_row[4] if s_row and s_row[4] else ''
 
         cur.execute("""
@@ -608,6 +622,7 @@ def generate_student_report_card(parent, admission_no, level, save_path=None, pr
     opening_date = exam_opening_date if exam_has_holiday and exam_opening_date else ""
     closing_date = exam_closing_date if exam_has_holiday and exam_closing_date else ""
     class_name = _resolve_historical_class(cur, student_adm, exam_id, current_class)
+    student_stream = _resolve_historical_stream(cur, student_adm, exam_id, student_stream)
 
     cur.execute("""
         SELECT teacher_remarks, headteacher_remarks, academic_master_remarks, discipline_master_remarks

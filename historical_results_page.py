@@ -43,11 +43,13 @@ class HistoricalResultsPage(QWidget):
         self.exam_box = QComboBox()
         self.class_box = QComboBox()
         self.class_box.addItems(get_classes())
+        self.stream_box = QComboBox()
 
         self.year_box.currentIndexChanged.connect(self._on_year_changed)
         self.term_box.currentIndexChanged.connect(self._on_term_changed)
         self.exam_box.currentIndexChanged.connect(self._on_filter_changed)
         self.class_box.currentIndexChanged.connect(self._on_filter_changed)
+        self.stream_box.currentIndexChanged.connect(self._on_filter_changed)
 
         filter_layout.addWidget(QLabel("Year:"))
         filter_layout.addWidget(self.year_box)
@@ -57,6 +59,8 @@ class HistoricalResultsPage(QWidget):
         filter_layout.addWidget(self.exam_box)
         filter_layout.addWidget(QLabel("Class:"))
         filter_layout.addWidget(self.class_box)
+        filter_layout.addWidget(QLabel("Stream:"))
+        filter_layout.addWidget(self.stream_box)
 
         root.addWidget(filter_bar)
 
@@ -139,14 +143,23 @@ class HistoricalResultsPage(QWidget):
             self._on_filter_changed()
 
     def _on_filter_changed(self):
+        self._load_streams()
         self._update_current_page()
+
+    def _load_streams(self):
+        combo_loaders.load_streams(
+            self.stream_box,
+            class_name=self.class_box.currentText().strip(),
+            exam_id=self.exam_box.currentData(),
+            level=self._history_level,
+        )
 
     def _get_current_context(self):
         exam_id = self.exam_box.currentData()
         class_name = self.class_box.currentText().strip()
         if exam_id is None or not class_name:
             return None
-        return exam_id, class_name, self._history_level
+        return exam_id, class_name, self._history_level, self.stream_box.currentData()
 
     def _update_current_page(self):
         context = self._get_current_context()
@@ -195,19 +208,19 @@ class HistoricalResultsPage(QWidget):
     def show_list(self):
         pass  # unified view replaces the old list tab
 
-    def activate_ranking(self, exam_id, class_name, level=None):
-        self._set_filters_from_context(exam_id, class_name, level)
+    def activate_ranking(self, exam_id, class_name, level=None, stream=None):
+        self._set_filters_from_context(exam_id, class_name, level, stream)
         self._switch_page(0)
 
-    def activate_broadsheet(self, exam_id, class_name, level=None):
-        self._set_filters_from_context(exam_id, class_name, level)
+    def activate_broadsheet(self, exam_id, class_name, level=None, stream=None):
+        self._set_filters_from_context(exam_id, class_name, level, stream)
         self._switch_page(1)
 
-    def activate_reports(self, exam_id, class_name, level=None):
-        self._set_filters_from_context(exam_id, class_name, level)
+    def activate_reports(self, exam_id, class_name, level=None, stream=None):
+        self._set_filters_from_context(exam_id, class_name, level, stream)
         self._switch_page(3)
 
-    def _set_filters_from_context(self, exam_id, class_name, level):
+    def _set_filters_from_context(self, exam_id, class_name, level, stream=None):
         from db_utils import fetch_one
         row = fetch_one("""
             SELECT e.term_id, t.academic_year_id
@@ -236,4 +249,8 @@ class HistoricalResultsPage(QWidget):
                 if idx >= 0:
                     self.exam_box.setCurrentIndex(idx)
                 self.class_box.setCurrentText(class_name)
+                self._load_streams()
+                stream_index = self.stream_box.findData(stream)
+                if stream_index >= 0:
+                    self.stream_box.setCurrentIndex(stream_index)
         self._update_current_page()
