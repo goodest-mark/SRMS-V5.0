@@ -1276,7 +1276,7 @@ def _build_signatures(
     exam_name='',
 ):
     GAP = 8
-    col_w = (USABLE_WIDTH - GAP * 3) / 4
+    col_w = (USABLE_WIDTH - GAP * 2) / 3
     sig_style = ST['sig_text']
     sig_hdr_style = ST['sig_label']
 
@@ -1309,12 +1309,6 @@ def _build_signatures(
         f'Name: {head_teacher}' if head_teacher else 'Name: __________',
     )
 
-    parent_block = labeled_block(
-        'PARENT / GUARDIAN',
-        Paragraph('Signature: __________', sig_style),
-        'Date: __________',
-    )
-
     stamp_image = _safe_image(stamp_path, 0.55 * inch, 0.55 * inch)
     if stamp_image is None:
         stamp_image = Paragraph('STAMP', sig_hdr_style)
@@ -1326,8 +1320,8 @@ def _build_signatures(
     verify_block = labeled_block('VERIFY', verify_body, '')
 
     tbl = Table(
-        [[head_block, parent_block, stamp_block, verify_block]],
-        colWidths=[col_w, col_w, col_w, col_w]
+        [[head_block, stamp_block, verify_block]],
+        colWidths=[col_w, col_w, col_w]
     )
     tbl.setStyle(TableStyle([
         ('LINEABOVE', (0, 0), (-1, 0), 1, NAVY),

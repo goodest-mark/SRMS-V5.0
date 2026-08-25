@@ -1,3 +1,4 @@
+# students_page.py — final polished version
 from PySide6.QtCore import QTimer, QUrl, Qt
 from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QSizePolicy,
     QStackedWidget,
+    QApplication,
 )
 
 import sqlite3
@@ -49,6 +51,10 @@ class StudentsPage(QWidget):
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(300)
         self._search_timer.timeout.connect(self._do_search)
+
+        # --- Load More state ---
+        self._offset = 0
+        self._batch_size = 100
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -150,8 +156,8 @@ class StudentsPage(QWidget):
         list_layout.addLayout(filters)
 
         self.class_filter.currentIndexChanged.connect(self._on_class_filter_changed)
-        self.stream_filter.currentIndexChanged.connect(self.load_list)
-        self.gender_filter.currentIndexChanged.connect(self.load_list)
+        self.stream_filter.currentIndexChanged.connect(self._on_stream_filter_changed)
+        self.gender_filter.currentIndexChanged.connect(self._on_gender_filter_changed)
         self.show_graduated.toggled.connect(self._on_show_graduated_toggled)
 
         self.table = QTableWidget()
@@ -182,6 +188,13 @@ class StudentsPage(QWidget):
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         list_layout.addWidget(self.table)
+
+        # --- Load More button ---
+        self.load_more_btn = QPushButton("Load More")
+        self.load_more_btn.setVisible(False)
+        self.load_more_btn.clicked.connect(self.load_more)
+        list_layout.addWidget(self.load_more_btn, alignment=Qt.AlignCenter)
+
         self.stacked_widget.addWidget(self.list_page)
 
         # ---- Page 1: Registration ----
@@ -481,6 +494,10 @@ class StudentsPage(QWidget):
                     CREATE INDEX IF NOT EXISTS idx_students_full_name 
                     ON students(full_name)
                 """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_students_level_class_stream 
+                    ON students(level, class, stream)
+                """)
         except Exception as e:
             print(f"[WARNING] Could not create indexes: {e}")
 
@@ -521,12 +538,15 @@ class StudentsPage(QWidget):
         self.clear_form()
         self.refresh_classes()
         self.refresh_list_filters()
-        self.load_list()
+        self.load_list()   # resets offset automatically
 
     def on_students_updated(self):
-        # Only refresh filters and reports – do NOT reload the entire list
         self.refresh_list_filters()
         self.load_reports_search()
+        if self.isVisible() and self.stacked_widget.currentIndex() == 0:
+            self.load_list()
+        else:
+            self._needs_refresh = True
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -535,7 +555,15 @@ class StudentsPage(QWidget):
             self.on_level_changed()
 
     # =====================================================
-    # PAGE 0: STUDENTS (LIST) – OPTIMISED
+    # LOAD MORE HELPERS
+    # =====================================================
+    def load_more(self):
+        """Fetch and append the next batch of students."""
+        self._offset += self._batch_size
+        self.load_list(append=True)
+
+    # =====================================================
+    # PAGE 0: STUDENTS (LIST) – with Load More
     # =====================================================
 
     def refresh_classes(self):
@@ -591,56 +619,104 @@ class StudentsPage(QWidget):
 
     def _on_class_filter_changed(self):
         self.refresh_stream_filter()
-        self.load_list()
+        self.load_list()   # resets offset
+
+    def _on_stream_filter_changed(self):
+        self.load_list()   # resets offset
+
+    def _on_gender_filter_changed(self):
+        self.load_list()   # resets offset
 
     def _on_show_graduated_toggled(self):
         self.refresh_list_filters()
-        self.load_list()
+        self.load_list()   # resets offset
 
     def _on_search_changed(self):
         self._search_timer.stop()
         self._search_timer.start()
 
     def _do_search(self):
-        self.load_list()
+        self.load_list()   # resets offset
 
-    def load_list(self):
-        """Load only the latest 100 students (for speed)."""
-        level = SystemState.get_level()
-        search_text = self.search.text().strip()
+    def load_list(self, append=False):
+        """Load students with current filters. If append=True, add rows to existing table."""
+        # Reset offset and hide button for fresh loads
+        if not append:
+            self._offset = 0
+            self.load_more_btn.setVisible(False)
 
-        limit_clause = "LIMIT 100"
+        # Set wait cursor
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            level = SystemState.get_level()
+            search_text = self.search.text().strip()
+            class_filter = self.class_filter.currentText()
+            stream_filter = self.stream_filter.currentText()
+            gender_filter = self.gender_filter.currentText()
+            show_graduated = self.show_graduated.isChecked()
 
-        if search_text:
-            pattern = f"%{search_text}%"
-            rows = fetch_all("""
+            # Build dynamic WHERE clause with TRIM and COLLATE NOCASE
+            conditions = ["level = ?"]
+            params = [level]
+
+            if not show_graduated:
+                conditions.append("class <> ?")
+                params.append(GRADUATED_CLASS)
+
+            if class_filter and class_filter != "All Classes":
+                conditions.append("TRIM(class) = ? COLLATE NOCASE")
+                params.append(class_filter.strip())
+
+            if stream_filter and stream_filter != "All Streams":
+                conditions.append("TRIM(stream) = ? COLLATE NOCASE")
+                params.append(stream_filter.strip())
+
+            if gender_filter and gender_filter != "All Genders":
+                conditions.append("TRIM(gender) = ? COLLATE NOCASE")
+                params.append(gender_filter.strip())
+
+            if search_text:
+                pattern = f"%{search_text}%"
+                conditions.append(
+                    "(admission_no LIKE ? OR COALESCE(exam_no, '') LIKE ? "
+                    "OR full_name LIKE ? OR class LIKE ? OR COALESCE(stream, '') LIKE ?)"
+                )
+                params.extend([pattern] * 5)
+
+            where_clause = " AND ".join(conditions)
+            query = f"""
                 SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
                 FROM students
-                WHERE level=? AND class<>?
-                  AND (admission_no LIKE ? OR COALESCE(exam_no, '') LIKE ?
-                       OR full_name LIKE ? OR class LIKE ? OR COALESCE(stream, '') LIKE ?)
+                WHERE {where_clause}
                 ORDER BY id DESC
-                """ + limit_clause,
-                (level, "Graduated", pattern, pattern, pattern, pattern, pattern))
-        else:
-            rows = fetch_all("""
-                SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
-                FROM students
-                WHERE level=? AND class<>?
-                ORDER BY id DESC
-                """ + limit_clause,
-                (level, "Graduated"))
+                LIMIT ? OFFSET ?
+            """
+            params.extend([self._batch_size, self._offset])
 
-        self.table.setUpdatesEnabled(False)
-        self.table.setRowCount(len(rows))
-        for row_index, row in enumerate(rows):
-            for column, value in enumerate(row[:8]):
-                text = "" if value is None else str(value)
-                item = QTableWidgetItem(text)
-                item.setToolTip(text)
-                self.table.setItem(row_index, column, item)
-        self.table.setUpdatesEnabled(True)
-        self.update_delete_selected_button()
+            rows = fetch_all(query, tuple(params))
+
+            self.table.setUpdatesEnabled(False)
+            if not append:
+                self.table.setRowCount(0)   # clear existing rows
+            start_row = self.table.rowCount()
+            self.table.setRowCount(start_row + len(rows))
+            for row_index, row in enumerate(rows):
+                for column, value in enumerate(row[:8]):
+                    text = "" if value is None else str(value)
+                    item = QTableWidgetItem(text)
+                    item.setToolTip(text)
+                    self.table.setItem(start_row + row_index, column, item)
+            self.table.setUpdatesEnabled(True)
+
+            # Refresh UI: scroll to top and clear selection
+            self.table.scrollToTop()
+            self.table.clearSelection()
+
+            # Show "Load More" only if we got a full batch (means there may be more)
+            self.load_more_btn.setVisible(len(rows) == self._batch_size)
+            self.update_delete_selected_button()
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def on_student_double_clicked(self):
         row = self.table.currentRow()
@@ -689,13 +765,11 @@ class StudentsPage(QWidget):
         try:
             with get_cursor(commit=True) as cur:
                 if self.selected_id is None:
-                    # Insert new student
                     cur.execute("""
                         INSERT INTO students (admission_no, exam_no, full_name, gender, class, stream, level)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     """, (admission_no, exam_no, full_name, gender, class_name, stream, level))
                     self.selected_id = cur.lastrowid
-                    # Add new row at top
                     self.table.insertRow(0)
                     self.table.setItem(0, 0, QTableWidgetItem(str(self.selected_id)))
                     self.table.setItem(0, 1, QTableWidgetItem(admission_no))
@@ -705,16 +779,14 @@ class StudentsPage(QWidget):
                     self.table.setItem(0, 5, QTableWidgetItem(class_name))
                     self.table.setItem(0, 6, QTableWidgetItem(stream))
                     self.table.setItem(0, 7, QTableWidgetItem(level))
-                    if self.table.rowCount() > 100:
+                    if self.table.rowCount() > self._batch_size:
                         self.table.removeRow(self.table.rowCount() - 1)
                 else:
-                    # Update existing
                     cur.execute("""
                         UPDATE students
                         SET admission_no=?, exam_no=?, full_name=?, gender=?, class=?, stream=?, level=?
                         WHERE id=?
                     """, (admission_no, exam_no, full_name, gender, class_name, stream, level, self.selected_id))
-                    # Update the row in the table
                     for row in range(self.table.rowCount()):
                         id_item = self.table.item(row, 0)
                         if id_item and int(id_item.text()) == self.selected_id:
@@ -734,7 +806,6 @@ class StudentsPage(QWidget):
             return
 
         self.clear_form()
-        # Emit event WITHOUT reloading the list – we've already updated the table
         EventBus.emit("STUDENTS_UPDATED", visible_only=True)
 
     def delete_student(self):
@@ -755,7 +826,6 @@ class StudentsPage(QWidget):
             QMessageBox.critical(self, "Database Error", f"An error occurred while deleting: {e}")
             return
 
-        # Remove row from table
         for row in range(self.table.rowCount()):
             id_item = self.table.item(row, 0)
             if id_item and int(id_item.text()) == self.selected_id:
@@ -812,12 +882,12 @@ class StudentsPage(QWidget):
             QMessageBox.critical(self, "Database Error", f"An error occurred while deleting: {e}")
             return
 
-        # Remove rows (reverse order)
         for row in sorted(selected_rows, reverse=True):
             self.table.removeRow(row)
 
         if self.selected_id in ids:
             self.clear_form()
+
         EventBus.emit("STUDENTS_UPDATED", visible_only=True)
         QMessageBox.information(self, "Delete Students", f"Deleted {count} student(s).")
 
@@ -837,7 +907,7 @@ class StudentsPage(QWidget):
         self.switch_page(0)
 
     # =====================================================
-    # PAGE 2: REPORTS (unchanged, but uses events)
+    # PAGE 2: REPORTS (unchanged)
     # =====================================================
 
     def hide_preview(self):
@@ -845,34 +915,38 @@ class StudentsPage(QWidget):
         self.clear_preview_layout()
 
     def load_reports_search(self):
-        level = SystemState.get_level()
-        search_text = self.reports_search.text().strip()
-        if search_text:
-            pattern = f"%{search_text}%"
-            rows = fetch_all("""
-                SELECT id, admission_no, full_name, class
-                FROM students WHERE level=?
-                AND (admission_no LIKE ? OR full_name LIKE ? OR class LIKE ?)
-                ORDER BY full_name LIMIT 50
-            """, (level, pattern, pattern, pattern))
-        else:
-            rows = fetch_all("""
-                SELECT id, admission_no, full_name, class
-                FROM students WHERE level=? ORDER BY full_name LIMIT 50
-            """, (level,))
-        self.reports_student_table.setRowCount(len(rows))
-        for row_index, row in enumerate(rows):
-            for column, value in enumerate(row):
-                text = "" if value is None else str(value)
-                item = QTableWidgetItem(text)
-                item.setToolTip(text)
-                self.reports_student_table.setItem(row_index, column, item)
-        self.reports_table_page.setRowCount(0)
-        self.hide_preview()
-        self.reports_selected_admission = None
-        self.view_report_page_btn.setEnabled(False)
-        self.download_report_page_btn.setEnabled(False)
-        self.preview_marks_btn.setEnabled(False)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            level = SystemState.get_level()
+            search_text = self.reports_search.text().strip()
+            if search_text:
+                pattern = f"%{search_text}%"
+                rows = fetch_all("""
+                    SELECT id, admission_no, full_name, class
+                    FROM students WHERE level=?
+                    AND (admission_no LIKE ? OR full_name LIKE ? OR class LIKE ?)
+                    ORDER BY full_name LIMIT 50
+                """, (level, pattern, pattern, pattern))
+            else:
+                rows = fetch_all("""
+                    SELECT id, admission_no, full_name, class
+                    FROM students WHERE level=? ORDER BY full_name LIMIT 50
+                """, (level,))
+            self.reports_student_table.setRowCount(len(rows))
+            for row_index, row in enumerate(rows):
+                for column, value in enumerate(row):
+                    text = "" if value is None else str(value)
+                    item = QTableWidgetItem(text)
+                    item.setToolTip(text)
+                    self.reports_student_table.setItem(row_index, column, item)
+            self.reports_table_page.setRowCount(0)
+            self.hide_preview()
+            self.reports_selected_admission = None
+            self.view_report_page_btn.setEnabled(False)
+            self.download_report_page_btn.setEnabled(False)
+            self.preview_marks_btn.setEnabled(False)
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def on_reports_student_selected(self):
         row = self.reports_student_table.currentRow()
@@ -1272,7 +1346,7 @@ class StudentsPage(QWidget):
             QMessageBox.information(self, "Report Card", f"Report saved to {result}")
 
     # =====================================================
-    # EXCEL FRAMEWORK (comments removed)
+    # EXCEL FRAMEWORK
     # =====================================================
 
     def download_template(self):
@@ -1334,40 +1408,41 @@ class StudentsPage(QWidget):
                     cls = str(row[4] or "").strip() if len(row) > 4 else ""
                     stream = str(row[5] or "").strip() if len(row) > 5 else ""
                     level_excel = str(row[6] or "").strip().upper() if len(row) > 6 else ""
-                    # comment ignored
 
                     if not name or not cls:
                         rejected += 1
                         continue
+
                     resolved_level = get_level_for_class(cls)
                     if resolved_level is None:
                         rejected += 1
                         continue
-                    if level_excel and level_excel != resolved_level:
-                        redirected += 1
-                    level_excel = resolved_level
-                    try:
-                        cur.execute("SELECT 1 FROM students WHERE admission_no=?", (adm,))
-                        exists = cur.fetchone()
-                        cur.execute("""
-                            INSERT INTO students (admission_no, exam_no, full_name, gender, class, stream, level)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(admission_no) DO UPDATE SET
-                                exam_no=excluded.exam_no,
-                                full_name=excluded.full_name,
-                                gender=excluded.gender,
-                                class=excluded.class,
-                                stream=excluded.stream,
-                                level=excluded.level
-                        """, (adm, exam_no, name, gender, cls, stream, level_excel))
-                        if exists:
-                            updated += 1
-                        else:
-                            imported += 1
-                    except Exception as e:
-                        print(f"[ERROR] Failed to import student '{adm}': {e}")
-                        rejected += 1
-                        continue
+
+                    current_level = SystemState.get_level()
+                    if level_excel and level_excel in (resolved_level, current_level):
+                        final_level = level_excel
+                    else:
+                        final_level = resolved_level
+                        if level_excel and level_excel != final_level:
+                            redirected += 1
+
+                    cur.execute("SELECT 1 FROM students WHERE admission_no=?", (adm,))
+                    exists = cur.fetchone()
+                    cur.execute("""
+                        INSERT INTO students (admission_no, exam_no, full_name, gender, class, stream, level)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(admission_no) DO UPDATE SET
+                            exam_no=excluded.exam_no,
+                            full_name=excluded.full_name,
+                            gender=excluded.gender,
+                            class=excluded.class,
+                            stream=excluded.stream,
+                            level=excluded.level
+                    """, (adm, exam_no, name, gender, cls, stream, final_level))
+                    if exists:
+                        updated += 1
+                    else:
+                        imported += 1
             EventBus.emit("STUDENTS_UPDATED", visible_only=True)
             QMessageBox.information(self, "Import Complete",
                                   f"Operation Summary:\n- New Students Imported: {imported}\n- Existing Records Updated: {updated}\n- Rows Redirected to Actual Level: {redirected}\n- Records Rejected (Invalid Data): {rejected}")
