@@ -252,10 +252,16 @@ def to_excel(parent, data):
                 ws.cell(row=r_idx, column=c_idx).border = thin_border
 
         # Auto‑fit columns (cap at 30)
-        for col in ws.columns:
+        from openpyxl.utils import get_column_letter
+        from openpyxl.cell.cell import MergedCell
+
+        for col_idx in range(1, ws.max_column + 1):
+            column_letter = get_column_letter(col_idx)
             max_length = 0
-            column_letter = col[0].column_letter
-            for cell in col:
+            for row_idx in range(1, ws.max_row + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                if isinstance(cell, MergedCell):
+                    continue
                 try:
                     if cell.value is not None:
                         max_length = max(max_length, len(str(cell.value)))
@@ -342,17 +348,95 @@ def to_excel(parent, data):
         ws.append([])
 
         # ----- Signatures -----
-        ws.append([])
-        ws.append(["Academic Master / Mistress Signature: ......................................."])
-        ws.append(["Headmaster / Headmistress Signature: ........................................"])
-        ws.append(["School Stamp:"])
+        # NOTE: ws.append([]) does not advance ws.max_row in openpyxl (a blank
+        # row has no cells, so it isn't counted until something is written
+        # after it) - so row numbers below are computed directly from
+        # ws.max_row plus an explicit gap, instead of via repeated appends.
 
-        # Style data cells
-        for row in ws.iter_rows(min_row=header_row + 1):
+        # Split the sheet width into 4 blocks: Class Teacher, Academic Master/
+        # Mistress, Headmaster/Headmistress, Official Stamp - mirroring the PDF layout.
+        quarter = max(1, last_col // 4)
+        sig_blocks = [
+            ("CLASS TEACHER", 1, quarter),
+            ("ACADEMIC MASTER / MISTRESS", quarter + 1, quarter * 2),
+            ("HEADMASTER / HEADMISTRESS", quarter * 2 + 1, quarter * 3),
+            ("OFFICIAL STAMP", quarter * 3 + 1, last_col),
+        ]
+
+        thin_side = Side(style='thin')
+        bottom_line = Border(bottom=Side(style='thin', color=palette['accent_dark']))
+        box_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+        header_r = ws.max_row + 3  # leaves 2 blank rows of spacing above, like the rest of the sheet
+        line_r = header_r + 2
+        label_r = line_r + 1
+        date_line_r = label_r + 1
+        date_label_r = date_line_r + 1
+
+        for label, c_start, c_end in sig_blocks:
+            # Block heading
+            ws.merge_cells(start_row=header_r, start_column=c_start, end_row=header_r, end_column=c_end)
+            head_cell = ws.cell(row=header_r, column=c_start)
+            head_cell.value = label
+            head_cell.font = Font(bold=True, size=10, color=palette['accent_dark'])
+            head_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+            if label == "OFFICIAL STAMP":
+                # Bordered box standing in for a physical stamp, spanning the
+                # same vertical space as the other blocks' signature + date rows.
+                ws.merge_cells(start_row=line_r, start_column=c_start, end_row=date_label_r, end_column=c_end)
+                for r in range(line_r, date_label_r + 1):
+                    for c in range(c_start, c_end + 1):
+                        ws.cell(row=r, column=c).border = box_border
+            else:
+                # Ruled line for the signature itself
+                ws.merge_cells(start_row=line_r, start_column=c_start, end_row=line_r, end_column=c_end)
+                ws.row_dimensions[line_r].height = 24
+                for c in range(c_start, c_end + 1):
+                    ws.cell(row=line_r, column=c).border = bottom_line
+
+                ws.merge_cells(start_row=label_r, start_column=c_start, end_row=label_r, end_column=c_end)
+                lbl_cell = ws.cell(row=label_r, column=c_start)
+                lbl_cell.value = "Signature"
+                lbl_cell.font = Font(italic=True, size=9, color="6B7280")
+                lbl_cell.alignment = Alignment(horizontal="center")
+
+                # Ruled line for the date
+                ws.merge_cells(start_row=date_line_r, start_column=c_start, end_row=date_line_r, end_column=c_end)
+                ws.row_dimensions[date_line_r].height = 24
+                for c in range(c_start, c_end + 1):
+                    ws.cell(row=date_line_r, column=c).border = bottom_line
+
+                ws.merge_cells(start_row=date_label_r, start_column=c_start, end_row=date_label_r, end_column=c_end)
+                dlbl_cell = ws.cell(row=date_label_r, column=c_start)
+                dlbl_cell.value = "Date"
+                dlbl_cell.font = Font(italic=True, size=9, color="6B7280")
+                dlbl_cell.alignment = Alignment(horizontal="center")
+
+        ws.row_dimensions[header_r].height = 30
+
+        # Style data cells (leave the signature block's own alignment/borders intact)
+        for row in ws.iter_rows(min_row=header_row + 1, max_row=header_r - 1):
             for cell in row:
                 cell.alignment = Alignment(horizontal="center")
 
         ws.freeze_panes = f"E{header_row + 1}"
+
+        # ----- Print / page setup -----
+        # The sheet is wide (many subject columns), so without this it splits
+        # across several print pages, the banner text gets clipped at the
+        # page-1 margin, and the column headers don't repeat on later pages.
+        ws.page_setup.orientation = 'landscape'
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0  # allow as many pages tall as needed
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.print_title_rows = f'{header_row}:{header_row}'
+        ws.print_area = f'A1:{get_column_letter(ws.max_column)}{ws.max_row}'
+        ws.page_margins.left = 0.3
+        ws.page_margins.right = 0.3
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.4
 
         _set_progress(progress, 90, "Saving Excel file")
         wb.save(path)
