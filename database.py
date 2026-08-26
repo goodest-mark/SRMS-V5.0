@@ -35,7 +35,6 @@ def connect(db_path=None):
         path = DB_NAME
     conn = sqlite3.connect(path)
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute("PRAGMA busy_timeout = 5000")
     return conn
@@ -48,6 +47,7 @@ def init_db(db_path=None):
     conn = connect()
     cur = conn.cursor()
     try:
+        conn.execute("PRAGMA journal_mode = WAL")
         _init_db_inner(conn, cur)
     except Exception as e:
         conn.rollback()
@@ -260,6 +260,7 @@ def _init_db_inner(conn, cur):
         marks INTEGER,
         exam_id INTEGER,
         class_name TEXT,
+        stream TEXT,
         UNIQUE(admission_no, subject_name, exam_id),
         FOREIGN KEY (admission_no) REFERENCES students(admission_no) ON DELETE CASCADE,
         FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
@@ -494,6 +495,21 @@ def _init_db_inner(conn, cur):
                 WHERE s.admission_no = results.admission_no
             )
             WHERE class_name IS NULL OR class_name = ''
+        """)
+    if "stream" not in result_columns:
+        print("[MIGRATION] Adding stream to results...")
+        cur.execute("ALTER TABLE results ADD COLUMN stream TEXT")
+        # Preserve the best information available for legacy rows.  New rows
+        # snapshot the stream at entry time, so future student moves do not
+        # rewrite historical result context.
+        cur.execute("""
+            UPDATE results
+            SET stream = (
+                SELECT s.stream
+                FROM students s
+                WHERE s.admission_no = results.admission_no
+            )
+            WHERE stream IS NULL OR stream = ''
         """)
 
     cur.execute("PRAGMA table_info(enrollments)")

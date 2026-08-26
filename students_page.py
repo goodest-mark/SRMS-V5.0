@@ -1,10 +1,12 @@
-from PySide6.QtCore import QUrl, Qt
-from PySide6.QtGui import QDesktopServices
+# students_page.py — final polished version
+from PySide6.QtCore import QTimer, QUrl, Qt
+from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QCheckBox,
     QFileDialog,
+    QGridLayout,
     QGroupBox,
     QHeaderView,
     QHBoxLayout,
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QSizePolicy,
     QStackedWidget,
+    QApplication,
 )
 
 import sqlite3
@@ -44,6 +47,14 @@ class StudentsPage(QWidget):
         self.selected_id = None
         self.selected_admission_no = None
         self.reports_selected_admission = None
+        self._search_timer = QTimer()
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(300)
+        self._search_timer.timeout.connect(self._do_search)
+
+        # --- Load More state ---
+        self._offset = 0
+        self._batch_size = 100
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -52,23 +63,24 @@ class StudentsPage(QWidget):
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         root.addWidget(self.scroll_area)
 
         self.content_widget = QWidget()
         self.scroll_area.setWidget(self.content_widget)
 
         main_layout = QVBoxLayout(self.content_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(16, 12, 16, 12)
+        main_layout.setSpacing(8)
 
         # =====================================================
         # TOP NAVIGATION BUTTONS
         # =====================================================
         nav_layout = QHBoxLayout()
-        nav_layout.setContentsMargins(0, 0, 0, 12)
+        nav_layout.setContentsMargins(0, 0, 0, 6)
 
         nav_container = QFrame()
-        nav_container.setObjectName("studentsNavContainer")
+        nav_container.setObjectName("NavContainer")
         nav_container_layout = QHBoxLayout(nav_container)
         nav_container_layout.setContentsMargins(4, 4, 4, 4)
         nav_container_layout.setSpacing(4)
@@ -88,33 +100,6 @@ class StudentsPage(QWidget):
         self.btn_students.setProperty("variant", "accent")
         self.btn_registration.setProperty("variant", "default")
         self.btn_reports.setProperty("variant", "default")
-
-        nav_container.setStyleSheet("""
-            QFrame#studentsNavContainer {
-                background-color: #EEF1F6;
-                border-radius: 12px;
-            }
-            QFrame#studentsNavContainer QPushButton#navButton {
-                background-color: transparent;
-                border: none;
-                border-radius: 9px;
-                padding: 8px 18px;
-                font-weight: 600;
-                font-size: 12px;
-                color: #5B6472;
-            }
-            QFrame#studentsNavContainer QPushButton#navButton:hover {
-                background-color: #E0E4EC;
-                color: #1E293B;
-            }
-            QFrame#studentsNavContainer QPushButton#navButton[variant="accent"] {
-                background-color: #1E3A8A;
-                color: #FFFFFF;
-            }
-            QFrame#studentsNavContainer QPushButton#navButton[variant="accent"]:hover {
-                background-color: #1E3A8A;
-            }
-        """)
 
         self.btn_students.clicked.connect(lambda: self.switch_page(0))
         self.btn_registration.clicked.connect(lambda: self.switch_page(1))
@@ -139,7 +124,7 @@ class StudentsPage(QWidget):
         list_top = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search student...")
-        self.search.textChanged.connect(self.load_list)
+        self.search.textChanged.connect(self._on_search_changed)
         list_top.addWidget(self.search)
 
         self.delete_selected_btn = QPushButton("Delete Selected")
@@ -171,8 +156,8 @@ class StudentsPage(QWidget):
         list_layout.addLayout(filters)
 
         self.class_filter.currentIndexChanged.connect(self._on_class_filter_changed)
-        self.stream_filter.currentIndexChanged.connect(self.load_list)
-        self.gender_filter.currentIndexChanged.connect(self.load_list)
+        self.stream_filter.currentIndexChanged.connect(self._on_stream_filter_changed)
+        self.gender_filter.currentIndexChanged.connect(self._on_gender_filter_changed)
         self.show_graduated.toggled.connect(self._on_show_graduated_toggled)
 
         self.table = QTableWidget()
@@ -203,68 +188,181 @@ class StudentsPage(QWidget):
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         list_layout.addWidget(self.table)
+
+        # --- Load More button ---
+        self.load_more_btn = QPushButton("Load More")
+        self.load_more_btn.setVisible(False)
+        self.load_more_btn.clicked.connect(self.load_more)
+        list_layout.addWidget(self.load_more_btn, alignment=Qt.AlignCenter)
+
         self.stacked_widget.addWidget(self.list_page)
 
         # ---- Page 1: Registration ----
         self.register_page = QWidget()
-        register_layout = QVBoxLayout(self.register_page)
+        self.register_page.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.register_page.setMinimumSize(0, 0)
+        register_layout = QHBoxLayout(self.register_page)
         register_layout.setContentsMargins(0, 0, 0, 0)
-        register_layout.setSpacing(12)
+        register_layout.setSpacing(10)
 
-        form_layout = QHBoxLayout()
+        # ===== Card 1: Single Registration =====
+        single_card = QGroupBox("Single Registration")
+        single_card.setObjectName("registrationCard")
+        single_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        single_card.setMinimumHeight(480)
+        single_card.setMaximumHeight(585)
+        single_card_layout = QVBoxLayout(single_card)
+        single_card_layout.setContentsMargins(22, 28, 22, 22)
+        single_card_layout.setSpacing(14)
+
+        single_form = QGridLayout()
+        single_form.setHorizontalSpacing(32)
+        single_form.setVerticalSpacing(18)
+        single_form.setContentsMargins(0, 0, 0, 0)
+        single_form.setColumnStretch(0, 1)
+        single_form.setColumnStretch(1, 1)
+
         self.adm = QLineEdit()
         self.adm.setPlaceholderText("Admission No *")
+        self.adm.setMinimumHeight(50)
+        self.adm.setMaximumHeight(52)
+
         self.exam_no = QLineEdit()
         self.exam_no.setPlaceholderText("Exam No (Optional)")
+        self.exam_no.setMinimumHeight(50)
+        self.exam_no.setMaximumHeight(52)
+
         self.name = QLineEdit()
         self.name.setPlaceholderText("Full Name *")
+        self.name.setMinimumHeight(50)
+        self.name.setMaximumHeight(52)
+
         self.gender = QComboBox()
         self.gender.addItems(["Male", "Female"])
+        self.gender.setMinimumHeight(50)
+        self.gender.setMaximumHeight(52)
+
         self.class_box = QComboBox()
-        self.class_box.setPlaceholderText("Select Class *")
-        self.stream = QLineEdit()
-        self.stream.setPlaceholderText("Stream (Optional)")
+        self.class_box.setMinimumHeight(50)
+        self.class_box.setMaximumHeight(52)
 
-        form_layout.addWidget(self.adm)
-        form_layout.addWidget(self.exam_no)
-        form_layout.addWidget(self.name)
-        form_layout.addWidget(self.gender)
-        form_layout.addWidget(self.class_box)
-        form_layout.addWidget(self.stream)
-        register_layout.addLayout(form_layout)
+        self.stream_box = QLineEdit()
+        self.stream_box.setPlaceholderText("Stream (Optional)")
+        self.stream_box.setMinimumHeight(50)
+        self.stream_box.setMaximumHeight(52)
 
-        self.comment = QTextEdit()
-        self.comment.setPlaceholderText("Comments / Remarks")
-        self.comment.setFixedHeight(70)
-        register_layout.addWidget(self.comment)
+        def field_label(text):
+            lbl = QLabel(text)
+            lbl.setObjectName("FieldLabel")
+            lbl.setProperty("variant", "muted")
+            f = lbl.font()
+            f.setPointSizeF(9.5)
+            f.setWeight(QFont.Weight.DemiBold)
+            lbl.setFont(f)
+            return lbl
 
-        action_layout = QHBoxLayout()
+        def field_block(label_text, widget):
+            block = QVBoxLayout()
+            block.setContentsMargins(0, 0, 0, 0)
+            block.setSpacing(4)
+            block.addWidget(field_label(label_text))
+            block.addWidget(widget)
+            return block
+
+        single_form.addLayout(field_block("Admission No *", self.adm), 0, 0)
+        single_form.addLayout(field_block("Exam No", self.exam_no), 0, 1)
+        single_form.addLayout(field_block("Full Name *", self.name), 1, 0)
+        single_form.addLayout(field_block("Gender", self.gender), 1, 1)
+        single_form.addLayout(field_block("Class *", self.class_box), 2, 0)
+        single_form.addLayout(field_block("Stream", self.stream_box), 2, 1)
+
+        single_card_layout.addLayout(single_form)
+
+        single_actions = QHBoxLayout()
+        single_actions.setSpacing(14)
         self.save_btn = QPushButton("Save Student")
         self.save_btn.setObjectName("workflowPrimary")
+        self.save_btn.setMinimumHeight(52)
+        self.save_btn.setMaximumHeight(52)
         self.save_btn.clicked.connect(self.save_student)
+
         self.delete_btn = QPushButton("Delete Student")
         self.delete_btn.setObjectName("workflowDanger")
+        self.delete_btn.setMinimumHeight(52)
+        self.delete_btn.setMaximumHeight(52)
         self.delete_btn.clicked.connect(self.delete_student)
         self.delete_btn.setEnabled(False)
-        self.import_btn = QPushButton("Import Excel")
-        self.import_btn.setObjectName("workflowSecondary")
-        self.import_btn.clicked.connect(self.import_excel)
-        self.export_btn = QPushButton("Export Excel")
-        self.export_btn.setObjectName("workflowSecondary")
-        self.export_btn.clicked.connect(self.export_excel)
+
+        single_actions.addStretch(1)
+        single_actions.addWidget(self.delete_btn)
+        single_actions.addWidget(self.save_btn)
+        single_card_layout.addStretch(1)
+        single_card_layout.addLayout(single_actions)
+
+        # ===== Card 2: Bulk Registration =====
+        bulk_card = QGroupBox("Bulk Registration")
+        bulk_card.setObjectName("registrationCard")
+        bulk_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        bulk_card.setMinimumHeight(480)
+        bulk_card.setMaximumHeight(585)
+        bulk_card_layout = QVBoxLayout(bulk_card)
+        bulk_card_layout.setContentsMargins(22, 28, 22, 22)
+        bulk_card_layout.setSpacing(14)
+
+        bulk_explainer = QLabel(
+            "Register many students at once using an Excel file. Download the template, fill it in, then import it back."
+        )
+        bulk_explainer.setWordWrap(True)
+        bulk_explainer.setObjectName("ExplainerText")
+        bulk_explainer.setProperty("variant", "muted")
+        bulk_explainer.setMinimumHeight(52)
+        explainer_font = bulk_explainer.font()
+        explainer_font.setPointSizeF(11.0)
+        bulk_explainer.setFont(explainer_font)
+        bulk_card_layout.addWidget(bulk_explainer)
+
         self.template_btn = QPushButton("Download Template")
-        self.template_btn.setObjectName("workflowSecondary")
+        self.template_btn.setObjectName("registrationBulkAction")
+        self.template_btn.setMinimumHeight(78)
         self.template_btn.clicked.connect(self.download_template)
 
-        action_layout.addWidget(self.template_btn)
-        action_layout.addWidget(self.import_btn)
-        action_layout.addWidget(self.export_btn)
-        action_layout.addWidget(self.save_btn)
-        action_layout.addWidget(self.delete_btn)
-        action_layout.addStretch()
-        register_layout.addLayout(action_layout)
+        self.import_btn = QPushButton("Import Excel")
+        self.import_btn.setObjectName("registrationBulkAction")
+        self.import_btn.setMinimumHeight(78)
+        self.import_btn.clicked.connect(self.import_excel)
+
+        self.export_btn = QPushButton("Export Excel")
+        self.export_btn.setObjectName("registrationBulkAction")
+        self.export_btn.setMinimumHeight(78)
+        self.export_btn.clicked.connect(self.export_excel)
+
+        bulk_card_layout.addWidget(self.template_btn)
+        bulk_card_layout.addWidget(self.import_btn)
+        bulk_card_layout.addWidget(self.export_btn)
+        bulk_card_layout.addStretch(1)
+
+        register_layout.addWidget(single_card, 5, Qt.AlignTop)
+        register_layout.addWidget(bulk_card, 3, Qt.AlignTop)
 
         self.stacked_widget.addWidget(self.register_page)
+
+        # Registration-page readability
+        card_font = single_card.font()
+        card_font.setPointSizeF(12.5)
+        card_font.setWeight(QFont.Weight.DemiBold)
+        single_card.setFont(card_font)
+        bulk_card.setFont(card_font)
+
+        for field in (self.adm, self.exam_no, self.name, self.gender, self.class_box, self.stream_box):
+            f = field.font()
+            f.setPointSizeF(11.0)
+            field.setFont(f)
+
+        for button in (self.save_btn, self.delete_btn, self.template_btn, self.import_btn, self.export_btn):
+            f = button.font()
+            f.setPointSizeF(11.0)
+            f.setWeight(QFont.Weight.DemiBold)
+            button.setFont(f)
 
         # ---- Page 2: Reports ----
         self.reports_page = QWidget()
@@ -272,10 +370,9 @@ class StudentsPage(QWidget):
         reports_page_layout.setContentsMargins(0, 0, 0, 0)
         reports_page_layout.setSpacing(16)
 
-        # Search
         search_label = QLabel("Find a Student")
+        search_label.setObjectName("SectionTitle")
         search_label.setProperty("variant", "accent")
-        search_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         reports_page_layout.addWidget(search_label)
 
         self.reports_search = QLineEdit()
@@ -283,10 +380,9 @@ class StudentsPage(QWidget):
         self.reports_search.textChanged.connect(self.load_reports_search)
         reports_page_layout.addWidget(self.reports_search)
 
-        # Student selection table
         student_list_label = QLabel("Select a Student")
+        student_list_label.setObjectName("SectionTitle")
         student_list_label.setProperty("variant", "accent")
-        student_list_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         reports_page_layout.addWidget(student_list_label)
 
         self.reports_student_table = QTableWidget()
@@ -307,10 +403,9 @@ class StudentsPage(QWidget):
         self.reports_student_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         reports_page_layout.addWidget(self.reports_student_table)
 
-        # Reports list
         reports_list_label = QLabel("Available Exam Reports")
+        reports_list_label.setObjectName("SectionTitle")
         reports_list_label.setProperty("variant", "accent")
-        reports_list_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         reports_page_layout.addWidget(reports_list_label)
 
         self.reports_table_page = QTableWidget()
@@ -334,7 +429,6 @@ class StudentsPage(QWidget):
         self.reports_table_page.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         reports_page_layout.addWidget(self.reports_table_page)
 
-        # Action buttons
         reports_actions = QHBoxLayout()
         self.view_report_page_btn = QPushButton("View Report")
         self.view_report_page_btn.setObjectName("workflowPrimary")
@@ -355,21 +449,11 @@ class StudentsPage(QWidget):
         reports_actions.addWidget(self.preview_marks_btn)
         reports_page_layout.addLayout(reports_actions)
 
-        # Preview frame (hidden by default)
         self.preview_frame = QFrame()
         self.preview_frame.setObjectName("PreviewCard")
-        self.preview_frame.setStyleSheet("""
-            QFrame#PreviewCard {
-                background: rgba(0,0,0,0.03);
-                border: 1px solid rgba(148,163,184,0.2);
-                border-radius: 10px;
-                padding: 10px;
-            }
-        """)
         self.preview_layout = QVBoxLayout(self.preview_frame)
         self.preview_layout.setContentsMargins(12, 12, 12, 12)
         self.preview_layout.setSpacing(10)
-
         self.preview_frame.setVisible(False)
         reports_page_layout.addWidget(self.preview_frame)
 
@@ -382,6 +466,7 @@ class StudentsPage(QWidget):
         # =====================================================
         # INITIALISE
         # =====================================================
+        self._ensure_indexes()
         self.refresh_classes()
         self.refresh_list_filters()
         self.load_list()
@@ -391,11 +476,41 @@ class StudentsPage(QWidget):
         EventBus.subscribe("LEVEL_CHANGED", self.on_level_changed)
 
     # =====================================================
+    # INDEX CREATION (run once)
+    # =====================================================
+    def _ensure_indexes(self):
+        """Create indexes for faster queries if they don't exist."""
+        try:
+            with get_cursor(commit=True) as cur:
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_students_level_class 
+                    ON students(level, class)
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_students_admission 
+                    ON students(admission_no)
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_students_full_name 
+                    ON students(full_name)
+                """)
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_students_level_class_stream 
+                    ON students(level, class, stream)
+                """)
+        except Exception as e:
+            print(f"[WARNING] Could not create indexes: {e}")
+
+    # =====================================================
     # PAGE SWITCHING
     # =====================================================
 
     def switch_page(self, index):
         self.stacked_widget.setCurrentIndex(index)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.verticalScrollBar().setValue(0)
+        QTimer.singleShot(0, lambda: self.scroll_area.verticalScrollBar().setValue(0))
         for btn in (self.btn_students, self.btn_registration, self.btn_reports):
             btn.setProperty("variant", "default")
             btn.setChecked(False)
@@ -423,12 +538,15 @@ class StudentsPage(QWidget):
         self.clear_form()
         self.refresh_classes()
         self.refresh_list_filters()
-        self.load_list()
+        self.load_list()   # resets offset automatically
 
     def on_students_updated(self):
         self.refresh_list_filters()
-        self.load_list()
         self.load_reports_search()
+        if self.isVisible() and self.stacked_widget.currentIndex() == 0:
+            self.load_list()
+        else:
+            self._needs_refresh = True
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -437,7 +555,15 @@ class StudentsPage(QWidget):
             self.on_level_changed()
 
     # =====================================================
-    # PAGE 0: STUDENTS (LIST)
+    # LOAD MORE HELPERS
+    # =====================================================
+    def load_more(self):
+        """Fetch and append the next batch of students."""
+        self._offset += self._batch_size
+        self.load_list(append=True)
+
+    # =====================================================
+    # PAGE 0: STUDENTS (LIST) – with Load More
     # =====================================================
 
     def refresh_classes(self):
@@ -452,7 +578,6 @@ class StudentsPage(QWidget):
             self.class_box.setCurrentIndex(0)
 
     def refresh_list_filters(self):
-        """Populate filters from the active level without mixing level data."""
         selected_class = self.class_filter.currentText()
         self.class_filter.blockSignals(True)
         self.class_filter.clear()
@@ -494,55 +619,104 @@ class StudentsPage(QWidget):
 
     def _on_class_filter_changed(self):
         self.refresh_stream_filter()
-        self.load_list()
+        self.load_list()   # resets offset
+
+    def _on_stream_filter_changed(self):
+        self.load_list()   # resets offset
+
+    def _on_gender_filter_changed(self):
+        self.load_list()   # resets offset
 
     def _on_show_graduated_toggled(self):
         self.refresh_list_filters()
-        self.load_list()
+        self.load_list()   # resets offset
 
-    def load_list(self):
-        level = SystemState.get_level()
-        search_text = self.search.text().strip()
-        conditions = ["level=?"]
-        params = [level]
+    def _on_search_changed(self):
+        self._search_timer.stop()
+        self._search_timer.start()
 
-        if not self.show_graduated.isChecked():
-            conditions.append("class<>?")
-            params.append(GRADUATED_CLASS)
-        class_name = self.class_filter.currentText()
-        if class_name and class_name != "All Classes":
-            conditions.append("class=?")
-            params.append(class_name)
-        stream = self.stream_filter.currentText()
-        if stream and stream != "All Streams":
-            conditions.append("TRIM(COALESCE(stream, ''))=?")
-            params.append(stream)
-        gender = self.gender_filter.currentText()
-        if gender and gender != "All Genders":
-            conditions.append("gender=?")
-            params.append(gender)
-        if search_text:
-            pattern = f"%{search_text}%"
-            conditions.append("""(
-                admission_no LIKE ? OR COALESCE(exam_no, '') LIKE ?
-                OR full_name LIKE ? OR class LIKE ? OR COALESCE(stream, '') LIKE ?
-            )""")
-            params.extend([pattern] * 5)
+    def _do_search(self):
+        self.load_list()   # resets offset
 
-        rows = fetch_all(f"""
-            SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
-            FROM students
-            WHERE {' AND '.join(conditions)}
-            ORDER BY id DESC
-        """, tuple(params))
-        self.table.setRowCount(len(rows))
-        for row_index, row in enumerate(rows):
-            for column, value in enumerate(row):
-                text = "" if value is None else str(value)
-                item = QTableWidgetItem(text)
-                item.setToolTip(text)
-                self.table.setItem(row_index, column, item)
-        self.update_delete_selected_button()
+    def load_list(self, append=False):
+        """Load students with current filters. If append=True, add rows to existing table."""
+        # Reset offset and hide button for fresh loads
+        if not append:
+            self._offset = 0
+            self.load_more_btn.setVisible(False)
+
+        # Set wait cursor
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            level = SystemState.get_level()
+            search_text = self.search.text().strip()
+            class_filter = self.class_filter.currentText()
+            stream_filter = self.stream_filter.currentText()
+            gender_filter = self.gender_filter.currentText()
+            show_graduated = self.show_graduated.isChecked()
+
+            # Build dynamic WHERE clause with TRIM and COLLATE NOCASE
+            conditions = ["level = ?"]
+            params = [level]
+
+            if not show_graduated:
+                conditions.append("class <> ?")
+                params.append(GRADUATED_CLASS)
+
+            if class_filter and class_filter != "All Classes":
+                conditions.append("TRIM(class) = ? COLLATE NOCASE")
+                params.append(class_filter.strip())
+
+            if stream_filter and stream_filter != "All Streams":
+                conditions.append("TRIM(stream) = ? COLLATE NOCASE")
+                params.append(stream_filter.strip())
+
+            if gender_filter and gender_filter != "All Genders":
+                conditions.append("TRIM(gender) = ? COLLATE NOCASE")
+                params.append(gender_filter.strip())
+
+            if search_text:
+                pattern = f"%{search_text}%"
+                conditions.append(
+                    "(admission_no LIKE ? OR COALESCE(exam_no, '') LIKE ? "
+                    "OR full_name LIKE ? OR class LIKE ? OR COALESCE(stream, '') LIKE ?)"
+                )
+                params.extend([pattern] * 5)
+
+            where_clause = " AND ".join(conditions)
+            query = f"""
+                SELECT id, admission_no, exam_no, full_name, gender, class, stream, level
+                FROM students
+                WHERE {where_clause}
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+            """
+            params.extend([self._batch_size, self._offset])
+
+            rows = fetch_all(query, tuple(params))
+
+            self.table.setUpdatesEnabled(False)
+            if not append:
+                self.table.setRowCount(0)   # clear existing rows
+            start_row = self.table.rowCount()
+            self.table.setRowCount(start_row + len(rows))
+            for row_index, row in enumerate(rows):
+                for column, value in enumerate(row[:8]):
+                    text = "" if value is None else str(value)
+                    item = QTableWidgetItem(text)
+                    item.setToolTip(text)
+                    self.table.setItem(start_row + row_index, column, item)
+            self.table.setUpdatesEnabled(True)
+
+            # Refresh UI: scroll to top and clear selection
+            self.table.scrollToTop()
+            self.table.clearSelection()
+
+            # Show "Load More" only if we got a full batch (means there may be more)
+            self.load_more_btn.setVisible(len(rows) == self._batch_size)
+            self.update_delete_selected_button()
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def on_student_double_clicked(self):
         row = self.table.currentRow()
@@ -564,19 +738,15 @@ class StudentsPage(QWidget):
         if class_index >= 0:
             self.class_box.setCurrentIndex(class_index)
 
-        self.stream.setText(self.table.item(row, 6).text())
-
-        with get_cursor() as cur:
-            cur.execute("SELECT comments FROM students WHERE id=?", (self.selected_id,))
-            comments_row = cur.fetchone()
-            self.comment.setText(comments_row[0] if comments_row and comments_row[0] else "")
+        stream = self.table.item(row, 6).text() if self.table.item(row, 6) else ""
+        self.stream_box.setText(stream)
 
         self.save_btn.setText("Update Student")
         self.delete_btn.setEnabled(True)
         self.switch_page(1)
 
     # =====================================================
-    # PAGE 1: REGISTRATION
+    # PAGE 1: REGISTRATION – DIRECT TABLE UPDATES
     # =====================================================
 
     def save_student(self):
@@ -585,43 +755,66 @@ class StudentsPage(QWidget):
         full_name = self.name.text().strip()
         gender = self.gender.currentText().strip()
         class_name = self.class_box.currentText().strip()
-        stream = self.stream.text().strip()
+        stream = self.stream_box.text().strip()
         level = SystemState.get_level()
 
         if not admission_no or not full_name or not class_name or class_name == "-- Select Class --":
             QMessageBox.warning(self, "Required Fields", "Admission number, full name and class are required.")
             return
 
-        comment = self.comment.toPlainText().strip()
         try:
             with get_cursor(commit=True) as cur:
                 if self.selected_id is None:
                     cur.execute("""
-                        INSERT INTO students (admission_no, exam_no, full_name, gender, class, stream, level, comments)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (admission_no, exam_no, full_name, gender, class_name, stream, level, comment))
+                        INSERT INTO students (admission_no, exam_no, full_name, gender, class, stream, level)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (admission_no, exam_no, full_name, gender, class_name, stream, level))
+                    self.selected_id = cur.lastrowid
+                    self.table.insertRow(0)
+                    self.table.setItem(0, 0, QTableWidgetItem(str(self.selected_id)))
+                    self.table.setItem(0, 1, QTableWidgetItem(admission_no))
+                    self.table.setItem(0, 2, QTableWidgetItem(exam_no))
+                    self.table.setItem(0, 3, QTableWidgetItem(full_name))
+                    self.table.setItem(0, 4, QTableWidgetItem(gender))
+                    self.table.setItem(0, 5, QTableWidgetItem(class_name))
+                    self.table.setItem(0, 6, QTableWidgetItem(stream))
+                    self.table.setItem(0, 7, QTableWidgetItem(level))
+                    if self.table.rowCount() > self._batch_size:
+                        self.table.removeRow(self.table.rowCount() - 1)
                 else:
                     cur.execute("""
                         UPDATE students
-                        SET admission_no=?, exam_no=?, full_name=?, gender=?, class=?, stream=?, level=?, comments=?
+                        SET admission_no=?, exam_no=?, full_name=?, gender=?, class=?, stream=?, level=?
                         WHERE id=?
-                    """, (admission_no, exam_no, full_name, gender, class_name, stream, level, comment, self.selected_id))
+                    """, (admission_no, exam_no, full_name, gender, class_name, stream, level, self.selected_id))
+                    for row in range(self.table.rowCount()):
+                        id_item = self.table.item(row, 0)
+                        if id_item and int(id_item.text()) == self.selected_id:
+                            self.table.setItem(row, 1, QTableWidgetItem(admission_no))
+                            self.table.setItem(row, 2, QTableWidgetItem(exam_no))
+                            self.table.setItem(row, 3, QTableWidgetItem(full_name))
+                            self.table.setItem(row, 4, QTableWidgetItem(gender))
+                            self.table.setItem(row, 5, QTableWidgetItem(class_name))
+                            self.table.setItem(row, 6, QTableWidgetItem(stream))
+                            self.table.setItem(row, 7, QTableWidgetItem(level))
+                            break
         except sqlite3.IntegrityError:
             QMessageBox.warning(self, "Duplicate Admission Number", "That admission number is already registered.")
             return
         except Exception as e:
-            QMessageBox.critical(self, "Database Error", f"An unexpected error occurred while saving the student record: {e}")
+            QMessageBox.critical(self, "Database Error", f"An error occurred while saving: {e}")
             return
 
         self.clear_form()
-        EventBus.emit("STUDENTS_UPDATED")
+        EventBus.emit("STUDENTS_UPDATED", visible_only=True)
 
     def delete_student(self):
         if self.selected_id is None:
             QMessageBox.warning(self, "Delete Student", "Select a student before deleting.")
             return
         student_name = self.name.text().strip() or "this student"
-        answer = QMessageBox.question(self, "Delete Student", f"Are you sure you want to delete '{student_name}'?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        answer = QMessageBox.question(self, "Delete Student", f"Are you sure you want to delete '{student_name}'?",
+                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if answer != QMessageBox.Yes:
             return
         if not authorize_action(self, "Delete Student"):
@@ -630,10 +823,17 @@ class StudentsPage(QWidget):
             with get_cursor(commit=True) as cur:
                 cur.execute("DELETE FROM students WHERE id=?", (self.selected_id,))
         except Exception as e:
-            QMessageBox.critical(self, "Database Error", f"An unexpected error occurred while deleting the student record: {e}")
+            QMessageBox.critical(self, "Database Error", f"An error occurred while deleting: {e}")
             return
+
+        for row in range(self.table.rowCount()):
+            id_item = self.table.item(row, 0)
+            if id_item and int(id_item.text()) == self.selected_id:
+                self.table.removeRow(row)
+                break
+
         self.clear_form()
-        EventBus.emit("STUDENTS_UPDATED")
+        EventBus.emit("STUDENTS_UPDATED", visible_only=True)
 
     def update_delete_selected_button(self):
         count = len(self.table.selectionModel().selectedRows())
@@ -679,15 +879,16 @@ class StudentsPage(QWidget):
             with get_cursor(commit=True) as cur:
                 cur.executemany("DELETE FROM students WHERE id=?", [(sid,) for sid in ids])
         except Exception as e:
-            QMessageBox.critical(self, "Database Error", f"An unexpected error occurred while deleting student records: {e}")
+            QMessageBox.critical(self, "Database Error", f"An error occurred while deleting: {e}")
             return
+
+        for row in sorted(selected_rows, reverse=True):
+            self.table.removeRow(row)
 
         if self.selected_id in ids:
             self.clear_form()
-        # load_list()/load_reports_search() run via the STUDENTS_UPDATED
-        # subscription below (see on_students_updated) — calling them here
-        # too would refresh both twice for no benefit.
-        EventBus.emit("STUDENTS_UPDATED")
+
+        EventBus.emit("STUDENTS_UPDATED", visible_only=True)
         QMessageBox.information(self, "Delete Students", f"Deleted {count} student(s).")
 
     def clear_form(self):
@@ -696,8 +897,8 @@ class StudentsPage(QWidget):
         self.adm.clear()
         self.exam_no.clear()
         self.name.clear()
-        self.stream.clear()
-        self.comment.clear()
+        if hasattr(self, "stream_box"):
+            self.stream_box.clear()
         self.gender.setCurrentIndex(0)
         if self.class_box.count() > 0:
             self.class_box.setCurrentIndex(0)
@@ -706,43 +907,46 @@ class StudentsPage(QWidget):
         self.switch_page(0)
 
     # =====================================================
-    # PAGE 2: REPORTS
+    # PAGE 2: REPORTS (unchanged)
     # =====================================================
 
     def hide_preview(self):
-        """Hide the preview frame and clear its content."""
         self.preview_frame.setVisible(False)
         self.clear_preview_layout()
 
     def load_reports_search(self):
-        level = SystemState.get_level()
-        search_text = self.reports_search.text().strip()
-        if search_text:
-            pattern = f"%{search_text}%"
-            rows = fetch_all("""
-                SELECT id, admission_no, full_name, class
-                FROM students WHERE level=?
-                AND (admission_no LIKE ? OR full_name LIKE ? OR class LIKE ?)
-                ORDER BY full_name LIMIT 50
-            """, (level, pattern, pattern, pattern))
-        else:
-            rows = fetch_all("""
-                SELECT id, admission_no, full_name, class
-                FROM students WHERE level=? ORDER BY full_name LIMIT 50
-            """, (level,))
-        self.reports_student_table.setRowCount(len(rows))
-        for row_index, row in enumerate(rows):
-            for column, value in enumerate(row):
-                text = "" if value is None else str(value)
-                item = QTableWidgetItem(text)
-                item.setToolTip(text)
-                self.reports_student_table.setItem(row_index, column, item)
-        self.reports_table_page.setRowCount(0)
-        self.hide_preview()
-        self.reports_selected_admission = None
-        self.view_report_page_btn.setEnabled(False)
-        self.download_report_page_btn.setEnabled(False)
-        self.preview_marks_btn.setEnabled(False)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            level = SystemState.get_level()
+            search_text = self.reports_search.text().strip()
+            if search_text:
+                pattern = f"%{search_text}%"
+                rows = fetch_all("""
+                    SELECT id, admission_no, full_name, class
+                    FROM students WHERE level=?
+                    AND (admission_no LIKE ? OR full_name LIKE ? OR class LIKE ?)
+                    ORDER BY full_name LIMIT 50
+                """, (level, pattern, pattern, pattern))
+            else:
+                rows = fetch_all("""
+                    SELECT id, admission_no, full_name, class
+                    FROM students WHERE level=? ORDER BY full_name LIMIT 50
+                """, (level,))
+            self.reports_student_table.setRowCount(len(rows))
+            for row_index, row in enumerate(rows):
+                for column, value in enumerate(row):
+                    text = "" if value is None else str(value)
+                    item = QTableWidgetItem(text)
+                    item.setToolTip(text)
+                    self.reports_student_table.setItem(row_index, column, item)
+            self.reports_table_page.setRowCount(0)
+            self.hide_preview()
+            self.reports_selected_admission = None
+            self.view_report_page_btn.setEnabled(False)
+            self.download_report_page_btn.setEnabled(False)
+            self.preview_marks_btn.setEnabled(False)
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def on_reports_student_selected(self):
         row = self.reports_student_table.currentRow()
@@ -850,7 +1054,6 @@ class StudentsPage(QWidget):
 
         level = SystemState.get_level()
 
-        # ---- Student details ----
         student = fetch_one("""
             SELECT full_name, class, stream, gender, level
             FROM students WHERE admission_no=?
@@ -860,7 +1063,6 @@ class StudentsPage(QWidget):
         full_name, class_name, stream, gender, student_level = student
         gender_display = "M" if gender and gender.lower().startswith("m") else "F" if gender else "-"
 
-        # ---- Get the historical class for this exam (fix for dash issue) ----
         hist_class = fetch_one("""
             SELECT DISTINCT class_name
             FROM results
@@ -871,7 +1073,6 @@ class StudentsPage(QWidget):
         else:
             class_for_ranking = class_name
 
-        # ---- Exam details ----
         exam_info = fetch_one("""
             SELECT e.exam_name, t.term_name, y.year_name, e.status
             FROM exams e
@@ -883,7 +1084,6 @@ class StudentsPage(QWidget):
             return
         exam_name, term_name, year_name, status = exam_info
 
-        # ---- Ranking (using historical class) ----
         ranking = compute_student_scores(level, exam_id, class_for_ranking)
         student_rank = "-"
         student_division = "-"
@@ -895,7 +1095,6 @@ class StudentsPage(QWidget):
                 student_points = r.get('points', '-')
                 break
 
-        # ---- Subject results and average (computed directly) ----
         results = fetch_all("""
             SELECT r.subject_name, r.marks, s.subject_short_name
             FROM results r
@@ -911,7 +1110,6 @@ class StudentsPage(QWidget):
             subject_count += 1
         student_avg = round(total_marks / subject_count, 2) if subject_count > 0 else 0
 
-        # ---- Comments ----
         remarks = fetch_one("""
             SELECT teacher_remarks, headteacher_remarks, academic_master_remarks, discipline_master_remarks
             FROM exam_remarks
@@ -931,7 +1129,6 @@ class StudentsPage(QWidget):
         if discipline_rem is None:
             discipline_rem = get_discipline_master_remark(student_avg)
 
-        # ---- Requirements ----
         term_info = fetch_one("""
             SELECT t.id, t.academic_year_id
             FROM terms t
@@ -951,16 +1148,13 @@ class StudentsPage(QWidget):
                 ORDER BY item_name
             """, (year_id, term_id, level, class_for_ranking))
 
-        # ---- Build preview ----
         self.clear_preview_layout()
 
-        # Header
         header = QLabel("📄 REPORT CARD PREVIEW")
+        header.setObjectName("SectionTitle")
         header.setProperty("variant", "accent")
-        header.setStyleSheet("font-size: 16px; font-weight: bold;")
         self.preview_layout.addWidget(header)
 
-        # Student Profile
         profile_text = (
             f"<b>Student:</b> {full_name} &nbsp;|&nbsp; "
             f"<b>Admission:</b> {admission_no} &nbsp;|&nbsp; "
@@ -974,10 +1168,9 @@ class StudentsPage(QWidget):
         )
         profile_label = QLabel(profile_text)
         profile_label.setWordWrap(True)
-        profile_label.setStyleSheet("padding: 8px; background: rgba(0,0,0,0.04); border-radius: 6px; font-size: 12px;")
+        profile_label.setObjectName("ProfileSummary")
         self.preview_layout.addWidget(profile_label)
 
-        # Academic Summary
         summary_layout = QHBoxLayout()
         summary_layout.setSpacing(20)
         summary_layout.addWidget(QLabel(f"<b>Rank:</b> {student_rank}"))
@@ -987,9 +1180,8 @@ class StudentsPage(QWidget):
         summary_layout.addStretch()
         self.preview_layout.addLayout(summary_layout)
 
-        # Subject Performance
         subject_label = QLabel("Subject Performance")
-        subject_label.setStyleSheet("font-weight: bold; margin-top: 6px; font-size: 13px;")
+        subject_label.setObjectName("SubsectionTitle")
         self.preview_layout.addWidget(subject_label)
 
         preview_table = QTableWidget()
@@ -1011,7 +1203,6 @@ class StudentsPage(QWidget):
                 preview_table.setItem(i, 1, QTableWidgetItem(str(marks)))
                 preview_table.setItem(i, 2, QTableWidgetItem(grade))
 
-            # Total row
             preview_table.setRowCount(len(results) + 1)
             total_row = len(results)
             preview_table.setItem(total_row, 0, QTableWidgetItem("TOTAL"))
@@ -1036,10 +1227,9 @@ class StudentsPage(QWidget):
         )
         self.preview_layout.addWidget(preview_table)
 
-        # ---- Requirements (instead of signatures) ----
         if req_rows:
             req_label = QLabel("Requirements")
-            req_label.setStyleSheet("font-weight: bold; margin-top: 6px; font-size: 13px;")
+            req_label.setObjectName("SubsectionTitle")
             self.preview_layout.addWidget(req_label)
 
             req_table = QTableWidget()
@@ -1065,9 +1255,8 @@ class StudentsPage(QWidget):
             )
             self.preview_layout.addWidget(req_table)
 
-        # ---- Comments ----
         comments_label = QLabel("Comments")
-        comments_label.setStyleSheet("font-weight: bold; margin-top: 6px; font-size: 13px;")
+        comments_label.setObjectName("SubsectionTitle")
         self.preview_layout.addWidget(comments_label)
 
         comments_data = [
@@ -1098,12 +1287,9 @@ class StudentsPage(QWidget):
         )
         self.preview_layout.addWidget(comments_table)
 
-        # ---- No signatures section ----
-
         self.preview_frame.setVisible(True)
 
     def clear_preview_layout(self):
-        """Robustly remove all widgets from the preview layout."""
         while self.preview_layout.count():
             item = self.preview_layout.takeAt(0)
             if item.widget():
@@ -1111,16 +1297,13 @@ class StudentsPage(QWidget):
                 widget.setParent(None)
                 widget.deleteLater()
             elif item.layout():
-                # If it's a layout, clear it recursively
                 self._clear_layout(item.layout())
-        # Also remove any direct children of the preview frame (just in case)
         for child in self.preview_frame.children():
             if isinstance(child, QWidget):
                 child.setParent(None)
                 child.deleteLater()
 
     def _clear_layout(self, layout):
-        """Recursively clear a layout."""
         while layout.count():
             item = layout.takeAt(0)
             if item.widget():
@@ -1173,7 +1356,7 @@ class StudentsPage(QWidget):
             self,
             "students_template.xlsx",
             "STUDENT REGISTRATION FORM",
-            ["Admission No*", "Exam No", "Full Name*", "Gender*", "Class*", "Stream", "Level", "Comments"],
+            ["Admission No*", "Exam No", "Full Name*", "Gender*", "Class*", "Stream", "Level"],
             instructions=[
                 "1. Do not change the column headers in Row 10.",
                 "2. Start student data entry from Row 12.",
@@ -1181,14 +1364,14 @@ class StudentsPage(QWidget):
                 "4. Exam No is optional.",
                 f"5. Use the current level: {level}.",
             ],
-            samples=["2024/001", "EX/2024/001", "John Doe", "Male", "Form I", "A", SystemState.get_level(), "Good progress"]
+            samples=["2024/001", "EX/2024/001", "John Doe", "Male", "Form I", "A", SystemState.get_level()]
         )
 
     def export_excel(self):
         import excel_utils
         level = SystemState.get_level()
-        data = fetch_all("SELECT admission_no, exam_no, full_name, gender, class, stream, comments FROM students WHERE level=?", (level,))
-        excel_utils.export_to_excel(self, f"students_{level}.xlsx", ["Admission No", "Exam No", "Full Name", "Gender", "Class", "Stream", "Comments"], data)
+        data = fetch_all("SELECT admission_no, exam_no, full_name, gender, class, stream FROM students WHERE level=?", (level,))
+        excel_utils.export_to_excel(self, f"students_{level}.xlsx", ["Admission No", "Exam No", "Full Name", "Gender", "Class", "Stream"], data)
 
     def import_excel(self):
         import excel_utils
@@ -1219,59 +1402,48 @@ class StudentsPage(QWidget):
                         rejected += 1
                         continue
                     adm = str(row[0]).strip()
-                    if len(row) >= 8:
-                        exam_no = str(row[1] or "").strip()
-                        name = str(row[2] or "").strip()
-                        gender = str(row[3] or "").strip()
-                        cls = str(row[4] or "").strip()
-                        stream = str(row[5] or "").strip()
-                        level_excel = str(row[6] or "").strip().upper()
-                        comment = str(row[7] or "").strip()
-                    else:
-                        exam_no = ""
-                        name = str(row[1] or "").strip()
-                        gender = str(row[2] or "").strip()
-                        cls = str(row[3] or "").strip()
-                        stream = str(row[4] or "").strip()
-                        level_excel = str(row[5] or "").strip().upper()
-                        comment = str(row[6] or "").strip()
+                    exam_no = str(row[1] or "").strip() if len(row) > 1 else ""
+                    name = str(row[2] or "").strip() if len(row) > 2 else ""
+                    gender = str(row[3] or "").strip() if len(row) > 3 else ""
+                    cls = str(row[4] or "").strip() if len(row) > 4 else ""
+                    stream = str(row[5] or "").strip() if len(row) > 5 else ""
+                    level_excel = str(row[6] or "").strip().upper() if len(row) > 6 else ""
+
                     if not name or not cls:
                         rejected += 1
                         continue
+
                     resolved_level = get_level_for_class(cls)
                     if resolved_level is None:
                         rejected += 1
                         continue
-                    if level_excel and level_excel != resolved_level:
-                        redirected += 1
-                    level_excel = resolved_level
-                    try:
-                        cur.execute("SELECT 1 FROM students WHERE admission_no=?", (adm,))
-                        exists = cur.fetchone()
-                        cur.execute("""
-                            INSERT INTO students (admission_no, exam_no, full_name, gender, class, stream, level, comments)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(admission_no) DO UPDATE SET
-                                exam_no=excluded.exam_no,
-                                full_name=excluded.full_name,
-                                gender=excluded.gender,
-                                class=excluded.class,
-                                stream=excluded.stream,
-                                level=excluded.level,
-                                comments=excluded.comments
-                        """, (adm, exam_no, name, gender, cls, stream, level_excel, comment))
-                        if exists:
-                            updated += 1
-                        else:
-                            imported += 1
-                    except Exception as e:
-                        print(f"[ERROR] Failed to import student '{adm}': {e}")
-                        rejected += 1
-                        continue
-            # load_list()/load_reports_search() run via the STUDENTS_UPDATED
-            # subscription (see on_students_updated) — calling them here too
-            # would refresh both twice for no benefit.
-            EventBus.emit("STUDENTS_UPDATED")
+
+                    current_level = SystemState.get_level()
+                    if level_excel and level_excel in (resolved_level, current_level):
+                        final_level = level_excel
+                    else:
+                        final_level = resolved_level
+                        if level_excel and level_excel != final_level:
+                            redirected += 1
+
+                    cur.execute("SELECT 1 FROM students WHERE admission_no=?", (adm,))
+                    exists = cur.fetchone()
+                    cur.execute("""
+                        INSERT INTO students (admission_no, exam_no, full_name, gender, class, stream, level)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(admission_no) DO UPDATE SET
+                            exam_no=excluded.exam_no,
+                            full_name=excluded.full_name,
+                            gender=excluded.gender,
+                            class=excluded.class,
+                            stream=excluded.stream,
+                            level=excluded.level
+                    """, (adm, exam_no, name, gender, cls, stream, final_level))
+                    if exists:
+                        updated += 1
+                    else:
+                        imported += 1
+            EventBus.emit("STUDENTS_UPDATED", visible_only=True)
             QMessageBox.information(self, "Import Complete",
                                   f"Operation Summary:\n- New Students Imported: {imported}\n- Existing Records Updated: {updated}\n- Rows Redirected to Actual Level: {redirected}\n- Records Rejected (Invalid Data): {rejected}")
         except Exception as e:

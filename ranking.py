@@ -26,14 +26,18 @@ from ranking_engine import compute_student_scores
 class RankingWorker(QThread):
     finished = Signal(list)
 
-    def __init__(self, level, exam_id, class_name):
+    def __init__(self, level, exam_id, class_name, stream=None):
         super().__init__()
         self.level = level
         self.exam_id = exam_id
         self.class_name = class_name
+        self.stream = stream
 
     def run(self):
-        ranking = compute_student_scores(self.level, exam_id=self.exam_id, class_name=self.class_name)
+        ranking = compute_student_scores(
+            self.level, exam_id=self.exam_id, class_name=self.class_name,
+            stream=self.stream,
+        )
         self.finished.emit(ranking)
 
 
@@ -45,6 +49,7 @@ class RankingPage(QWidget):
         self.history_exam_id = None
         self.history_class_name = None
         self.history_level = None
+        self.history_stream = None
         self._worker = None
         self._needs_refresh = False
 
@@ -141,7 +146,7 @@ class RankingPage(QWidget):
             self._update_table_height()
             return
 
-        self._worker = RankingWorker(level, exam_id, class_name)
+        self._worker = RankingWorker(level, exam_id, class_name, self.history_stream)
         self._worker.finished.connect(self.on_data_loaded)
         self._worker.start()
 
@@ -213,10 +218,11 @@ class RankingPage(QWidget):
         self.history_level = SystemState.get_level()
         self.load()
 
-    def set_history_context(self, exam_id, class_name, level=None):
+    def set_history_context(self, exam_id, class_name, level=None, stream=None):
         self.history_exam_id = exam_id
         self.history_class_name = class_name
         self.history_level = level or SystemState.get_level()
+        self.history_stream = stream
 
         row = fetch_one("""
             SELECT e.exam_name, t.term_name, y.year_name
@@ -230,6 +236,7 @@ class RankingPage(QWidget):
             exam_name, term_name, year_name = row
             self.context_label.setText(
                 f"History context: {exam_name} - {term_name} - {year_name} - {class_name}"
+                + (f" - {stream}" if stream else "")
             )
         else:
             self.context_label.setText(f"History context: Exam #{exam_id} - {class_name}")
@@ -240,6 +247,7 @@ class RankingPage(QWidget):
         self.history_exam_id = None
         self.history_class_name = None
         self.history_level = None
+        self.history_stream = None
         self.context_label.setText("")
         self.load()
 

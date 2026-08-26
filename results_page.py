@@ -129,6 +129,9 @@ class ResultsPage(QWidget):
         self.class_box.setMinimumWidth(150)
         self.class_box.setPlaceholderText("Select Class")
 
+        self.stream_box = QComboBox()
+        self.stream_box.setMinimumWidth(140)
+
         self.subject = QComboBox()
         self.subject.setMinimumWidth(220)
         self.subject.setPlaceholderText("Select Subject")
@@ -137,6 +140,8 @@ class ResultsPage(QWidget):
         filters_layout.addWidget(self.exam)
         filters_layout.addWidget(QLabel("Class"))
         filters_layout.addWidget(self.class_box)
+        filters_layout.addWidget(QLabel("Stream"))
+        filters_layout.addWidget(self.stream_box)
         filters_layout.addWidget(QLabel("Subject"))
         filters_layout.addWidget(self.subject)
 
@@ -242,8 +247,9 @@ class ResultsPage(QWidget):
         layout.addLayout(buttons)
 
         # Connect events
-        self.exam.currentIndexChanged.connect(lambda _: self.load_subjects())
-        self.class_box.currentIndexChanged.connect(lambda _: self.load_subjects())
+        self.exam.currentIndexChanged.connect(lambda _: self._on_exam_or_class_changed())
+        self.class_box.currentIndexChanged.connect(lambda _: self._on_exam_or_class_changed())
+        self.stream_box.currentIndexChanged.connect(lambda _: self.load_subjects())
         self.subject.currentIndexChanged.connect(lambda _: self.load_students())
 
         EventBus.subscribe("LEVEL_CHANGED", self.on_level_changed)
@@ -286,6 +292,7 @@ class ResultsPage(QWidget):
             self.exam.blockSignals(False)
             self.class_box.blockSignals(False)
 
+        self.load_streams()
         self.load_subjects(load_table=False)
         selected_index = -1
         for i in range(self.subject.count()):
@@ -309,6 +316,7 @@ class ResultsPage(QWidget):
     def refresh_all(self):
         self.load_exams()
         self.load_classes()
+        self.load_streams()
         self.load_subjects()
 
     def load_exams(self):
@@ -317,10 +325,23 @@ class ResultsPage(QWidget):
     def load_classes(self):
         combo_loaders.load_classes(self.class_box)
 
+    def load_streams(self):
+        combo_loaders.load_streams(
+            self.stream_box,
+            class_name=self.class_box.currentText().strip(),
+            exam_id=self.exam.currentData(),
+            level=SystemState.get_level(),
+        )
+
+    def _on_exam_or_class_changed(self):
+        self.load_streams()
+        self.load_subjects()
+
     def load_subjects(self, load_table=True):
         load_table = bool(load_table)
         exam_id = self.exam.currentData()
         class_name = self.class_box.currentText().strip()
+        stream = self.stream_box.currentData()
         level = SystemState.get_level()
 
         if not class_name or exam_id is None:
@@ -348,13 +369,18 @@ class ResultsPage(QWidget):
                  WHERE UPPER(TRIM(r.subject_name)) = UPPER(TRIM(e.subject_name))
                    AND r.exam_id = ?
                    AND UPPER(TRIM(COALESCE(r.class_name, s2.class))) = UPPER(TRIM(?))
-                   AND s2.level = ?) as entered
+                   AND s2.level = ?
+                   AND (? IS NULL OR UPPER(TRIM(COALESCE(r.stream, s2.stream, ''))) = UPPER(TRIM(?)))
+                 ) as entered
             FROM enrollments e
+            JOIN students es ON es.admission_no = e.admission_no
             WHERE UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
               AND e.academic_year_id=? AND e.term_id=?
+              AND (? IS NULL OR UPPER(TRIM(COALESCE(es.stream, ''))) = UPPER(TRIM(?)))
             GROUP BY e.subject_name
             ORDER BY e.subject_name
-        """, (exam_id, class_name, level, class_name, year_id, term_id))
+        """, (exam_id, class_name, level, stream, stream,
+               class_name, year_id, term_id, stream, stream))
 
         self.subject.blockSignals(True)
         self.subject.clear()
@@ -385,6 +411,7 @@ class ResultsPage(QWidget):
     def load_students(self, subject_name=None):
         exam_id = self.exam.currentData()
         class_name = self.class_box.currentText().strip()
+        stream = self.stream_box.currentData()
         if isinstance(subject_name, int):
             subject_name = None
 
@@ -412,7 +439,8 @@ class ResultsPage(QWidget):
         student_rows = fetch_all("""
             SELECT DISTINCT
                 s.admission_no,
-                s.full_name
+                s.full_name,
+                TRIM(COALESCE(s.stream, ''))
             FROM enrollments e
             JOIN students s ON s.admission_no = e.admission_no
             WHERE UPPER(TRIM(e.subject_name)) = UPPER(TRIM(?))
@@ -422,8 +450,9 @@ class ResultsPage(QWidget):
               AND UPPER(TRIM(e.class_name)) = UPPER(TRIM(?))
               AND e.academic_year_id = ?
               AND e.term_id = ?
+              AND (? IS NULL OR UPPER(TRIM(COALESCE(s.stream, ''))) = UPPER(TRIM(?)))
             ORDER BY s.full_name
-        """, (subject_name, level, class_name, year_id, term_id))
+        """, (subject_name, level, class_name, year_id, term_id, stream, stream))
 
         result_rows = fetch_all("""
             SELECT
@@ -433,15 +462,16 @@ class ResultsPage(QWidget):
             WHERE exam_id = ?
               AND UPPER(TRIM(subject_name)) = UPPER(TRIM(?))
               AND UPPER(TRIM(COALESCE(class_name, ''))) = UPPER(TRIM(?))
-        """, (exam_id, subject_name, class_name))
+              AND (? IS NULL OR UPPER(TRIM(COALESCE(stream, ''))) = UPPER(TRIM(?)))
+        """, (exam_id, subject_name, class_name, stream, stream))
 
         marks_by_admission = {
             admission_no: marks
             for admission_no, marks in result_rows
         }
         rows = [
-            (admission_no, full_name, marks_by_admission.get(admission_no))
-            for admission_no, full_name in student_rows
+            (admission_no, full_name, student_stream, marks_by_admission.get(admission_no))
+            for admission_no, full_name, student_stream in student_rows
         ]
 
         self.loading_table = True
@@ -455,9 +485,10 @@ class ResultsPage(QWidget):
         if not self.exam_read_only:
             marks_flags |= Qt.ItemFlag.ItemIsEditable
 
-        for row_index, (admission_no, full_name, marks) in enumerate(rows):
+        for row_index, (admission_no, full_name, student_stream, marks) in enumerate(rows):
             admission_item = QTableWidgetItem(admission_no)
             admission_item.setFlags(read_only_flags)
+            admission_item.setData(Qt.ItemDataRole.UserRole, student_stream)
 
             name_item = QTableWidgetItem(full_name or "")
             name_item.setFlags(read_only_flags)
@@ -516,7 +547,10 @@ class ResultsPage(QWidget):
                 invalid_rows.append(row + 1)
                 continue
 
-            marks_to_save.append((admission_item.text(), marks))
+            marks_to_save.append((
+                admission_item.text(), marks,
+                admission_item.data(Qt.ItemDataRole.UserRole) or "",
+            ))
 
         if invalid_rows:
             show_error(self, f"Check row(s): {', '.join(map(str, invalid_rows))}", title="Invalid Marks")
@@ -524,14 +558,15 @@ class ResultsPage(QWidget):
 
         try:
             with get_cursor(commit=True) as cur:
-                for admission_no, marks in marks_to_save:
+                for admission_no, marks, stream in marks_to_save:
                     cur.execute("""
-                        INSERT INTO results (admission_no, subject_name, marks, exam_id, class_name)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO results (admission_no, subject_name, marks, exam_id, class_name, stream)
+                        VALUES (?, ?, ?, ?, ?, ?)
                         ON CONFLICT(admission_no, subject_name, exam_id)
                         DO UPDATE SET marks = excluded.marks,
-                                      class_name = excluded.class_name
-                    """, (admission_no, subject_name, marks, exam_id, class_name))
+                                      class_name = excluded.class_name,
+                                      stream = excluded.stream
+                    """, (admission_no, subject_name, marks, exam_id, class_name, stream))
         except Exception as e:
             QMessageBox.critical(self, "Database Error", f"An unexpected error occurred while saving results: {e}")
             return
@@ -801,13 +836,20 @@ class ResultsPage(QWidget):
 
                     if cur.fetchone():
                         try:
+                            cur.execute(
+                                "SELECT TRIM(COALESCE(stream, '')) FROM students WHERE admission_no=?",
+                                (adm_no,),
+                            )
+                            stream_row = cur.fetchone()
+                            student_stream = stream_row[0] if stream_row else ""
                             cur.execute("""
-                                INSERT INTO results (admission_no, subject_name, marks, exam_id, class_name)
-                                VALUES (?, ?, ?, ?, ?)
+                                INSERT INTO results (admission_no, subject_name, marks, exam_id, class_name, stream)
+                                VALUES (?, ?, ?, ?, ?, ?)
                                 ON CONFLICT(admission_no, subject_name, exam_id) DO UPDATE SET
                                     marks=excluded.marks,
-                                    class_name=excluded.class_name
-                            """, (adm_no, subject_name, marks_int, exam_id, class_name))
+                                    class_name=excluded.class_name,
+                                    stream=excluded.stream
+                            """, (adm_no, subject_name, marks_int, exam_id, class_name, student_stream))
                             imported += 1
                         except Exception as e:
                             print(f"[ERROR] Failed to import result for '{adm_no}': {e}")

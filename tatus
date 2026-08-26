@@ -1,0 +1,20 @@
+[33m6e0b9b0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{0}: reset: moving to HEAD~1
+[33m9ade335[m HEAD@{1}: commit: Archive dead duplicate page files
+[33m6e0b9b0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{2}: commit: number arrangement
+[33m7b4a7cc[m HEAD@{3}: pull --tags origin main (finish): returning to refs/heads/main
+[33m7b4a7cc[m HEAD@{4}: pull --tags origin main (pick): import export utils
+[33m063e550[m HEAD@{5}: pull --tags origin main (start): checkout 063e5504dfffc8fb3584e5f160f4bd33fa51b3a2
+[33m9742d90[m HEAD@{6}: commit: import export utils
+[33m9b2f935[m HEAD@{7}: commit: dashboard UI changes and buttons
+[33m53d05c4[m HEAD@{8}: pull --tags origin main (finish): returning to refs/heads/main
+[33m53d05c4[m HEAD@{9}: pull --tags origin main (pick): main window history page fix
+[33m7d099b6[m HEAD@{10}: pull --tags origin main (start): checkout 7d099b693baab8bf3f0c5f70b3cdaee2322ac752
+[33m5533899[m HEAD@{11}: commit: main window history page fix
+[33m69660d5[m HEAD@{12}: commit: empty database after no database failure
+[33m62cd98c[m HEAD@{13}: commit: no database
+[33m763de44[m HEAD@{14}: pull --tags origin main (finish): returning to refs/heads/main
+[33m763de44[m HEAD@{15}: pull --tags origin main (pick): Enrollment export
+[33m86c6b16[m HEAD@{16}: pull --tags origin main (start): checkout 86c6b1600fe7f4a92dacf4ce4880c890eec8e980
+[33m7b72fb8[m HEAD@{17}: commit: Enrollment export
+[33m70c3d91[m HEAD@{18}: pull --tags origin main (finish): returning to refs/heads/main
+[33m70c3d91[m HEAD@{19}: pull --tags origin main (pick): some UI and functional improvements includes enroll ment

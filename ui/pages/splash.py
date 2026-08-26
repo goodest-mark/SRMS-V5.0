@@ -3,16 +3,17 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     Qt,
     QTimer,
+    QPoint,
     QParallelAnimationGroup,
 )
-from PySide6.QtGui import QFont, QFontMetrics, QIcon, QPixmap, QColor
+from PySide6.QtGui import QFont, QIcon, QPixmap, QColor
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QProgressBar,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -22,10 +23,14 @@ from app_paths import icon_path
 
 
 class SplashScreen(QWidget):
-    def __init__(self, on_finish):
+    def __init__(self, on_finish, account_email="issatzuberi99@gmail.com"):
         super().__init__()
 
         self.on_finish = on_finish
+        self.account_email = account_email
+        self._drag_pos = None
+        self._is_maximized = False
+        self._normal_geometry = None
 
         self.setWindowTitle("SRMS V5")
         app_icon = icon_path("icon.jpeg")
@@ -45,10 +50,10 @@ class SplashScreen(QWidget):
 
         # Outer layout leaves margin around the card so the shadow has room to render
         root = QVBoxLayout(self)
-        root.setContentsMargins(40, 40, 40, 40)
+        root.setContentsMargins(30, 30, 30, 30)
         root.setSpacing(0)
 
-        # --- Main card shell ---
+        # --- Main square card shell ---
         shell = QFrame()
         shell.setObjectName("SplashShell")
         shell.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -60,174 +65,124 @@ class SplashScreen(QWidget):
         shadow.setColor(QColor(0, 0, 0, 180))
         shell.setGraphicsEffect(shadow)
 
-        shell_layout = QHBoxLayout(shell)
-        shell_layout.setContentsMargins(28, 28, 28, 28)
-        shell_layout.setSpacing(28)
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
 
-        # --- Left Brand Panel ---
-        left = QFrame()
-        left.setObjectName("SplashBrandPanel")
-        left.setMinimumWidth(380)
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(32, 32, 32, 32)
-        left_layout.setSpacing(16)
+        # --- Custom title bar ---
+        title_bar = QFrame()
+        title_bar.setObjectName("SplashTitleBar")
+        title_bar.setFixedHeight(44)
+        title_bar_layout = QHBoxLayout(title_bar)
+        title_bar_layout.setContentsMargins(16, 0, 12, 0)
+        title_bar_layout.setSpacing(6)
+        title_bar_layout.addStretch(1)
 
-        # Icon badge with pulse glow
-        icon_label = QLabel()
-        icon_label.setFixedSize(80, 80)
-        icon_label.setObjectName("SplashIconBadge")
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_pixmap = QPixmap(str(icon_path("icon.jpeg")))
-        if not icon_pixmap.isNull():
-            icon_label.setPixmap(
-                icon_pixmap.scaled(
-                    56, 56,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-        self.icon_label = icon_label
+        self.min_btn = QPushButton("\u2013")
+        self.max_btn = QPushButton("\u25a1")
+        self.close_btn = QPushButton("\u2715")
+        for btn, name in (
+            (self.min_btn, "SplashTitleBtn"),
+            (self.max_btn, "SplashTitleBtn"),
+            (self.close_btn, "SplashTitleCloseBtn"),
+        ):
+            btn.setObjectName(name)
+            btn.setFixedSize(30, 30)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        # Badge text (e.g., "SCHOOL RECORDS")
-        badge = QLabel("SCHOOL RECORDS MANAGEMENT SYSTEM")
-        badge.setObjectName("SplashBadge")
-        badge.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.min_btn.clicked.connect(self.showMinimized)
+        self.max_btn.clicked.connect(self._toggle_maximize)
+        self.close_btn.clicked.connect(self.close)
 
-        # Main title – now static
-        title = QLabel("SRMS V5")
+        title_bar_layout.addWidget(self.min_btn)
+        title_bar_layout.addWidget(self.max_btn)
+        title_bar_layout.addWidget(self.close_btn)
+
+        self._title_bar = title_bar
+
+        # --- Centered content ---
+        content = QFrame()
+        content.setObjectName("SplashContent")
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(48, 24, 48, 36)
+        content_layout.setSpacing(0)
+        content_layout.addStretch(2)
+
+        # Title
+        title = QLabel("SRMS")
         title.setObjectName("SplashTitle")
-        title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title_label = title
 
-        # Underline – static, full width
-        title_underline = QFrame()
-        title_underline.setObjectName("SplashTitleUnderline")
-        title_underline.setFixedHeight(4)
-        # Compute width based on font metrics
-        font = QFont("Segoe UI")
-        font.setPixelSize(38)
-        font.setWeight(QFont.Weight.Black)
-        full_width = QFontMetrics(font).horizontalAdvance("SRMS V5")
-        title_underline.setFixedWidth(full_width)
-        self._title_underline = title_underline
+        # Glow underline
+        underline = QFrame()
+        underline.setObjectName("SplashTitleUnderline")
+        underline.setFixedHeight(3)
+        underline.setFixedWidth(420)
+        underline_row = QHBoxLayout()
+        underline_row.addStretch(1)
+        underline_row.addWidget(underline)
+        underline_row.addStretch(1)
 
         # Subtitle
-        subtitle = QLabel("School Records Management System")
+        subtitle = QLabel("R e s u l t   M a n a g e m e n t   S y s t e m")
         subtitle.setObjectName("SplashSubtitle")
-        subtitle.setWordWrap(True)
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Summary
-        summary = QLabel(
-            "Academic records, results processing, reporting, and school administration in one workspace."
-        )
-        summary.setObjectName("SplashSummary")
-        summary.setWordWrap(True)
+        content_layout.addWidget(title)
+        content_layout.addSpacing(14)
+        content_layout.addLayout(underline_row)
+        content_layout.addSpacing(18)
+        content_layout.addWidget(subtitle)
+        content_layout.addStretch(3)
 
-        # Chips (tags)
-        chips_row = QHBoxLayout()
-        chips_row.setSpacing(10)
-        for text in ("Students", "Results", "Reports"):
-            chip = QLabel(text)
-            chip.setObjectName("SplashChip")
-            chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            chips_row.addWidget(chip)
-        chips_row.addStretch(1)
-
-        left_layout.addWidget(icon_label)
-        left_layout.addSpacing(4)
-        left_layout.addWidget(badge)
-        left_layout.addSpacing(2)
-        left_layout.addWidget(title)
-        left_layout.addWidget(title_underline)
-        left_layout.addWidget(subtitle)
-        left_layout.addWidget(summary)
-        left_layout.addStretch(1)
-        left_layout.addLayout(chips_row)
-
-        # --- Right Status Panel ---
-        right = QFrame()
-        right.setObjectName("SplashStatusPanel")
-        right.setMinimumWidth(440)
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(32, 32, 32, 32)
-        right_layout.setSpacing(16)
-
-        header = QLabel("Starting application")
-        header.setObjectName("SplashSectionTitle")
+        # Progress bar (thin flat line)
+        self.progress = QProgressBar()
+        self.progress.setObjectName("SplashProgress")
+        self.progress.setMaximum(100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(6)
 
         # Loading label with animated ellipsis
-        self.loading = QLabel("Initializing local services")
+        self.loading = QLabel("Initializing")
         self.loading.setObjectName("SplashLoading")
-        self.loading.setWordWrap(True)
+        self.loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._loading_dots = 0
+        self._current_loading_text = "Initializing"
         self._loading_timer = QTimer(self)
         self._loading_timer.timeout.connect(self._update_loading_dots)
         self._loading_timer.start(500)
 
-        # Progress bar (premium style)
-        self.progress = QProgressBar()
-        self.progress.setMaximum(100)
-        self.progress.setValue(0)
-        self.progress.setTextVisible(True)
-        self.progress.setFormat("%p%")
-
-        # Status details grid
-        info_grid = QGridLayout()
-        info_grid.setHorizontalSpacing(16)
-        info_grid.setVerticalSpacing(12)
-
-        details = [
-            ("Database", "Preparing local data store"),
-            ("Session", "Loading school profile"),
-            ("Modules", "Restoring workspace"),
-            ("Security", "Applying startup policy"),
-        ]
-        for row, (label_text, value_text) in enumerate(details):
-            label = QLabel(label_text)
-            label.setObjectName("SplashInfoLabel")
-            value = QLabel(value_text)
-            value.setObjectName("SplashInfoValue")
-            value.setWordWrap(True)
-            info_grid.addWidget(label, row, 0)
-            info_grid.addWidget(value, row, 1)
+        content_layout.addWidget(self.progress)
+        content_layout.addSpacing(14)
+        content_layout.addWidget(self.loading)
+        content_layout.addStretch(2)
 
         # Divider
         divider = QFrame()
         divider.setObjectName("SplashDivider")
         divider.setFixedHeight(1)
 
-        # Footer with version and premium badge
-        footer_layout = QHBoxLayout()
-        footer_layout.setSpacing(12)
+        # Footer: signed-in account email, small and centered
+        footer = QLabel(self.account_email)
+        footer.setObjectName("SplashFooterEmail")
+        footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        footer_left = QLabel("SRMS V5.0.1")
-        footer_left.setObjectName("SplashFooter")
-
-        premium_badge = QLabel("PREMIUM")
-        premium_badge.setObjectName("SplashPremiumBadge")
-        premium_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        footer_layout.addWidget(footer_left)
-        footer_layout.addStretch(1)
-        footer_layout.addWidget(premium_badge)
-
-        right_layout.addWidget(header)
-        right_layout.addWidget(self.loading)
-        right_layout.addWidget(self.progress)
-        right_layout.addLayout(info_grid)
-        right_layout.addStretch(1)
-        right_layout.addWidget(divider)
-        right_layout.addLayout(footer_layout)
+        footer_wrap = QVBoxLayout()
+        footer_wrap.setSpacing(14)
+        footer_wrap.setContentsMargins(48, 0, 48, 24)
+        footer_wrap.addWidget(divider)
+        footer_wrap.addWidget(footer)
 
         # --- Assemble shell ---
-        shell_layout.addWidget(left, 3)
-        shell_layout.addWidget(right, 2)
+        shell_layout.addWidget(title_bar)
+        shell_layout.addWidget(content, 1)
+        shell_layout.addLayout(footer_wrap)
 
-        root.addStretch(1)
         root.addWidget(shell)
-        root.addStretch(1)
 
-        # --- Stylesheet (premium look) ---
+        # --- Stylesheet (premium look, square card) ---
         self.setStyleSheet("""
             * {
                 font-family: 'Segoe UI', 'Inter', -apple-system, 'Helvetica Neue', sans-serif;
@@ -238,124 +193,88 @@ class SplashScreen(QWidget):
             QFrame#SplashShell {
                 background: qlineargradient(
                     x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #0b1729, stop:1 #09121e
+                    stop:0 #0a0e1a, stop:1 #060810
                 );
-                border: 1px solid rgba(96, 165, 250, 0.25);
-                border-radius: 28px;
-            }
-            QFrame#SplashBrandPanel {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1a3a6b, stop:1 #102a4a
-                );
-                border: 1px solid rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(37, 99, 235, 0.25);
                 border-radius: 20px;
             }
-            QFrame#SplashStatusPanel {
-                background: rgba(8, 16, 32, 0.92);
-                border: 1px solid rgba(96, 165, 250, 0.20);
-                border-radius: 20px;
+            QFrame#SplashTitleBar {
+                background: #14151c;
+                border-top-left-radius: 20px;
+                border-top-right-radius: 20px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.06);
             }
-            QLabel#SplashIconBadge {
-                background: rgba(37, 99, 235, 0.25);
-                border: 2px solid rgba(96, 165, 250, 0.5);
-                border-radius: 20px;
+            QPushButton#SplashTitleBtn {
+                background: transparent;
+                color: #94a3b8;
+                border: none;
+                border-radius: 6px;
+                font-size: 15px;
+                font-weight: 600;
             }
-            QLabel#SplashBadge {
-                color: #a5c9ff;
-                font-size: 11px;
-                font-weight: 800;
-                letter-spacing: 1.5px;
+            QPushButton#SplashTitleBtn:hover {
+                background: rgba(148, 163, 184, 0.15);
+                color: #ffffff;
+            }
+            QPushButton#SplashTitleCloseBtn {
+                background: transparent;
+                color: #94a3b8;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton#SplashTitleCloseBtn:hover {
+                background: #e81123;
+                color: #ffffff;
+            }
+            QFrame#SplashContent {
+                background: transparent;
             }
             QLabel#SplashTitle {
                 color: #ffffff;
-                font-size: 38px;
+                font-size: 120px;
                 font-weight: 900;
-                letter-spacing: -0.5px;
+                letter-spacing: 18px;
             }
             QFrame#SplashTitleUnderline {
                 background: qlineargradient(
                     x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #3b82f6, stop:0.5 #8b5cf6, stop:1 #22c55e
+                    stop:0 rgba(37, 99, 235, 0),
+                    stop:0.5 rgba(59, 130, 246, 220),
+                    stop:1 rgba(37, 99, 235, 0)
                 );
-                border-radius: 2px;
+                border-radius: 1px;
             }
             QLabel#SplashSubtitle {
-                color: #dbeafe;
-                font-size: 16px;
-                font-weight: 700;
+                color: #93c5fd;
+                font-size: 26px;
+                font-weight: 500;
             }
-            QLabel#SplashSummary {
-                color: #94a3b8;
-                font-size: 13px;
+            QProgressBar#SplashProgress {
+                background: rgba(148, 163, 184, 0.15);
+                border: none;
+                border-radius: 3px;
             }
-            QLabel#SplashChip {
-                background: rgba(37, 99, 235, 0.18);
-                color: #e8f0fe;
-                border: 1px solid rgba(96, 165, 250, 0.30);
-                border-radius: 999px;
-                padding: 6px 14px;
-                min-width: 90px;
-                font-size: 12px;
-                font-weight: 700;
-            }
-            QLabel#SplashSectionTitle {
-                color: #e2e8f0;
-                font-size: 18px;
-                font-weight: 800;
+            QProgressBar#SplashProgress::chunk {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2563eb, stop:1 #3b82f6
+                );
+                border-radius: 3px;
             }
             QLabel#SplashLoading {
-                color: #ffffff;
+                color: #7ea6d8;
                 font-size: 20px;
-                font-weight: 800;
-            }
-            QLabel#SplashInfoLabel {
-                color: #93c5fd;
-                font-size: 12px;
-                font-weight: 800;
-                text-transform: uppercase;
-            }
-            QLabel#SplashInfoValue {
-                color: #e2e8f0;
-                font-size: 13px;
-                font-weight: 600;
+                font-weight: 500;
             }
             QFrame#SplashDivider {
                 background: rgba(148, 163, 184, 0.15);
             }
-            QLabel#SplashFooter {
-                color: #94a3b8;
+            QLabel#SplashFooterEmail {
+                color: #64748b;
                 font-size: 12px;
-                font-weight: 700;
-            }
-            QLabel#SplashPremiumBadge {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #f59e0b, stop:1 #f97316
-                );
-                color: #0f172a;
-                border-radius: 999px;
-                padding: 4px 14px;
-                font-size: 10px;
-                font-weight: 900;
-                letter-spacing: 0.5px;
-            }
-            QProgressBar {
-                background: rgba(15, 23, 42, 0.92);
-                color: #ffffff;
-                border: 1px solid rgba(96, 165, 250, 0.20);
-                border-radius: 14px;
-                text-align: center;
-                height: 24px;
-                font-weight: 700;
-                font-size: 12px;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #3b82f6, stop:0.5 #8b5cf6, stop:1 #2563eb
-                );
-                border-radius: 12px;
+                font-weight: 500;
             }
         """)
 
@@ -372,28 +291,16 @@ class SplashScreen(QWidget):
         ]
 
         # --- Progress animation (eased) ---
+        # Fill takes 3s, then we hold on the completed screen for a few
+        # seconds (see _on_progress_finished) so the user has time to read
+        # everything, including the small account email at the bottom.
         self._progress_anim = QPropertyAnimation(self.progress, b"value", self)
-        self._progress_anim.setDuration(3500)
+        self._progress_anim.setDuration(9000)
         self._progress_anim.setStartValue(0)
         self._progress_anim.setEndValue(100)
         self._progress_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._progress_anim.valueChanged.connect(self._on_progress_value_changed)
         self._progress_anim.finished.connect(self._on_progress_finished)
-
-        # --- Glow animation on icon badge ---
-        glow = QGraphicsDropShadowEffect(self)
-        glow.setBlurRadius(20)
-        glow.setColor(QColor(96, 165, 250, 180))
-        glow.setXOffset(0)
-        glow.setYOffset(0)
-        icon_label.setGraphicsEffect(glow)
-
-        self._glow_anim = QPropertyAnimation(glow, b"blurRadius", self)
-        self._glow_anim.setDuration(1000)
-        self._glow_anim.setLoopCount(-1)
-        self._glow_anim.setStartValue(15)
-        self._glow_anim.setEndValue(35)
-        self._glow_anim.setEasingCurve(QEasingCurve.Type.InOutSine)
 
         # --- Fade in on open ---
         self.setWindowOpacity(0.0)
@@ -409,10 +316,9 @@ class SplashScreen(QWidget):
     def _start(self):
         self._fade_in.start()
         self._progress_anim.start()
-        self._glow_anim.start()
 
     def _apply_main_window_geometry(self):
-        """Match a clean splash size and centered position."""
+        """Square splash sized and centered on screen."""
         available = self.screen().availableGeometry()
         width = min(1280, int(available.width() * 0.90))
         height = min(720, int(available.height() * 0.82))
@@ -423,16 +329,36 @@ class SplashScreen(QWidget):
         qr.moveCenter(available.center())
         self.move(qr.topLeft())
 
+    # --- Draggable frameless window (via custom title bar) ---
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._title_bar.underMouse():
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+
+    def _toggle_maximize(self):
+        if self._is_maximized:
+            if self._normal_geometry is not None:
+                self.setGeometry(self._normal_geometry)
+            self._is_maximized = False
+        else:
+            self._normal_geometry = self.geometry()
+            self.setGeometry(self.screen().availableGeometry())
+            self._is_maximized = True
+
     def _update_loading_dots(self):
         if self._finished:
             return
         self._loading_dots = (self._loading_dots + 1) % 4
-        if hasattr(self, '_current_loading_text'):
-            base = self._current_loading_text
-        else:
-            base = self.loading.text()
         dots = '.' * self._loading_dots
-        self.loading.setText(base + dots)
+        self.loading.setText(self._current_loading_text + dots)
 
     def _on_progress_value_changed(self, value):
         if self._finished:
@@ -440,7 +366,6 @@ class SplashScreen(QWidget):
         for threshold, message in self._stages:
             if value >= threshold:
                 self._current_loading_text = message
-                self.loading.setText(message)  # will be updated by timer
 
     def _on_progress_finished(self):
         if self._finished:
@@ -450,7 +375,9 @@ class SplashScreen(QWidget):
         self.progress.setValue(100)
         self.loading.setText("Launching SRMS V5")
 
-        QTimer.singleShot(5000, self._start_exit_animation)
+        # Hold the fully-loaded screen on display so the user has time to
+        # read the title, subtitle, and footer email before it closes.
+        QTimer.singleShot(3000, self._start_exit_animation)
 
     def _start_exit_animation(self):
         fade_out = QPropertyAnimation(self, b"windowOpacity", self)
@@ -459,16 +386,8 @@ class SplashScreen(QWidget):
         fade_out.setEndValue(0.0)
         fade_out.setEasingCurve(QEasingCurve.Type.InCubic)
 
-        shell = self.findChild(QFrame, "SplashShell")
-        scale_anim = QPropertyAnimation(shell, b"scale", self)
-        scale_anim.setDuration(300)
-        scale_anim.setStartValue(1.0)
-        scale_anim.setEndValue(0.95)
-        scale_anim.setEasingCurve(QEasingCurve.Type.InCubic)
-
         self._exit_group = QParallelAnimationGroup(self)
         self._exit_group.addAnimation(fade_out)
-        self._exit_group.addAnimation(scale_anim)
         self._exit_group.finished.connect(self._complete)
         self._exit_group.start()
 

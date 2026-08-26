@@ -1,0 +1,26 @@
+
+[2026-08-24T20:35:29.406062] Failed to open page 'students'
+Traceback (most recent call last):
+  File "/home/essah/PycharmProjects/SRMS-V5.0/ui/pages/main_window.py", line 536, in ensure_page
+    page = self._page_factories[page_name]()
+  File "/home/essah/PycharmProjects/SRMS-V5.0/ui/pages/main_window.py", line 302, in create_students_page
+    from students_page import StudentsPage
+  File "/home/essah/PycharmProjects/SRMS-V5.0/students_page.py", line 3, in <module>
+    from PySide6.QtWidgets import (
+    ...<21 lines>...
+    )
+ImportError: cannot import name 'QFont' from 'PySide6.QtWidgets' (/home/essah/PycharmProjects/SRMS-V5.0/.venv/lib/python3.14/site-packages/PySide6/QtWidgets.abi3.so)
+
+[2026-08-25T00:02:54.465745] Failed to open page 'students'
+Traceback (most recent call last):
+  File "/home/essah/PycharmProjects/SRMS-V5.0/ui/pages/main_window.py", line 563, in ensure_page
+    page = self._page_factories[page_name]()
+  File "/home/essah/PycharmProjects/SRMS-V5.0/ui/pages/main_window.py", line 330, in create_students_page
+    return StudentsPage()
+  File "/home/essah/PycharmProjects/SRMS-V5.0/students_page.py", line 470, in __init__
+    self.load_list()
+    ~~~~~~~~~~~~~~^^
+  File "/home/essah/PycharmProjects/SRMS-V5.0/students_page.py", line 638, in load_list
+    item.setData(Qt.UserRole, row[8] or "")
+                              ~~~^^^
+IndexError: tuple index out of range

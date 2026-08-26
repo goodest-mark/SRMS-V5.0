@@ -75,6 +75,14 @@ class TestInitDb:
         assert cur.fetchone() is not None
         conn.close()
 
+    def test_results_table_has_stream_snapshot_column(self, initialized_db):
+        conn = sqlite3.connect(initialized_db)
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(results)")
+        columns = {row[1] for row in cur.fetchall()}
+        conn.close()
+        assert "stream" in columns
+
     def test_creates_division_rules_table(self, initialized_db):
         conn = sqlite3.connect(initialized_db)
         cur = conn.cursor()

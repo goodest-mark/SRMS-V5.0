@@ -3,6 +3,7 @@ import sqlite3
 import pytest
 from database import connect, init_db
 from ranking_engine import compute_student_scores
+from cache_utils import ranking_cache
 
 
 def _create_open_exam(cur, level):
@@ -232,6 +233,25 @@ class TestComputeStudentScoresOLevel:
         alice = next(r for r in ranking if r["admission"] == "ADM001")
         bob = next(r for r in ranking if r["admission"] == "ADM002")
         assert alice["position"] < bob["position"]
+
+    def test_can_filter_rankings_by_snapshotted_stream(self, db_with_results):
+        """A historical stream filter must use the result snapshot, not a move."""
+        exam_id = db_with_results["exam_id"]
+        conn = sqlite3.connect(db_with_results["db_path"])
+        cur = conn.cursor()
+        cur.execute("UPDATE students SET stream='Science' WHERE admission_no IN ('ADM001', 'ADM003')")
+        cur.execute("UPDATE students SET stream='Arts' WHERE admission_no='ADM002'")
+        cur.execute("UPDATE results SET stream='Science' WHERE admission_no IN ('ADM001', 'ADM003') AND exam_id=?", (exam_id,))
+        cur.execute("UPDATE results SET stream='Arts' WHERE admission_no='ADM002' AND exam_id=?", (exam_id,))
+        conn.commit()
+        conn.close()
+        ranking_cache.clear()
+
+        science = compute_student_scores("O_LEVEL", exam_id=exam_id, class_name="Form I", stream="Science")
+        assert {student["admission"] for student in science} == {"ADM001", "ADM003"}
+
+        arts = compute_student_scores("O_LEVEL", exam_id=exam_id, class_name="Form I", stream="Arts")
+        assert {student["admission"] for student in arts} == {"ADM002"}
 
     def test_ready_students_sorted_by_total_marks_descending(self, db_with_results):
         ranking = compute_student_scores("O_LEVEL", exam_id=db_with_results["exam_id"])

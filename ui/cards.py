@@ -147,8 +147,10 @@ class PremiumStatCard(QFrame):
     def _animate_shadow(self, offset, blur):
         if self._shadow_anim is not None:
             self._shadow_anim.stop()
+            self._shadow_anim.deleteLater()
         if self._blur_anim is not None:
             self._blur_anim.stop()
+            self._blur_anim.deleteLater()
 
         self._shadow_anim = QPropertyAnimation(self._shadow, b"offset", self)
         self._shadow_anim.setDuration(160)
